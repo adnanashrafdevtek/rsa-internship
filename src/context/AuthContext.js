@@ -11,7 +11,8 @@ export const AuthProvider = ({ children }) => {
   const login = (username, password) => {
     const dummyUsers = [
       { username: "admin", password: "admin123", role: "admin" },
-      { username: "teacher", password: "teacher123", role: "teacher" }
+      { username: "teacher", password: "teacher123", role: "teacher" },
+      { username: "Mr. Smith", password: "test123", role: "teacher" } // 🧪 experimental teacher
     ];
     const foundUser = dummyUsers.find(
       (u) => u.username === username && u.password === password

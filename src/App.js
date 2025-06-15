@@ -8,6 +8,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import ResetPassword from "./pages/ResetPassword";
 import Schedule from "./pages/Schedule";
+import TeacherList from "./pages/TeacherList";
+import StudentList from "./pages/StudentList";
 
 
 function App() {
@@ -49,9 +51,23 @@ function App() {
             }
           />
           <Route
+            path="/teacher/schedules"
+            element={
+              <ProtectedRoute>
+                <TeacherList/>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/reset-password"
             element={
                 <ResetPassword />
+            }
+          />
+          <Route
+            path="/student/schedules"
+            element={
+                <StudentList />
             }
           />
         </Routes>

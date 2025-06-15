@@ -1,29 +1,20 @@
-import React from "react";
+import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [hoveringSchedule, setHoveringSchedule] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate("/");
   };
 
-  if (!user) return null; // hide sidebar if not logged in
+  if (!user) return null;
 
-  // Common links for all users
-  const links = [
-    { name: "Home", path: "/home" },
-    { name: "Classes", path: "/class" },
-    { name: "Schedule", path: "/schedule" },
-  ];
-
-  // Admin-only links
-  if (user.role === "admin") {
-    links.push({ name: "Users", path: "/student" });
-  }
+  const isAdmin = user.role === "admin";
 
   return (
     <div
@@ -34,26 +25,55 @@ export default function Sidebar() {
         padding: "20px",
         display: "flex",
         flexDirection: "column",
-        height: "100vh"
+        height: "100vh",
+        position: "relative"
       }}
     >
       <h2 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "20px" }}>
         Navigation
       </h2>
 
-      {/* Navigation Links */}
       <nav style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        {links.map((link) => (
-          <a key={link.name} href={link.path} style={linkStyle}>
-            {link.name}
-          </a>
-        ))}
+        <Link to="/home" style={linkStyle}>Home</Link>
+        <Link to="/class" style={linkStyle}>Classes</Link>
+
+        {/* Schedule section */}
+        {isAdmin ? (
+          <div
+            style={{ position: "relative" }}
+            onMouseEnter={() => setHoveringSchedule(true)}
+            onMouseLeave={() => setHoveringSchedule(false)}
+          >
+            <div style={{ ...linkStyle, cursor: "pointer" }}>
+              Schedule ▾
+            </div>
+            {hoveringSchedule && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: "100%",
+                  top: 0,
+                  backgroundColor: "#34495e",
+                  borderRadius: "4px",
+                  zIndex: 10,
+                  minWidth: "140px"
+                }}
+              >
+                <Link to="/teacher/schedules" style={submenuLinkStyle}>Teachers</Link>
+                <Link to="/student/schedules" style={submenuLinkStyle}>Students</Link>
+              </div>
+            )}
+          </div>
+        ) : (
+          <Link to="/schedule" style={linkStyle}>Schedule</Link>
+        )}
+
+        {/* Admin-only link */}
+        {isAdmin && <Link to="/student" style={linkStyle}>Users</Link>}
       </nav>
 
-      {/* Spacer to push logout to bottom */}
       <div style={{ flexGrow: 1 }}></div>
 
-      {/* Logout Button */}
       <button onClick={handleLogout} style={logoutStyle}>
         Logout
       </button>
@@ -67,6 +87,14 @@ const linkStyle = {
   padding: "10px",
   borderRadius: "4px",
   backgroundColor: "#34495e"
+};
+
+const submenuLinkStyle = {
+  ...linkStyle,
+  display: "block",
+  padding: "8px 12px",
+  fontSize: "14px",
+  backgroundColor: "#3b4b5e"
 };
 
 const logoutStyle = {

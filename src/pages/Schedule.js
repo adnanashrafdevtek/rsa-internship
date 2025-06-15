@@ -1,59 +1,82 @@
-import React from "react";
+import React, { useState } from "react";
+import { Calendar, dateFnsLocalizer } from "react-big-calendar";
+import format from "date-fns/format";
+import parse from "date-fns/parse";
+import startOfWeek from "date-fns/startOfWeek";
+import getDay from "date-fns/getDay";
+import "react-big-calendar/lib/css/react-big-calendar.css";
+
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "./Sidebar";
 
+const locales = {
+  "en-US": require("date-fns/locale/en-US"),
+};
+
+const localizer = dateFnsLocalizer({
+  format,
+  parse,
+  startOfWeek,
+  getDay,
+  locales,
+});
+
+// Dummy calendar events
+const dummyEvents = [
+  {
+    title: "Math",
+    start: new Date(2025, 5, 16, 9, 0),
+    end: new Date(2025, 5, 16, 10, 30),
+  },
+  {
+    title: "Science",
+    start: new Date(2025, 5, 17, 11, 0),
+    end: new Date(2025, 5, 17, 12, 30),
+  },
+  {
+    title: "History",
+    start: new Date(2025, 5, 18, 14, 0),
+    end: new Date(2025, 5, 18, 15, 30),
+  },
+];
+
 export default function Schedule() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [events, setEvents] = useState(dummyEvents);
 
   const handleLogout = () => {
     logout();
     navigate("/");
   };
 
-  // Dummy schedule data
-  const schedule = [
-    { day: "Monday", time: "9:00 AM - 10:30 AM", subject: "Math" },
-    { day: "Tuesday", time: "11:00 AM - 12:30 PM", subject: "Science" },
-    { day: "Wednesday", time: "2:00 PM - 3:30 PM", subject: "History" },
-    { day: "Thursday", time: "9:00 AM - 10:30 AM", subject: "English" },
-    { day: "Friday", time: "1:00 PM - 2:30 PM", subject: "Art" },
-  ];
+  const handleSelectSlot = ({ start, end }) => {
+    const title = prompt("Enter class name:");
+    if (title) {
+      setEvents([...events, { start, end, title }]);
+    }
+  };
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       <Sidebar onLogout={handleLogout} />
 
-      <div style={{ flex: 1, backgroundColor: "white", padding: "40px" }}>
-        <h1 style={{ fontSize: "36px", fontWeight: "bold", marginBottom: "20px" }}>
+      <div style={{ flex: 1, padding: "20px" }}>
+        <h1 style={{ fontSize: "32px", fontWeight: "bold", marginBottom: "20px" }}>
           {user?.username}'s Schedule
         </h1>
 
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ backgroundColor: "#f2f2f2", textAlign: "left" }}>
-              <th style={cellStyle}>Day</th>
-              <th style={cellStyle}>Time</th>
-              <th style={cellStyle}>Subject</th>
-            </tr>
-          </thead>
-          <tbody>
-            {schedule.map((entry, index) => (
-              <tr key={index} style={{ borderBottom: "1px solid #ddd" }}>
-                <td style={cellStyle}>{entry.day}</td>
-                <td style={cellStyle}>{entry.time}</td>
-                <td style={cellStyle}>{entry.subject}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Calendar
+          localizer={localizer}
+          events={events}
+          startAccessor="start"
+          endAccessor="end"
+          selectable
+          onSelectSlot={handleSelectSlot}
+          style={{ height: "80vh" }}
+        />
       </div>
     </div>
   );
 }
-
-const cellStyle = {
-  padding: "12px 15px",
-  fontSize: "16px"
-};
