@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Calendar, momentLocalizer, Views } from "react-big-calendar";
 import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
@@ -8,29 +8,32 @@ import { useNavigate } from "react-router-dom";
 
 const localizer = momentLocalizer(moment);
 
-// Dummy student list
-const dummyStudents = [
-  { id: 1, name: "Alice Thompson" },
-  { id: 2, name: "Brian Wilson" },
-  { id: 3, name: "Catherine Lee" },
-  { id: 4, name: "Daniel Kim" },
-  { id: 5, name: "Emily Davis" },
-  { id: 6, name: "Frank Wright" },
-  { id: 7, name: "Grace Parker" },
-  { id: 8, name: "Henry Martinez" },
-  { id: 9, name: "Isabella Clark" },
-  { id: 10, name: "Jack Nguyen" }
-];
-
 export default function StudentList() {
   const { logout } = useAuth();
   const navigate = useNavigate();
+
+  const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [studentSchedules, setStudentSchedules] = useState({});
   const [view, setView] = useState(Views.WEEK);
+  const [loading, setLoading] = useState(true);
 
-  const filteredStudents = dummyStudents.filter((student) =>
+  // 🔁 Fetch students from backend
+  useEffect(() => {
+    fetch("http://localhost:5000/api/students")
+      .then((res) => res.json())
+      .then((data) => {
+        setStudents(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching students:", err);
+        setLoading(false);
+      });
+  }, []);
+
+  const filteredStudents = students.filter((student) =>
     student.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -77,7 +80,9 @@ export default function StudentList() {
           View Student Schedules
         </h1>
 
-        {!selectedStudent ? (
+        {loading ? (
+          <p>Loading students...</p>
+        ) : !selectedStudent ? (
           <div>
             <input
               type="text"
@@ -87,7 +92,9 @@ export default function StudentList() {
               style={searchStyle}
             />
 
-            <p style={{ marginBottom: "15px", marginTop: "10px" }}>Select a student to view their schedule:</p>
+            <p style={{ marginBottom: "15px", marginTop: "10px" }}>
+              Select a student to view their schedule:
+            </p>
             <ul style={{ listStyle: "none", padding: 0 }}>
               {filteredStudents.map((student) => (
                 <li key={student.id} style={{ marginBottom: "10px" }}>
@@ -105,7 +112,11 @@ export default function StudentList() {
         ) : (
           <div>
             <button
-              style={{ ...buttonStyle, marginBottom: "20px", backgroundColor: "#95a5a6" }}
+              style={{
+                ...buttonStyle,
+                marginBottom: "20px",
+                backgroundColor: "#95a5a6"
+              }}
               onClick={() => setSelectedStudent(null)}
             >
               ← Back to Student List
@@ -124,7 +135,7 @@ export default function StudentList() {
               selectable
               onSelectSlot={handleSelectSlot}
               onSelectEvent={handleSelectEvent}
-              views={['month', 'week', 'day']}
+              views={["month", "week", "day"]}
               view={view}
               onView={(newView) => setView(newView)}
               defaultDate={new Date()}

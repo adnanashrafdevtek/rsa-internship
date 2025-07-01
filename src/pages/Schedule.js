@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Calendar, dateFnsLocalizer } from "react-big-calendar";
 import format from "date-fns/format";
 import parse from "date-fns/parse";
@@ -22,29 +22,33 @@ const localizer = dateFnsLocalizer({
   locales,
 });
 
-// Dummy calendar events
-const dummyEvents = [
-  {
-    title: "Math",
-    start: new Date(2025, 5, 16, 9, 0),
-    end: new Date(2025, 5, 16, 10, 30),
-  },
-  {
-    title: "Science",
-    start: new Date(2025, 5, 17, 11, 0),
-    end: new Date(2025, 5, 17, 12, 30),
-  },
-  {
-    title: "History",
-    start: new Date(2025, 5, 18, 14, 0),
-    end: new Date(2025, 5, 18, 15, 30),
-  },
-];
-
 export default function Schedule() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [events, setEvents] = useState(dummyEvents);
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch schedule events from backend for current user
+  useEffect(() => {
+    if (!user?.username) return;
+
+    fetch(`http://localhost:5000/api/schedule?username=${user.username}`)
+      .then((res) => res.json())
+      .then((data) => {
+        // Make sure your backend returns array of events with start/end as ISO strings or timestamps
+        const formattedEvents = data.map(event => ({
+          ...event,
+          start: new Date(event.start),
+          end: new Date(event.end),
+        }));
+        setEvents(formattedEvents);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error loading schedule:", err);
+        setLoading(false);
+      });
+  }, [user]);
 
   const handleLogout = () => {
     logout();
@@ -55,8 +59,11 @@ export default function Schedule() {
     const title = prompt("Enter class name:");
     if (title) {
       setEvents([...events, { start, end, title }]);
+      // Optional: POST to backend here to save new event permanently
     }
   };
+
+  if (loading) return <p>Loading schedule...</p>;
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>

@@ -1,36 +1,6 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import Sidebar from "./Sidebar";
-
-const dummyClasses = [
-  {
-    name: "Math A",
-    section: "1A",
-    subject: "Math",
-    room: "201",
-    timings: "8:00 – 8:45 AM",
-    teacher: "teacher",
-    students: ["student", "Fatima Ahmed"],
-  },
-  {
-    name: "Science B",
-    section: "2B",
-    subject: "Science",
-    room: "102",
-    timings: "9:00 – 9:45 AM",
-    teacher: "teacher",
-    students: ["Maryam Yusuf", "student"],
-  },
-  {
-    name: "History C",
-    section: "3C",
-    subject: "History",
-    room: "301",
-    timings: "10:00 – 10:45 AM",
-    teacher: "ustadh",
-    students: ["All students"],
-  },
-];
 
 const allStudents = [
   "student", "Fatima Ahmed", "Zayd Ali", "Maryam Yusuf", "Bilal Rahman",
@@ -39,6 +9,8 @@ const allStudents = [
 
 export default function ClassApp() {
   const { user } = useAuth();
+  const [classes, setClasses] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const capitalize = (str) =>
     str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
@@ -47,11 +19,26 @@ export default function ClassApp() {
   const isTeacher = user?.role === "teacher";
   const isStudent = user?.role === "student";
 
-  const visibleClasses = dummyClasses.filter((cls) => {
+  // 🔁 Fetch real class data from backend
+  useEffect(() => {
+    fetch("http://localhost:5000/api/classes")
+      .then((res) => res.json())
+      .then((data) => {
+        setClasses(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching classes:", err);
+        setLoading(false);
+      });
+  }, []);
+
+  // 🧠 Filter based on user role
+  const visibleClasses = classes.filter((cls) => {
     if (isAdmin) return true;
     if (isTeacher) return cls.teacher === user.username;
     if (isStudent) {
-      const list = cls.students.includes("All students") ? allStudents : cls.students;
+      const list = cls.students?.includes("All students") ? allStudents : cls.students || [];
       return list.includes(user.username);
     }
     return false;
@@ -71,7 +58,9 @@ export default function ClassApp() {
             : "Classes"}
         </h1>
 
-        {visibleClasses.length === 0 ? (
+        {loading ? (
+          <p>Loading classes...</p>
+        ) : visibleClasses.length === 0 ? (
           <p>
             {isStudent
               ? "You are not enrolled in any classes."

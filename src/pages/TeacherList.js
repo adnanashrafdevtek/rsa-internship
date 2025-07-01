@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -8,20 +8,34 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 
 const localizer = momentLocalizer(moment);
 
-// Dummy teacher list
-const dummyTeachers = [
-  { id: 1, name: "Mr. Smith" },
-  { id: 2, name: "Ms. Johnson" },
-  { id: 3, name: "Dr. Lee" }
-];
-
 export default function TeacherList() {
   const { logout } = useAuth();
   const navigate = useNavigate();
+
+  const [teachers, setTeachers] = useState([]);
   const [selectedTeacher, setSelectedTeacher] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [teacherSchedules, setTeacherSchedules] = useState({});
   const [view, setView] = useState(Views.WEEK);
+  const [loading, setLoading] = useState(true);
+
+  // 🔁 Fetch teacher list from backend
+  useEffect(() => {
+    fetch("http://localhost:5000/api/teachers")
+      .then((res) => res.json())
+      .then((data) => {
+        setTeachers(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching teachers:", err);
+        setLoading(false);
+      });
+  }, []);
+
+  const filteredTeachers = teachers.filter((teacher) =>
+    teacher.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handleLogout = () => {
     logout();
@@ -55,10 +69,6 @@ export default function TeacherList() {
     }
   };
 
-  const filteredTeachers = dummyTeachers.filter((teacher) =>
-    teacher.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       {/* Sidebar */}
@@ -70,7 +80,9 @@ export default function TeacherList() {
           View Teacher Schedules
         </h1>
 
-        {!selectedTeacher ? (
+        {loading ? (
+          <p>Loading teachers...</p>
+        ) : !selectedTeacher ? (
           <div>
             <input
               type="text"
@@ -116,7 +128,7 @@ export default function TeacherList() {
               selectable
               onSelectSlot={handleSelectSlot}
               onSelectEvent={handleSelectEvent}
-              views={['month', 'week', 'day']}
+              views={["month", "week", "day"]}
               view={view}
               onView={(newView) => setView(newView)}
               defaultDate={new Date()}
