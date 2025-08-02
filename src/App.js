@@ -10,6 +10,7 @@ import ResetPassword from "./pages/ResetPassword";
 import Schedule from "./pages/Schedule";
 import TeacherList from "./pages/TeacherList";
 import StudentList from "./pages/StudentList";
+import AddUserPage from "./pages/AddUserPage";
 import ClassRosters from "./pages/ClassRosters"; // ✅ NEW
 
 function App() {
@@ -76,6 +77,15 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+          path="/add-user" 
+          element={
+            <ProtectedRoute>
+          <AddUserPage />
+          </ProtectedRoute>
+          }
+          />
+
         </Routes>
       </Router>
     </AuthProvider>
