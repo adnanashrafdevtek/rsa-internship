@@ -1,21 +1,11 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
-import axios from "axios";
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [hoveringSchedule, setHoveringSchedule] = useState(false);
-  const [showAddUserForm, setShowAddUserForm] = useState(false);
-  const [activationLink, setActivationLink] = useState("");
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    emailAddress: "",
-    address: "",
-    role: "student"
-  });
 
   const handleLogout = () => {
     logout();
@@ -24,33 +14,6 @@ export default function Sidebar() {
 
   const capitalizeFirst = (str) =>
     str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
-
-  const handleInputChange = (e) => {
-    setFormData((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }));
-  };
-
-  const handleAddUserSubmit = async (e) => {
-    e.preventDefault();
-
-    try {
-      const res = await axios.post("http://localhost:3000/api/user", formData);
-      setActivationLink(res.data.activationLink || "");
-      alert("User added successfully!");
-      setFormData({
-        firstName: "",
-        lastName: "",
-        emailAddress: "",
-        address: "",
-        role: "student"
-      });
-    } catch (err) {
-      console.error(err);
-      alert("Error adding user.");
-    }
-  };
 
   if (!user) return null;
 
@@ -75,7 +38,7 @@ export default function Sidebar() {
       </h2>
 
       <p style={{ marginBottom: "20px", fontSize: "16px", color: "#ecf0f1" }}>
-        Logged in as: <strong>{capitalizeFirst(user.username)}</strong>
+        Logged in as: <strong>{capitalizeFirst(user.firstName)}</strong>
       </p>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -114,85 +77,15 @@ export default function Sidebar() {
           <Link to="/rosters" style={linkStyle}>Class Rosters</Link>
         )}
 
-        {isAdmin && <Link to="/student" style={linkStyle}>Users</Link>}
-
-        {/* Add User Button */}
         {isAdmin && (
-          <button
-            onClick={() => setShowAddUserForm(prev => !prev)}
-            style={{
-              ...linkStyle,
-              textAlign: "left",
-              backgroundColor: "#16a085"
-            }}
-          >
-            {showAddUserForm ? "➖ Cancel Add User" : "➕ Add User"}
-          </button>
+          <>
+            <Link to="/student" style={linkStyle}>Users</Link>
+            <Link to="/add-user" style={{ ...linkStyle, backgroundColor: "#16a085" }}>
+              ➕ Add User
+            </Link>
+          </>
         )}
       </nav>
-
-      {/* Add User Form */}
-      {showAddUserForm && (
-        <form
-          onSubmit={handleAddUserSubmit}
-          style={{
-            marginTop: "10px",
-            backgroundColor: "#1c2833",
-            padding: "10px",
-            borderRadius: "6px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "8px"
-          }}
-        >
-          <input
-            name="firstName"
-            placeholder="First Name"
-            value={formData.firstName}
-            onChange={handleInputChange}
-            style={inputStyle}
-          />
-          <input
-            name="lastName"
-            placeholder="Last Name"
-            value={formData.lastName}
-            onChange={handleInputChange}
-            style={inputStyle}
-          />
-          <input
-            name="emailAddress"
-            placeholder="Email"
-            value={formData.emailAddress}
-            onChange={handleInputChange}
-            style={inputStyle}
-          />
-          <input
-            name="address"
-            placeholder="Address"
-            value={formData.address}
-            onChange={handleInputChange}
-            style={inputStyle}
-          />
-          <select
-            name="role"
-            value={formData.role}
-            onChange={handleInputChange}
-            style={inputStyle}
-          >
-            <option value="student">Student</option>
-            <option value="teacher">Teacher</option>
-          </select>
-          <button type="submit" style={{ ...logoutStyle, backgroundColor: "#3498db" }}>
-            Submit User
-          </button>
-
-          {activationLink && (
-            <div style={{ fontSize: "12px", color: "#2ecc71" }}>
-              Activation Link: <a href={activationLink} style={{ color: "#1abc9c" }}>{activationLink}</a>
-            </div>
-          )}
-        </form>
-      )}
 
       <div style={{ flexGrow: 1 }}></div>
 
@@ -218,12 +111,6 @@ const submenuLinkStyle = {
   padding: "8px 12px",
   fontSize: "14px",
   backgroundColor: "#3b4b5e"
-};
-
-const inputStyle = {
-  padding: "6px",
-  borderRadius: "4px",
-  border: "none"
 };
 
 const logoutStyle = {

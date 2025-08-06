@@ -11,6 +11,7 @@ import Schedule from "./pages/Schedule";
 import TeacherList from "./pages/TeacherList";
 import StudentList from "./pages/StudentList";
 import ClassRosters from "./pages/ClassRosters"; // ✅ NEW
+import AddUserPage from "./pages/AddUserPage";
 
 function App() {
   return (
@@ -75,6 +76,14 @@ function App() {
                 <ClassRosters />
               </ProtectedRoute>
             }
+          />
+          <Route
+          path="/add-user" 
+          element={
+            <ProtectedRoute>
+          <AddUserPage />
+          </ProtectedRoute>
+          }
           />
         </Routes>
       </Router>
