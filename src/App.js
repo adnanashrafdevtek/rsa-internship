@@ -2,17 +2,17 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
-import Student from "./pages/Users";
 import Classes from "./pages/Classes";
-import ProtectedRoute from "./components/ProtectedRoute";
-import { AuthProvider } from "./context/AuthContext";
-import ResetPassword from "./pages/ResetPassword";
+import Student from "./pages/Users";
 import Schedule from "./pages/Schedule";
 import TeacherList from "./pages/TeacherList";
 import StudentList from "./pages/StudentList";
+import ResetPassword from "./pages/ResetPassword";
+import ClassRosters from "./pages/ClassRosters";
 import AddUserPage from "./pages/AddUserPage";
-import ClassRosters from "./pages/ClassRosters"; // ✅ NEW
 import ActivationForm from "./pages/ActivationForm";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { AuthProvider } from "./context/AuthContext";
 
 function App() {
   return (
@@ -62,23 +62,21 @@ function App() {
           />
           <Route
             path="/student/schedules"
-            element={
-              <StudentList />
-            }
+            element={<StudentList />}
           />
           <Route
             path="/reset-password"
             element={<ResetPassword />}
           />
           <Route
-  path="/rosters/:classId"
-  element={
-    <ProtectedRoute>
-      <ClassRosters />
-    </ProtectedRoute>
-  }
-/>
-
+            path="/rosters/:classId"
+            element={
+              <ProtectedRoute>
+                <ClassRosters />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/rosters"
             element={
               <ProtectedRoute>
@@ -87,15 +85,17 @@ function App() {
             }
           />
           <Route
-          path="/add-user" 
-          element={
-            <ProtectedRoute>
-          <AddUserPage />
-          </ProtectedRoute>
-          }
+            path="/add-user"
+            element={
+              <ProtectedRoute>
+                <AddUserPage />
+              </ProtectedRoute>
+            }
           />
           <Route
-          path="/activation-form" element={<ActivationForm />} />
+            path="/activation-form"
+            element={<ActivationForm />}
+          />
         </Routes>
       </Router>
     </AuthProvider>
