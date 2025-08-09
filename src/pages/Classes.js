@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
+import { Link } from 'react-router-dom';
+
 
 export default function Classes() {
   const [classes, setClasses] = useState([]);
@@ -23,6 +25,9 @@ export default function Classes() {
   const [showAddRecurring, setShowAddRecurring] = useState(false);
   const [showEditRecurring, setShowEditRecurring] = useState(false);
   const [showAddStudentsFor, setShowAddStudentsFor] = useState(null);
+  const [allStudents, setAllStudents] = useState([]);
+const [showAllStudents, setShowAllStudents] = useState(false);
+
 
   const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -57,10 +62,23 @@ export default function Classes() {
     }
   };
 
+  const fetchAllStudents = async () => {
+  try {
+    const res = await fetch('http://localhost:3000/api/students');
+    if (!res.ok) throw new Error();
+    setAllStudents(await res.json());
+  } catch {
+    setAllStudents([]);
+  }
+};
+
+
   useEffect(() => {
-    fetchClasses();
-    fetchTeachers();
-  }, []);
+  fetchClasses();
+  fetchTeachers();
+  fetchAllStudents();
+}, []);
+
 
   const startEditing = (cls) => {
     setEditingId(cls.id);
@@ -153,6 +171,35 @@ export default function Classes() {
     return '';
   };
 
+  const saveStudentsToClass = async () => {
+  console.log('Class ID:', showAddStudentsFor);
+  console.log('Selected Students:', selectedStudentIds);
+  if (!showAddStudentsFor || selectedStudentIds.length === 0) return alert('Select a class and students first');
+
+  try {
+    for (const student_id of selectedStudentIds) {
+      console.log('Adding student_id:', student_id);
+      const res = await fetch(`http://localhost:3000/api/classes/${showAddStudentsFor}/students`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to add student');
+      }
+    }
+    alert('Students added successfully');
+    setShowAddStudentsFor(null);
+    setSelectedStudentIds([]);
+    fetchClasses();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+
   const saveEdit = async () => {
     try {
       const startDatetime = combineLocalDatetime(editForm.start_date, editForm.start_time);
@@ -230,6 +277,23 @@ export default function Classes() {
       alert(err.message);
     }
   };
+
+  const handleOpenAddStudents = (cls) => {
+  setShowAddStudentsFor(cls.id);
+  setSelectedStudentIds([]);
+  setShowAllStudents(false);
+  fetchStudentsByGrade(cls.grade_level);
+};
+const handleToggleShowAllStudents = () => {
+  const next = !showAllStudents;
+  setShowAllStudents(next);
+  setSelectedStudentIds([]);
+  if (!next && showAddStudentsFor) {
+    const cls = classes.find(c => c.id === showAddStudentsFor);
+    if (cls) fetchStudentsByGrade(cls.grade_level);
+  }
+};
+
 
   return (
     <div style={{ display: 'flex' }}>
@@ -359,7 +423,12 @@ export default function Classes() {
                     </tr>
                   ) : (
                     <tr key={c.id}>
-                      <td style={tdStyle}>{c.name}</td>
+<td style={tdStyle}>
+  <Link to={`/rosters/${c.id}`} style={{ color: '#2196f3', textDecoration: 'underline', cursor: 'pointer' }}>
+    {c.name}
+  </Link>
+</td>
+
                       <td style={tdStyle}>{c.grade_level}</td>
                       <td style={tdStyle}>
                         {c.teacher_first_name && c.teacher_last_name
@@ -394,60 +463,53 @@ export default function Classes() {
 
                 {showAddStudentsFor && (
                   <tr>
-                    <td colSpan={7} style={{ padding: 12, background: '#fff8e1' }}>
-                      <div>
-                        <strong>Select Students to Add to Class (Grade {classes.find(c => c.id === showAddStudentsFor)?.grade_level})</strong>
-                      </div>
-                      <div style={{ maxHeight: 150, overflowY: 'auto', marginTop: 8 }}>
-                        {studentsForGrade.length === 0 && <div>No students found for this grade.</div>}
-                        {studentsForGrade.map(s => (
-                          <label key={s.id} style={{ display: 'block', cursor: 'pointer', padding: '4px 8px' }}>
-                            <input
-                              type="checkbox"
-                              checked={selectedStudentIds.includes(s.id)}
-                              onChange={() => {
-                                setSelectedStudentIds(prev =>
-                                  prev.includes(s.id)
-                                    ? prev.filter(id => id !== s.id)
-                                    : [...prev, s.id]
-                                );
-                              }}
-                            />{' '}
-                            {s.first_name} {s.last_name} (Grade {s.grade_level})
-                          </label>
-                        ))}
-                      </div>
-                      <div style={{ marginTop: 12 }}>
-                        <button
-                          onClick={async () => {
-                            if (selectedStudentIds.length === 0) {
-                              alert('Select at least one student');
-                              return;
-                            }
-                            try {
-                              const res = await fetch(`http://localhost:3000/api/class/${showAddStudentsFor}/students`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ studentIds: selectedStudentIds }),
-                              });
-                              if (!res.ok) throw new Error('Failed to add students');
-                              alert('Students added to class!');
-                              setShowAddStudentsFor(null);
-                              // Optionally refresh classes or students if needed
-                            } catch (e) {
-                              alert(e.message);
-                            }
-                          }}
-                          style={{ ...saveBtnStyle, marginRight: 8 }}
-                        >
-                          Save Students
-                        </button>
-                        <button onClick={() => setShowAddStudentsFor(null)} style={cancelBtnStyle}>
-                          Cancel
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+  <td colSpan={7} style={{ padding: 12, background: '#fff8e1' }}>
+    <label style={{ display: 'block', marginBottom: 8 }}>
+      <input
+        type="checkbox"
+        checked={showAllStudents}
+        onChange={handleToggleShowAllStudents}
+        style={{ marginRight: 6 }}
+      />
+      Show All Students
+    </label>
+    <div style={{ maxHeight: 150, overflowY: 'auto', marginTop: 8 }}>
+      {(showAllStudents ? allStudents : studentsForGrade).map(s => (
+        <label
+          key={s.id}
+          style={{ display: 'block', cursor: 'pointer', padding: '4px 8px' }}
+        >
+          <input
+            type="checkbox"
+            checked={selectedStudentIds.includes(s.id)}
+            onChange={() => {
+              setSelectedStudentIds(prev =>
+                prev.includes(s.id)
+                  ? prev.filter(id => id !== s.id)
+                  : [...prev, s.id]
+              );
+            }}
+            style={{ marginRight: 6 }}
+          />
+          {s.first_name} {s.last_name} (Grade {s.grade_level})
+        </label>
+      ))}
+    </div>
+    <div style={{ marginTop: 12 }}>
+      <button onClick={saveStudentsToClass} style={{ ...saveBtnStyle, marginRight: 8 }}>
+  Save Students
+</button>
+
+      <button
+        onClick={() => setShowAddStudentsFor(null)}
+        style={cancelBtnStyle}
+      >
+        Cancel
+      </button>
+    </div>
+  </td>
+</tr>
+
                 )}
               </tbody>
             </table>
@@ -496,29 +558,33 @@ export default function Classes() {
                 </div>
                 <div style={{ ...formRowStyle, alignItems: 'flex-start' }}>
                   <label style={labelStyle}>Recurring Days:</label>
-                  <div style={{ position: 'relative' }}>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddRecurring(prev => !prev)}
-                      style={{ ...editButtonStyle, minWidth: 90 }}
-                    >
-                      {addForm.recurring_days.length > 0 ? addForm.recurring_days.join(', ') : 'Select days'}
-                    </button>
-                    {showAddRecurring && (
-                      <div style={submenuStyle}>
-                        {daysOfWeek.map(day => (
-                          <label key={day} style={{ display: 'block', cursor: 'pointer', padding: '4px 8px' }}>
-                            <input
-                              type="checkbox"
-                              checked={addForm.recurring_days.includes(day)}
-                              onChange={() => toggleAddRecurringDay(day)}
-                            />{' '}
-                            {day}
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <div style={{
+  display: 'grid',
+  gridTemplateColumns: 'repeat(7, 1fr)',
+  gap: 4,
+  border: '1px solid #ccc',
+  padding: 4,
+  borderRadius: 4
+}}>
+  {daysOfWeek.map(day => (
+    <label key={day} style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 4,
+      border: '1px solid #aaa',
+      fontSize: 12
+    }}>
+      <input
+        type="checkbox"
+        checked={addForm.recurring_days.includes(day)}
+        onChange={() => toggleAddRecurringDay(day)}
+        style={{ marginRight: 4 }}
+      />
+      {day}
+    </label>
+  ))}
+</div>
                 </div>
                 <div style={{ marginTop: 12 }}>
                   <button onClick={addClass} style={saveBtnStyle}>

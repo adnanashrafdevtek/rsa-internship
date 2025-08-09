@@ -73,9 +73,6 @@ export default function Sidebar() {
           <Link to="/schedule" style={linkStyle}>Schedule</Link>
         )}
 
-        {(isAdmin || isTeacher) && (
-          <Link to="/rosters" style={linkStyle}>Class Rosters</Link>
-        )}
 
         {isAdmin && (
           <>
