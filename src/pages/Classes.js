@@ -3,6 +3,7 @@ import Sidebar from './Sidebar';
 import { Link } from 'react-router-dom';
 
 
+
 export default function Classes() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +31,9 @@ const [showAllStudents, setShowAllStudents] = useState(false);
 
 
   const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const TIMEZONE = 'America/Chicago'; // CST/CDT
+
+  
 
   const fetchClasses = () => {
     setLoading(true);
