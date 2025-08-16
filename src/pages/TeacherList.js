@@ -8,6 +8,39 @@ import { useNavigate } from "react-router-dom";
 
 const localizer = momentLocalizer(moment);
 
+function generateRecurringEvents(classObj, weeks = 8) {
+  const daysMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const events = [];
+  const startDate = new Date(classObj.start_time.slice(0, 10));
+  const startTime = classObj.start_time.slice(11, 16);
+  const endTime = classObj.end_time.slice(11, 16);
+  const recurringDays = classObj.recurring_days.split(",").map(d => d.trim());
+
+  for (let week = 0; week < weeks; week++) {
+    recurringDays.forEach(day => {
+      const dayOfWeek = daysMap[day];
+      const eventDate = new Date(startDate);
+      eventDate.setDate(eventDate.getDate() + (dayOfWeek - eventDate.getDay() + 7 * week));
+      const [sh, sm] = startTime.split(":");
+      const [eh, em] = endTime.split(":");
+      const start = new Date(eventDate);
+      start.setHours(Number(sh), Number(sm), 0, 0);
+      const end = new Date(eventDate);
+      end.setHours(Number(eh), Number(em), 0, 0);
+
+      events.push({
+        id: `class-${classObj.id}-${week}-${day}`,
+        title: classObj.name,
+        start,
+        end,
+        classId: classObj.id,
+        isClass: true,
+      });
+    });
+  }
+  return events;
+}
+
 export default function TeacherList() {
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -47,29 +80,41 @@ export default function TeacherList() {
   }, []);
 
   const fetchEventsForTeacher = async (teacherId) => {
-    try {
-      const res = await fetch(`http://localhost:3000/myCalendar?userId=${teacherId}&userType=teacher`);
-      if (!res.ok) throw new Error("Failed to fetch calendar events");
-      const data = await res.json();
+  try {
+    // Fetch custom events
+    const res = await fetch(`http://localhost:3000/myCalendar?userId=${teacherId}&userType=teacher`);
+    if (!res.ok) throw new Error("Failed to fetch calendar events");
+    const customEvents = await res.json();
 
-      const formatted = data.map((event) => ({
-        id: Number(event.id),
-        title: event.title || "No Title",
-        start: new Date(event.start_time),
-        end: new Date(event.end_time),
-      }));
+    // Fetch classes
+    const classRes = await fetch(`http://localhost:3000/api/teachers/${teacherId}/classes`);
+    const classes = classRes.ok ? await classRes.json() : [];
 
-      setTeacherSchedules((prev) => ({
-        ...prev,
-        [teacherId]: formatted,
-      }));
-      setSelectedEvents(new Set());
-      setShowCheckboxes(false);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to load calendar events");
-    }
-  };
+    // Generate recurring events for classes
+    let classEvents = [];
+    classes.forEach(cls => {
+      classEvents = classEvents.concat(generateRecurringEvents(cls));
+    });
+
+    // Format custom events
+    const formattedCustom = customEvents.map((event) => ({
+      id: Number(event.id),
+      title: event.title || "No Title",
+      start: new Date(event.start_time),
+      end: new Date(event.end_time),
+    }));
+
+    setTeacherSchedules((prev) => ({
+      ...prev,
+      [teacherId]: [...formattedCustom, ...classEvents],
+    }));
+    setSelectedEvents(new Set());
+    setShowCheckboxes(false);
+  } catch (err) {
+    console.error(err);
+    alert("Failed to load calendar events");
+  }
+};
 
   useEffect(() => {
     if (selectedTeacher) {
@@ -134,6 +179,12 @@ export default function TeacherList() {
       return newSet;
     });
   };
+
+  const fetchTeacherClasses = async (teacherId) => {
+  const res = await fetch(`http://localhost:3000/api/teachers/${teacherId}/classes`);
+  if (!res.ok) throw new Error("Failed to fetch teacher classes");
+  return await res.json();
+};
 
   const handleDeleteSelected = async () => {
     if (selectedEvents.size === 0) {
