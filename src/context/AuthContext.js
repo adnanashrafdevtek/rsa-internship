@@ -1,12 +1,41 @@
-// src/context/AuthContext.js
-import React, { createContext, useContext, useState } from "react";
+// context/AuthContext.js
+import React, { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext();
 
-const dummyUsers = [
-  { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0 },
-  { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1 },
-  { email: "student@example.com", password: "student123", role: "student", first_name: "Student", last_name: "User", id: 2 },
+const defaultUsers = [
+  {
+    username: "admin",
+    password: "admin123",
+    role: "admin",
+    first_name: "Admin",
+    last_name: "User",
+    active: true,
+  },
+  {
+    username: "teacher",
+    password: "teacher123",
+    role: "teacher",
+    first_name: "Jane",
+    last_name: "Doe",
+    active: true,
+  },
+  {
+    username: "Mr. Smith",
+    password: "test123",
+    role: "teacher",
+    first_name: "John",
+    last_name: "Smith",
+    active: true,
+  },
+  {
+    username: "student",
+    password: "student123",
+    role: "student",
+    first_name: "Sally",
+    last_name: "Student",
+    active: true,
+  },
 ];
 
 export const AuthProvider = ({ children }) => {
@@ -15,41 +44,28 @@ export const AuthProvider = ({ children }) => {
     return storedUser ? JSON.parse(storedUser) : null;
   });
 
-  const login = async (email, password) => {
-    // First try dummy users
-    const foundUser = dummyUsers.find(
-      (u) => u.email === email && u.password === password
+  const [users, setUsers] = useState(() => {
+    const storedUsers = localStorage.getItem("users");
+    return storedUsers ? JSON.parse(storedUsers) : defaultUsers;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("users", JSON.stringify(users));
+  }, [users]);
+
+  const login = (username, password) => {
+    const foundUser = users.find(
+      (u) =>
+        u.username === username &&
+        u.password === password &&
+        u.active === true
     );
     if (foundUser) {
       setUser(foundUser);
       localStorage.setItem("user", JSON.stringify(foundUser));
       return true;
     }
-
-    // If not found, try backend login
-    try {
-      const response = await fetch("http://localhost:3000/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ email, password })
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.user) {
-        setUser(data.user);
-        localStorage.setItem("user", JSON.stringify(data.user));
-        return true;
-      } else {
-        console.error("Login failed:", data.error);
-        return false;
-      }
-    } catch (err) {
-      console.error("Network error:", err);
-      return false;
-    }
+    return false;
   };
 
   const logout = () => {
@@ -57,8 +73,31 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("user");
   };
 
+  const changeUserPassword = (username, newPassword) => {
+    const updatedUsers = users.map((u) =>
+      u.username === username ? { ...u, password: newPassword } : u
+    );
+    setUsers(updatedUsers);
+  };
+
+  const toggleUserActiveStatus = (username) => {
+    const updatedUsers = users.map((u) =>
+      u.username === username ? { ...u, active: !u.active } : u
+    );
+    setUsers(updatedUsers);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        logout,
+        users,
+        changeUserPassword,
+        toggleUserActiveStatus,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
