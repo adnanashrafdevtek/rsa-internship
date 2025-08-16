@@ -36,3 +36,29 @@
     transform: rotate(360deg);
   }
 }
+/* Make the built-in now-indicator line bold and red */
+.rbc-now-indicator {
+  height: 8px !important;
+  background: linear-gradient(90deg, #ff0033 0%, #ff3333 100%) !important;
+  border-top: 4px solid #fff !important;
+  box-shadow: 0 0 18px 6px #ff0033 !important;
+  z-index: 99 !important;
+}
+
+.rbc-now-indicator::before {
+  content: "● NOW";
+  position: absolute;
+  left: 0;
+  top: -24px;
+  color: #fff;
+  font-weight: bold;
+  font-size: 18px;
+  background: #ff0033;
+  padding: 0 14px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(255,0,51,0.12);
+  border: 2px solid #fff;
+  letter-spacing: 1px;
+}
+
+

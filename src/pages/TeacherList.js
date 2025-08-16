@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Calendar, momentLocalizer, Views } from "react-big-calendar";
 import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 
 const localizer = momentLocalizer(moment);
+
 
 function generateRecurringEvents(classObj, weeks = 8) {
   const daysMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
@@ -41,6 +42,8 @@ function generateRecurringEvents(classObj, weeks = 8) {
   return events;
 }
 
+const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 export default function TeacherList() {
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -54,6 +57,30 @@ export default function TeacherList() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [showCheckboxes, setShowCheckboxes] = useState(false);
+  const [date, setDate] = useState(new Date());
+
+  const handleNavigate = (newDate) => {
+  setDate(newDate);
+};
+
+  // Add event modal state
+  const [showAddEventModal, setShowAddEventModal] = useState(false);
+  const [newEvent, setNewEvent] = useState({
+    title: "",
+    startDate: "",
+    startTime: "",
+    endDate: "",
+    endTime: "",
+    recurringDays: [],
+    eventType: "",
+    description: "",
+  });
+
+  // Event details modal state
+  const [showEventDetails, setShowEventDetails] = useState(false);
+  const [eventDetails, setEventDetails] = useState(null);
+
+  const calendarRef = useRef(null);
 
   const handleLogout = () => {
     logout();
@@ -80,41 +107,44 @@ export default function TeacherList() {
   }, []);
 
   const fetchEventsForTeacher = async (teacherId) => {
-  try {
-    // Fetch custom events
-    const res = await fetch(`http://localhost:3000/myCalendar?userId=${teacherId}&userType=teacher`);
-    if (!res.ok) throw new Error("Failed to fetch calendar events");
-    const customEvents = await res.json();
+    try {
+      // Fetch custom events
+      const res = await fetch(`http://localhost:3000/myCalendar?userId=${teacherId}`);
+      if (!res.ok) throw new Error("Failed to fetch calendar events");
+      const customEvents = await res.json();
 
-    // Fetch classes
-    const classRes = await fetch(`http://localhost:3000/api/teachers/${teacherId}/classes`);
-    const classes = classRes.ok ? await classRes.json() : [];
+      // Fetch classes
+      const classRes = await fetch(`http://localhost:3000/api/teachers/${teacherId}/classes`);
+      const classes = classRes.ok ? await classRes.json() : [];
 
-    // Generate recurring events for classes
-    let classEvents = [];
-    classes.forEach(cls => {
-      classEvents = classEvents.concat(generateRecurringEvents(cls));
-    });
+      // Generate recurring events for classes
+      let classEvents = [];
+      classes.forEach(cls => {
+        classEvents = classEvents.concat(generateRecurringEvents(cls));
+      });
 
-    // Format custom events
-    const formattedCustom = customEvents.map((event) => ({
-      id: Number(event.id),
-      title: event.title || "No Title",
-      start: new Date(event.start_time),
-      end: new Date(event.end_time),
-    }));
+      // Format custom events from /myCalendar (calendar table)
+      const formattedCustom = customEvents.map((event) => ({
+        id: Number(event.id),
+        title: event.title || event.event_title || "No Title",
+        start: new Date(event.start_time),
+        end: new Date(event.end_time),
+        description: event.description || "",
+        classId: event.class_id || null,
+        userId: event.user_id || null,
+      }));
 
-    setTeacherSchedules((prev) => ({
-      ...prev,
-      [teacherId]: [...formattedCustom, ...classEvents],
-    }));
-    setSelectedEvents(new Set());
-    setShowCheckboxes(false);
-  } catch (err) {
-    console.error(err);
-    alert("Failed to load calendar events");
-  }
-};
+      setTeacherSchedules((prev) => ({
+        ...prev,
+        [teacherId]: [...formattedCustom, ...classEvents],
+      }));
+      setSelectedEvents(new Set());
+      setShowCheckboxes(false);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to load calendar events");
+    }
+  };
 
   useEffect(() => {
     if (selectedTeacher) {
@@ -122,51 +152,64 @@ export default function TeacherList() {
     }
   }, [selectedTeacher]);
 
-  const handleSelectSlot = async ({ start, end }) => {
-    if (showCheckboxes) return;
-
-    const title = window.prompt("Enter event title:");
-    if (!title) return;
-
-    const classId = 1;
-
-    try {
-      const res = await fetch("http://localhost:3000/calendar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          start_time: moment(start).format("YYYY-MM-DD HH:mm:ss"),
-          end_time: moment(end).format("YYYY-MM-DD HH:mm:ss"),
-          class_id: classId,
-          event_title: title,
-          user_type: "teacher",
-          user_id: selectedTeacher.id,
-        }),
-      });
-
-      if (!res.ok) throw new Error("Failed to add event");
-
-      const newEvent = await res.json();
-
-      setTeacherSchedules((prev) => {
-        const currentEvents = prev[selectedTeacher.id] || [];
-        return {
-          ...prev,
-          [selectedTeacher.id]: [
-            ...currentEvents,
-            {
-              id: Number(newEvent.idcalendar),
-              title,
-              start: new Date(newEvent.start_time),
-              end: new Date(newEvent.end_time),
-            },
-          ],
-        };
-      });
-    } catch (err) {
-      alert(err.message);
+  // Auto-scroll to current time in week/day view
+  useEffect(() => {
+    if (view === "week" || view === "day") {
+      setTimeout(() => {
+        const now = new Date();
+        const hour = now.getHours();
+        const calendarContent = document.querySelector(".rbc-time-content");
+        if (calendarContent) {
+          calendarContent.scrollTop = Math.max(0, hour * 40 - 200);
+        }
+      }, 300);
     }
-  };
+  }, [view, selectedTeacher, teacherSchedules]);
+
+  // Bold, bright, and very noticeable red line for current time
+  // Start replace at line 97
+function NowIndicator() {
+  const now = new Date();
+  const minutes = now.getMinutes();
+  const top = now.getHours() * 40 + (minutes / 60) * 40; // 40px per hour row
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        top: top,
+        height: 8,
+        background: "linear-gradient(90deg, #ff0033 0%, #ff3333 100%)",
+        borderTop: "4px solid #fff",
+        boxShadow: "0 0 18px 6px #ff0033",
+        zIndex: 99,
+        pointerEvents: "none",
+        fontWeight: "bold",
+      }}
+    >
+      <span
+        style={{
+          position: "absolute",
+          left: 0,
+          top: -24,
+          color: "#fff",
+          fontWeight: "bold",
+          fontSize: 18,
+          background: "#ff0033",
+          padding: "0 14px",
+          borderRadius: 10,
+          boxShadow: "0 2px 8px rgba(255,0,51,0.12)",
+          border: "2px solid #fff",
+          letterSpacing: 1,
+        }}
+      >
+        ● NOW
+      </span>
+    </div>
+  );
+}
 
   const toggleSelectEvent = (eventId) => {
     setSelectedEvents((prev) => {
@@ -180,11 +223,133 @@ export default function TeacherList() {
     });
   };
 
-  const fetchTeacherClasses = async (teacherId) => {
-  const res = await fetch(`http://localhost:3000/api/teachers/${teacherId}/classes`);
-  if (!res.ok) throw new Error("Failed to fetch teacher classes");
-  return await res.json();
-};
+  const handleSelectAll = () => {
+    const allEventIds = (teacherSchedules[selectedTeacher.id] || []).map((e) => e.id);
+    if (selectedEvents.size === allEventIds.length) {
+      setSelectedEvents(new Set());
+    } else {
+      setSelectedEvents(new Set(allEventIds));
+    }
+  };
+
+  // Show event description/details on click
+  const handleEventClick = (event) => {
+    setEventDetails(event);
+    setShowEventDetails(true);
+  };
+
+  const EventWithCheckbox = ({ event }) => (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        cursor: "pointer",
+        fontWeight: 500,
+        color: "#222",
+      }}
+      onClick={() => handleEventClick(event)}
+      title={event.description || ""}
+    >
+      {showCheckboxes && (
+        <input
+          type="checkbox"
+          checked={selectedEvents.has(event.id)}
+          onChange={(e) => {
+            e.stopPropagation();
+            toggleSelectEvent(event.id);
+          }}
+          style={{ marginRight: 8 }}
+        />
+      )}
+      <span>{event.title}</span>
+    </div>
+  );
+
+  const handleNewEventChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    if (name === "recurringDays") {
+      setNewEvent((prev) => ({
+        ...prev,
+        recurringDays: checked
+          ? [...prev.recurringDays, value]
+          : prev.recurringDays.filter((d) => d !== value),
+      }));
+    } else {
+      setNewEvent((prev) => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleAddEvent = async (e) => {
+    e.preventDefault();
+    if (!selectedTeacher) return;
+
+    const { title, startDate, startTime, endDate, endTime, recurringDays, description } = newEvent;
+    if (!title || !startDate || !startTime || !endDate || !endTime) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+
+    // Helper to format date+time as "YYYY-MM-DD HH:mm:ss"
+    const formatDT = (date, time) => moment(`${date} ${time}`).format("YYYY-MM-DD HH:mm:ss");
+
+    let eventsToAdd = [];
+    if (recurringDays.length > 0) {
+      // Add an event for each recurring day between startDate and endDate
+      const start = moment(startDate);
+      const end = moment(endDate);
+      let curr = start.clone();
+      while (curr.isSameOrBefore(end)) {
+        const dayName = curr.format("ddd");
+        if (recurringDays.includes(dayName)) {
+          eventsToAdd.push({
+            title,
+            start_time: formatDT(curr.format("YYYY-MM-DD"), startTime),
+            end_time: formatDT(curr.format("YYYY-MM-DD"), endTime),
+            class_id: null,
+            user_id: selectedTeacher.id,
+            description,
+          });
+        }
+        curr.add(1, "day");
+      }
+    } else {
+      // Single event
+      eventsToAdd.push({
+        title,
+        start_time: formatDT(startDate, startTime),
+        end_time: formatDT(endDate, endTime),
+        class_id: null,
+        user_id: selectedTeacher.id,
+        description,
+      });
+    }
+
+    try {
+      for (const event of eventsToAdd) {
+        const res = await fetch("http://localhost:3000/api/calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(event),
+        });
+        if (!res.ok) throw new Error("Failed to POST/add event");
+      }
+      setShowAddEventModal(false);
+      setNewEvent({
+        title: "",
+        startDate: "",
+        startTime: "",
+        endDate: "",
+        endTime: "",
+        recurringDays: [],
+        eventType: "",
+        description: "",
+      });
+      // Refresh events
+      fetchEventsForTeacher(selectedTeacher.id);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const handleDeleteSelected = async () => {
     if (selectedEvents.size === 0) {
@@ -196,7 +361,7 @@ export default function TeacherList() {
     setDeleting(true);
     try {
       for (const eventId of selectedEvents) {
-        const res = await fetch(`http://localhost:3000/calendar/${Number(eventId)}`, {
+        const res = await fetch(`http://localhost:3000/api/calendar/${Number(eventId)}`, {
           method: "DELETE",
         });
         if (!res.ok) {
@@ -222,29 +387,6 @@ export default function TeacherList() {
     setDeleting(false);
   };
 
-  const handleSelectAll = () => {
-    const allEventIds = (teacherSchedules[selectedTeacher.id] || []).map((e) => e.id);
-    if (selectedEvents.size === allEventIds.length) {
-      setSelectedEvents(new Set());
-    } else {
-      setSelectedEvents(new Set(allEventIds));
-    }
-  };
-
-  const EventWithCheckbox = ({ event }) => (
-    <div style={{ display: "flex", alignItems: "center" }}>
-      {showCheckboxes && (
-        <input
-          type="checkbox"
-          checked={selectedEvents.has(event.id)}
-          onChange={() => toggleSelectEvent(event.id)}
-          style={{ marginRight: 8 }}
-        />
-      )}
-      <span>{event.title}</span>
-    </div>
-  );
-
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       <Sidebar onLogout={handleLogout} />
@@ -253,7 +395,7 @@ export default function TeacherList() {
           View Teacher Schedules
         </h1>
         <p style={{ marginBottom: "20px", fontSize: "16px", color: "#555" }}>
-          To add an event, drag and select a time slot on the calendar. A prompt will ask you to enter the event title.
+          To add an event, click the "Add Event" button for more options.
         </p>
 
         {loading ? (
@@ -306,6 +448,12 @@ export default function TeacherList() {
 
             <div style={{ marginBottom: 10 }}>
               <button
+                style={{ ...buttonStyle, backgroundColor: "#27ae60", marginRight: 10 }}
+                onClick={() => setShowAddEventModal(true)}
+              >
+                + Add Event
+              </button>
+              <button
                 style={{ ...buttonStyle, backgroundColor: "#c0392b" }}
                 onClick={() => {
                   setShowCheckboxes((prev) => !prev);
@@ -337,27 +485,294 @@ export default function TeacherList() {
               )}
             </div>
 
-            <Calendar
-              localizer={localizer}
-              events={teacherSchedules[selectedTeacher.id] || []}
-              startAccessor="start"
-              endAccessor="end"
-              style={{ height: 500 }}
-              selectable={!showCheckboxes}
-              onSelectSlot={handleSelectSlot}
-              components={{
-                event: EventWithCheckbox,
-              }}
-              views={["month", "week", "day"]}
-              view={view}
-              onView={(newView) => setView(newView)}
-              defaultDate={new Date()}
-              eventPropGetter={(event) =>
-                showCheckboxes && selectedEvents.has(event.id)
-                  ? { style: { backgroundColor: "#e74c3c" } }
-                  : {}
-              }
-            />
+            {/* Add Event Modal */}
+            {showAddEventModal && (
+              <div style={{
+                position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+                background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000
+              }}>
+                <div style={{
+                  background: "#fff",
+                  padding: 32,
+                  borderRadius: 12,
+                  minWidth: 400,
+                  boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
+                  maxWidth: "95vw"
+                }}>
+                  <h2 style={{ marginBottom: 18, color: "#2c3e50" }}>Add New Event</h2>
+                  <form onSubmit={handleAddEvent}>
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={{ display: "block", fontWeight: 500, marginBottom: 6 }}>Title</label>
+                      <input
+                        name="title"
+                        placeholder="Event Title"
+                        value={newEvent.title}
+                        onChange={handleNewEventChange}
+                        required
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          borderRadius: 6,
+                          border: "1px solid #ccc",
+                          fontSize: 15
+                        }}
+                      />
+                    </div>
+                    <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", fontWeight: 500, marginBottom: 6 }}>Start Date</label>
+                        <input
+                          type="date"
+                          name="startDate"
+                          value={newEvent.startDate}
+                          onChange={handleNewEventChange}
+                          required
+                          style={{
+                            width: "100%",
+                            padding: "8px",
+                            borderRadius: 6,
+                            border: "1px solid #ccc",
+                            fontSize: 15
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", fontWeight: 500, marginBottom: 6 }}>Start Time</label>
+                        <input
+                          type="time"
+                          name="startTime"
+                          value={newEvent.startTime}
+                          onChange={handleNewEventChange}
+                          required
+                          style={{
+                            width: "100%",
+                            padding: "8px",
+                            borderRadius: 6,
+                            border: "1px solid #ccc",
+                            fontSize: 15
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", fontWeight: 500, marginBottom: 6 }}>End Date</label>
+                        <input
+                          type="date"
+                          name="endDate"
+                          value={newEvent.endDate}
+                          onChange={handleNewEventChange}
+                          required
+                          style={{
+                            width: "100%",
+                            padding: "8px",
+                            borderRadius: 6,
+                            border: "1px solid #ccc",
+                            fontSize: 15
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", fontWeight: 500, marginBottom: 6 }}>End Time</label>
+                        <input
+                          type="time"
+                          name="endTime"
+                          value={newEvent.endTime}
+                          onChange={handleNewEventChange}
+                          required
+                          style={{
+                            width: "100%",
+                            padding: "8px",
+                            borderRadius: 6,
+                            border: "1px solid #ccc",
+                            fontSize: 15
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={{ display: "block", fontWeight: 500, marginBottom: 6 }}>Recurring Days</label>
+                      <div style={{
+                        display: "flex",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        background: "#f6f8fa",
+                        borderRadius: 6,
+                        padding: "8px 10px"
+                      }}>
+                        {daysOfWeek.map((day) => (
+                          <label key={day} style={{ fontWeight: 400, fontSize: 14 }}>
+                            <input
+                              type="checkbox"
+                              name="recurringDays"
+                              value={day}
+                              checked={newEvent.recurringDays.includes(day)}
+                              onChange={handleNewEventChange}
+                              style={{ marginRight: 4 }}
+                            />
+                            {day}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={{ display: "block", fontWeight: 500, marginBottom: 6 }}>Type</label>
+                      <select
+                        name="eventType"
+                        value={newEvent.eventType}
+                        onChange={handleNewEventChange}
+                        required
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          borderRadius: 6,
+                          border: "1px solid #ccc",
+                          fontSize: 15
+                        }}
+                      >
+                        <option value="">Select type</option>
+                        <option value="class">Class</option>
+                        <option value="meeting">Meeting</option>
+                        <option value="reminder">Reminder</option>
+                      </select>
+                    </div>
+                    <div style={{ marginBottom: 18 }}>
+                      <label style={{ display: "block", fontWeight: 500, marginBottom: 6 }}>Description</label>
+                      <textarea
+                        name="description"
+                        placeholder="Description (optional)"
+                        value={newEvent.description}
+                        onChange={handleNewEventChange}
+                        style={{
+                          width: "100%",
+                          minHeight: 60,
+                          padding: "10px",
+                          borderRadius: 6,
+                          border: "1px solid #ccc",
+                          fontSize: 15,
+                          resize: "vertical"
+                        }}
+                      />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                      <button
+                        type="button"
+                        style={{
+                          ...buttonStyle,
+                          backgroundColor: "#bdc3c7",
+                          color: "#222"
+                        }}
+                        onClick={() => setShowAddEventModal(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        style={{
+                          ...buttonStyle,
+                          backgroundColor: "#27ae60"
+                        }}
+                      >
+                        Save Event
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Event Details Modal */}
+            {showEventDetails && eventDetails && (
+              <div style={{
+                position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+                background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000
+              }}>
+                <div style={{
+                  background: "#fff",
+                  padding: 32,
+                  borderRadius: 14,
+                  minWidth: 350,
+                  maxWidth: 420,
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+                  position: "relative"
+                }}>
+                  <button
+                    onClick={() => setShowEventDetails(false)}
+                    style={{
+                      position: "absolute",
+                      top: 12,
+                      right: 16,
+                      background: "none",
+                      border: "none",
+                      fontSize: 22,
+                      color: "#c0392b",
+                      cursor: "pointer",
+                      fontWeight: "bold"
+                    }}
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                  <h2 style={{ marginBottom: 10, color: "#2c3e50" }}>{eventDetails.title}</h2>
+                  <div style={{ marginBottom: 8, color: "#555" }}>
+                    <b>Start:</b> {moment(eventDetails.start).format("YYYY-MM-DD HH:mm")}
+                  </div>
+                  <div style={{ marginBottom: 8, color: "#555" }}>
+                    <b>End:</b> {moment(eventDetails.end).format("YYYY-MM-DD HH:mm")}
+                  </div>
+                  {eventDetails.description && (
+                    <div style={{
+                      marginTop: 12,
+                      padding: "12px 14px",
+                      background: "#f8f8f8",
+                      borderRadius: 8,
+                      color: "#222",
+                      fontSize: 15,
+                      minHeight: 40
+                    }}>
+                      <b>Description:</b>
+                      <div style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>
+                        {eventDetails.description}
+                      </div>
+                    </div>
+                  )}
+                  {!eventDetails.description && (
+                    <div style={{
+                      marginTop: 12,
+                      color: "#aaa",
+                      fontStyle: "italic"
+                    }}>
+                      No description provided.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div style={{ position: "relative" }}>
+              <Calendar
+  localizer={localizer}
+  events={teacherSchedules[selectedTeacher.id] || []}
+  startAccessor="start"
+  endAccessor="end"
+  style={{ height: 500 }}
+  selectable={false}
+  components={{
+    event: EventWithCheckbox,
+  }}
+  views={["month", "week", "day"]}
+  view={view}
+  onView={(newView) => setView(newView)}
+  date={date}
+  onNavigate={handleNavigate}
+  eventPropGetter={(event) =>
+    showCheckboxes && selectedEvents.has(event.id)
+      ? { style: { backgroundColor: "#e74c3c" } }
+      : {}
+  }
+  ref={calendarRef}
+/>
+            </div>
           </div>
         )}
       </div>
@@ -381,5 +796,4 @@ const searchStyle = {
   fontSize: "16px",
   marginBottom: "10px",
   borderRadius: "4px",
-  border: "1px solid #ccc",
 };
