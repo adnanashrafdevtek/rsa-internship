@@ -1,28 +1,12 @@
-import React, { useState, useEffect } from "react";
+// components/Users.js
+import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import Sidebar from "./Sidebar";
 
 export default function Users() {
-  const { user } = useAuth();
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    fetch("http://localhost:3000/api/users")  // Adjust endpoint if needed
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch users");
-        return res.json();
-      })
-      .then((data) => {
-        setUsers(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
-  }, []);
+  const { user, users, changeUserPassword, toggleUserActiveStatus } = useAuth();
+  const [newPasswords, setNewPasswords] = useState({});
+  const [message, setMessage] = useState("");
 
   if (!user || user.role !== "admin") {
     return (
@@ -33,39 +17,78 @@ export default function Users() {
     );
   }
 
+  const handlePasswordChange = (username) => {
+    const newPassword = newPasswords[username];
+    if (!newPassword) return;
+
+    changeUserPassword(username, newPassword);
+    setMessage(`✅ Password updated for ${username}`);
+    setNewPasswords((prev) => ({ ...prev, [username]: "" }));
+  };
+
   return (
     <div style={{ display: "flex" }}>
       <Sidebar />
       <div style={{ padding: "40px", flex: 1 }}>
         <h1>All Users</h1>
-        {loading ? (
-          <p>Loading users...</p>
-        ) : error ? (
-          <p style={{ color: "red" }}>Error: {error}</p>
-        ) : (
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              marginTop: "20px",
-            }}
-          >
-            <thead>
-              <tr style={{ backgroundColor: "#eee" }}>
-                <th style={thStyle}>Name</th>
-                <th style={thStyle}>Role</th>
+        {message && <p style={{ color: "green" }}>{message}</p>}
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            marginTop: "20px",
+          }}
+        >
+          <thead>
+            <tr style={{ backgroundColor: "#eee" }}>
+              <th style={thStyle}>Name</th>
+              <th style={thStyle}>Username</th>
+              <th style={thStyle}>Role</th>
+              <th style={thStyle}>Status</th>
+              <th style={thStyle}>New Password</th>
+              <th style={thStyle}></th>
+              <th style={thStyle}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.username}>
+                <td style={tdStyle}>{`${u.first_name} ${u.last_name}`}</td>
+                <td style={tdStyle}>{u.username}</td>
+                <td style={tdStyle}>{u.role}</td>
+                <td style={tdStyle}>
+                  <span style={{ color: u.active ? "green" : "gray" }}>
+                    {u.active ? "Active" : "Inactive"}
+                  </span>
+                </td>
+                <td style={tdStyle}>
+                  <input
+                    type="password"
+                    value={newPasswords[u.username] || ""}
+                    onChange={(e) =>
+                      setNewPasswords((prev) => ({
+                        ...prev,
+                        [u.username]: e.target.value,
+                      }))
+                    }
+                    placeholder="Enter new password"
+                    style={{ width: "100%" }}
+                  />
+                </td>
+                <td style={tdStyle}>
+                  <button onClick={() => handlePasswordChange(u.username)}>
+                    Change
+                  </button>
+                </td>
+                <td style={tdStyle}>
+                  <button onClick={() => toggleUserActiveStatus(u.username)}>
+                    {u.active ? "Inactivate" : "Activate"}
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id}>
-                  <td style={tdStyle}>{`${u.first_name} ${u.last_name}`}</td>
-                  <td style={tdStyle}>{u.role}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
