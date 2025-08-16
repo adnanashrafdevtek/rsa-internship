@@ -44,7 +44,7 @@ function generateRecurringEvents(classObj, weeks = 8) {
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function StudentList() {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const [students, setStudents] = useState([]);
@@ -82,43 +82,55 @@ export default function StudentList() {
     navigate("/login");
   };
 
-  const filteredStudents = students.filter((student) =>
-    `${student.first_name} ${student.last_name}`
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase())
-  );
+  // --- Student Self-View Mode ---
+  const isStudent = user && user.role === "student";
+  const studentId = isStudent ? user.id : null;
 
+  // Always fetch all students for admin, or just self for student, but use same UI logic
   useEffect(() => {
-    fetch("http://localhost:3000/api/students")
-      .then((res) => res.json())
-      .then((data) => {
-        setStudents(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Error fetching students:", err);
-        setLoading(false);
-      });
-  }, []);
+    if (isStudent) {
+      // Fetch the student from backend to get up-to-date info (not just from auth context)
+      fetch(`http://localhost:3000/api/students/${user.id}`)
+        .then(res => res.json())
+        .then(data => {
+          setStudents([data]);
+          setSelectedStudent(data);
+          setLoading(false);
+        })
+        .catch(() => {
+          setStudents([]);
+          setSelectedStudent(null);
+          setLoading(false);
+        });
+    } else {
+      fetch("http://localhost:3000/api/students")
+        .then((res) => res.json())
+        .then((data) => {
+          setStudents(data);
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error("Error fetching students:", err);
+          setLoading(false);
+        });
+    }
+  }, [user, isStudent]);
 
+  // Fetch events for selected student (or self)
   const fetchEventsForStudent = async (studentId) => {
     try {
-      // Fetch custom events
       const res = await fetch(`http://localhost:3000/myCalendar?userId=${studentId}`);
       if (!res.ok) throw new Error("Failed to fetch calendar events");
       const customEvents = await res.json();
 
-      // Fetch classes
       const classRes = await fetch(`http://localhost:3000/api/students/${studentId}/classes`);
       const classes = classRes.ok ? await classRes.json() : [];
 
-      // Generate recurring events for classes
       let classEvents = [];
       classes.forEach(cls => {
         classEvents = classEvents.concat(generateRecurringEvents(cls));
       });
 
-      // Format custom events from /myCalendar (calendar table)
       const formattedCustom = customEvents.map((event) => ({
         id: Number(event.id),
         title: event.title || event.event_title || "No Title",
@@ -141,8 +153,9 @@ export default function StudentList() {
     }
   };
 
+  // Always use selectedStudent for fetching events, even for student
   useEffect(() => {
-    if (selectedStudent) {
+    if (selectedStudent && selectedStudent.id) {
       fetchEventsForStudent(selectedStudent.id);
     }
   }, [selectedStudent]);
@@ -341,19 +354,54 @@ export default function StudentList() {
     setDeleting(false);
   };
 
+  // --- UI ---
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       <Sidebar onLogout={handleLogout} />
-      <div style={{ flex: 1, backgroundColor: "white", padding: "40px" }}>
+      <div style={{ flex: 1, backgroundColor: "white", padding: "40px", marginLeft: 300 }}>
         <h1 style={{ fontSize: "28px", fontWeight: "bold", marginBottom: "5px" }}>
-          View Student Schedules
+          {isStudent ? "My Schedule" : "View Student Schedules"}
         </h1>
         <p style={{ marginBottom: "20px", fontSize: "16px", color: "#555" }}>
-          To add an event, click the "Add Event" button for more options.
+          {isStudent
+            ? "This is your schedule. All your classes and events are shown below."
+            : 'To add an event, click the "Add Event" button for more options.'}
         </p>
 
         {loading ? (
-          <p>Loading students...</p>
+          <p style={{ color: "#888" }}>Loading schedule...</p>
+        ) : isStudent ? (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <h2 style={{ fontSize: "22px", marginBottom: "10px" }}>
+                {selectedStudent?.first_name} {selectedStudent?.last_name}
+              </h2>
+            </div>
+            <div style={{ position: "relative" }}>
+              <Calendar
+                localizer={localizer}
+                events={studentSchedules[selectedStudent.id] || []}
+                startAccessor="start"
+                endAccessor="end"
+                style={{ height: 500 }}
+                selectable={false}
+                components={{
+                  event: EventWithCheckbox,
+                }}
+                views={["month", "week", "day"]}
+                view={view}
+                onView={(newView) => setView(newView)}
+                date={date}
+                onNavigate={setDate}
+                eventPropGetter={(event) =>
+                  showCheckboxes && selectedEvents.has(event.id)
+                    ? { style: { backgroundColor: "#e74c3c" } }
+                    : {}
+                }
+                ref={calendarRef}
+              />
+            </div>
+          </div>
         ) : !selectedStudent ? (
           <div>
             <input
@@ -367,7 +415,11 @@ export default function StudentList() {
               Select a student to view their schedule:
             </p>
             <ul style={{ listStyle: "none", padding: 0 }}>
-              {filteredStudents.map((student) => (
+              {students.filter((student) =>
+                `${student.first_name} ${student.last_name}`
+                  .toLowerCase()
+                  .includes(searchQuery.toLowerCase())
+              ).map((student) => (
                 <li key={student.id} style={{ marginBottom: "10px" }}>
                   <button
                     style={{
@@ -380,7 +432,7 @@ export default function StudentList() {
                   </button>
                 </li>
               ))}
-              {filteredStudents.length === 0 && <li>No students found.</li>}
+              {students.length === 0 && <li>No students found.</li>}
             </ul>
           </div>
         ) : (
@@ -718,7 +770,7 @@ export default function StudentList() {
                 view={view}
                 onView={(newView) => setView(newView)}
                 date={date}
-                onNavigate={handleNavigate}
+                onNavigate={setDate}
                 eventPropGetter={(event) =>
                   showCheckboxes && selectedEvents.has(event.id)
                     ? { style: { backgroundColor: "#e74c3c" } }

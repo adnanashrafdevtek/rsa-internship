@@ -7,6 +7,7 @@ const dummyUsers = [
   { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0 },
   { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1 },
   { email: "student@example.com", password: "student123", role: "student", first_name: "Student", last_name: "User", id: 2 },
+    { email: "HARUN.person@example.com", password: "uuuuuuu", role: "student", first_name: "HARUN", last_name: "person", id: 5 },
 ];
 
 export const AuthProvider = ({ children }) => {

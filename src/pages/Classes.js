@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from "../context/AuthContext";
 
 
 
@@ -11,6 +12,7 @@ export default function Classes() {
   const [studentsForGrade, setStudentsForGrade] = useState([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const { user } = useAuth();
   const [editForm, setEditForm] = useState({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({
@@ -31,19 +33,25 @@ export default function Classes() {
 
   const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const TIMEZONE = 'America/Chicago'; // CST/CDT
-
-  
+  const navigate = useNavigate();
 
   const fetchClasses = () => {
-    setLoading(true);
-    fetch('http://localhost:3000/api/classes')
-      .then(res => res.json())
-      .then(data => {
-        setClasses(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  };
+  setLoading(true);
+  let url = 'http://localhost:3000/api/classes';
+
+  // If the user is a student, fetch only their classes
+  if (user && user.role === "student") {
+    url = `http://localhost:3000/api/students/${user.id}/classes`;
+  }
+
+  fetch(url)
+    .then(res => res.json())
+    .then(data => {
+      setClasses(data);
+      setLoading(false);
+    })
+    .catch(() => setLoading(false));
+};
 
   const fetchTeachers = () => {
     fetch('http://localhost:3000/api/teachers')
@@ -76,10 +84,12 @@ export default function Classes() {
   };
 
   useEffect(() => {
+  if (user) {
     fetchClasses();
     fetchTeachers();
     fetchAllStudents();
-  }, []);
+  }
+}, [user]);
 
   const startEditing = (cls) => {
     setEditingId(cls.id);
@@ -170,6 +180,18 @@ export default function Classes() {
     }
 
     return '';
+  };
+
+  // Helper to format only time in 12-hour format
+  const formatTimeOnly = (dt) => {
+    if (!dt) return '';
+    const time24 = dt.slice(11, 16);
+    if (!time24) return '';
+    const [hourStr, min] = time24.split(':');
+    let hour = parseInt(hourStr, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12 || 12;
+    return `${hour}:${min} ${ampm}`;
   };
 
   const saveStudentsToClass = async () => {
@@ -291,10 +313,180 @@ export default function Classes() {
     }
   };
 
+  // Add this for clarity
+  const isStudent = user && user.role === "student";
+
+  // Replace the return statement with:
+  if (!user) {
+    return (
+      <div style={{ display: 'flex' }}>
+        <Sidebar />
+        <div style={{ flex: 1, padding: '40px', marginLeft: 300 }}>
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Student UI: Card layout
+  if (isStudent) {
+    return (
+      <div style={{ display: 'flex' }}>
+        <Sidebar />
+        <div style={{
+          flex: 1,
+          padding: '40px',
+          background: '#f6f8fa',
+          minHeight: '100vh',
+          marginLeft: 300
+        }}>
+          <h1 style={{
+            marginBottom: 28,
+            color: '#1a237e',
+            fontWeight: 800,
+            letterSpacing: 0.5
+          }}>
+            My Classes
+          </h1>
+          <p style={{
+            fontSize: 17,
+            color: '#3949ab',
+            marginBottom: 24
+          }}>
+            These are your classes. Click a class to see the roster, teacher, and more details.
+          </p>
+          {loading ? (
+            <p>Loading classes...</p>
+          ) : (
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 32
+            }}>
+              {classes.length === 0 && (
+                <div style={{
+                  fontSize: 18,
+                  color: '#888',
+                  marginTop: 40
+                }}>
+                  No classes found.
+                </div>
+              )}
+              {classes.map(c => (
+                <div
+                  key={c.id}
+                  style={{
+                    background: 'linear-gradient(135deg, #e3f0ff 0%, #f9f9fb 100%)',
+                    borderRadius: 16,
+                    boxShadow: '0 4px 18px 0 rgba(30, 64, 175, 0.08)',
+                    padding: '32px 36px 26px 36px',
+                    minWidth: 320,
+                    maxWidth: 400,
+                    flex: '1 1 340px',
+                    marginBottom: 8,
+                    border: '1px solid #e3e8f0',
+                    position: 'relative',
+                    transition: 'box-shadow 0.18s, transform 0.18s',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start'
+                  }}
+                  tabIndex={0}
+                  onClick={() => navigate(`/rosters/${c.id}`)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      navigate(`/rosters/${c.id}`);
+                    }
+                  }}
+                  onMouseOver={e => {
+                    e.currentTarget.style.boxShadow = '0 8px 32px 0 rgba(30, 64, 175, 0.16)';
+                    e.currentTarget.style.transform = 'translateY(-2px) scale(1.012)';
+                  }}
+                  onMouseOut={e => {
+                    e.currentTarget.style.boxShadow = '0 4px 18px 0 rgba(30, 64, 175, 0.08)';
+                    e.currentTarget.style.transform = 'none';
+                  }}
+                >
+                  <span style={{
+                    color: '#1565c0',
+                    fontWeight: 800,
+                    fontSize: 23,
+                    textDecoration: 'none',
+                    marginBottom: 8,
+                    display: 'inline-block',
+                    letterSpacing: 0.2,
+                    transition: 'color 0.15s'
+                  }}>
+                    {c.name}
+                  </span>
+                  <div style={{ margin: '14px 0 0 0', fontSize: 16 }}>
+                    <span style={{ fontWeight: 600, color: '#3949ab' }}>Time:</span>{' '}
+                    <span style={{ color: '#1976d2', fontWeight: 700 }}>
+                      {formatTimeOnly(c.start_time)}
+                    </span>
+                    {' '}<span style={{ color: '#b0bec5' }}>to</span>{' '}
+                    <span style={{ color: '#1976d2', fontWeight: 700 }}>
+                      {formatTimeOnly(c.end_time)}
+                    </span>
+                  </div>
+                  <div style={{ margin: '14px 0 0 0', fontSize: 16 }}>
+                    <span style={{ fontWeight: 600, color: '#3949ab' }}>Recurring:</span>{' '}
+                    {c.recurring_days
+                      ? (
+                        <span>
+                          {c.recurring_days.split(',').map(day => (
+                            <span
+                              key={day}
+                              style={{
+                                display: 'inline-block',
+                                background: '#e8f5e9',
+                                color: '#388e3c',
+                                borderRadius: 8,
+                                padding: '3px 13px',
+                                marginRight: 7,
+                                fontSize: 14,
+                                fontWeight: 700,
+                                letterSpacing: 0.5,
+                                boxShadow: '0 1px 3px 0 rgba(56,142,60,0.07)'
+                              }}
+                            >
+                              {day}
+                            </span>
+                          ))}
+                        </span>
+                      )
+                      : <span style={{ color: '#b0bec5' }}>—</span>
+                    }
+                  </div>
+                  <div style={{
+                    position: 'absolute',
+                    top: 22,
+                    right: 28,
+                    fontSize: 15,
+                    color: '#607d8b',
+                    fontWeight: 700,
+                    letterSpacing: 0.5,
+                    background: '#e3f2fd',
+                    borderRadius: 8,
+                    padding: '2px 12px'
+                  }}>
+                    {c.grade_level}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex' }}>
       <Sidebar />
-      <div style={{ flex: 1, padding: '40px' }}>
+      <div style={{ flex: 1, padding: '40px', marginLeft: 300 }}>
         <h1 style={{ marginBottom: 20 }}>Class List</h1>
         {loading ? (
           <p>Loading classes...</p>
@@ -309,12 +501,14 @@ export default function Classes() {
                   <th style={thStyle}>Start Time</th>
                   <th style={thStyle}>End Time</th>
                   <th style={thStyle}>Recurring Days</th>
-                  <th style={thStyle}>Actions</th>
+                  {/* Only show Actions column if not student */}
+                  {!isStudent && <th style={thStyle}>Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {classes.map(c =>
-                  editingId === c.id ? (
+                  // Only allow editing for non-students
+                  (editingId === c.id && !isStudent) ? (
                     <tr key={c.id} style={{ backgroundColor: '#f9f9f9' }}>
                       <td style={tdStyle}>
                         <input name="name" value={editForm.name} onChange={handleEditChange} style={inputStyle} />
@@ -406,31 +600,33 @@ export default function Classes() {
                           )}
                         </div>
                       </td>
-                      <td style={tdStyle}>
-                        <button onClick={saveEdit} style={saveBtnStyle}>
-                          Save
-                        </button>{' '}
-                        <button onClick={cancelEditing} style={cancelBtnStyle}>
-                          Cancel
-                        </button>{' '}
-                        <button onClick={() => deleteClass(c.id)} style={deleteBtnStyle}>
-                          Delete
-                        </button>{' '}
-                        <button
-                          onClick={() => {
-                            if (showAddStudentsFor === c.id) {
-                              setShowAddStudentsFor(null);
-                            } else {
-                              fetchStudentsByGrade(c.grade_level);
-                              setSelectedStudentIds([]);
-                              setShowAddStudentsFor(c.id);
-                            }
-                          }}
-                          style={{ ...editButtonStyle, backgroundColor: '#ff9800', marginLeft: 8 }}
-                        >
-                          Add Students
-                        </button>
-                      </td>
+                      {!isStudent && (
+                        <td style={tdStyle}>
+                          <button onClick={saveEdit} style={saveBtnStyle}>
+                            Save
+                          </button>{' '}
+                          <button onClick={cancelEditing} style={cancelBtnStyle}>
+                            Cancel
+                          </button>{' '}
+                          <button onClick={() => deleteClass(c.id)} style={deleteBtnStyle}>
+                            Delete
+                          </button>{' '}
+                          <button
+                            onClick={() => {
+                              if (showAddStudentsFor === c.id) {
+                                setShowAddStudentsFor(null);
+                              } else {
+                                fetchStudentsByGrade(c.grade_level);
+                                setSelectedStudentIds([]);
+                                setShowAddStudentsFor(c.id);
+                              }
+                            }}
+                            style={{ ...editButtonStyle, backgroundColor: '#ff9800', marginLeft: 8 }}
+                          >
+                            Add Students
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ) : (
                     <tr key={c.id}>
@@ -448,30 +644,34 @@ export default function Classes() {
                       <td style={tdStyle}>{formatDateTime(c.start_time)}</td>
                       <td style={tdStyle}>{formatDateTime(c.end_time)}</td>
                       <td style={tdStyle}>{c.recurring_days ? c.recurring_days : '—'}</td>
-                      <td style={tdStyle}>
-                        <button onClick={() => startEditing(c)} style={editButtonStyle}>
-                          Edit
-                        </button>{' '}
-                        <button
-                          onClick={() => {
-                            if (showAddStudentsFor === c.id) {
-                              setShowAddStudentsFor(null);
-                            } else {
-                              fetchStudentsByGrade(c.grade_level);
-                              setSelectedStudentIds([]);
-                              setShowAddStudentsFor(c.id);
-                            }
-                          }}
-                          style={{ ...editButtonStyle, backgroundColor: '#ff9800', marginLeft: 8 }}
-                        >
-                          Add Students
-                        </button>
-                      </td>
+                      {/* Only show action buttons for non-students */}
+                      {!isStudent && (
+                        <td style={tdStyle}>
+                          <button onClick={() => startEditing(c)} style={editButtonStyle}>
+                            Edit
+                          </button>{' '}
+                          <button
+                            onClick={() => {
+                              if (showAddStudentsFor === c.id) {
+                                setShowAddStudentsFor(null);
+                              } else {
+                                fetchStudentsByGrade(c.grade_level);
+                                setSelectedStudentIds([]);
+                                setShowAddStudentsFor(c.id);
+                              }
+                            }}
+                            style={{ ...editButtonStyle, backgroundColor: '#ff9800', marginLeft: 8 }}
+                          >
+                            Add Students
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   )
                 )}
 
-                {showAddStudentsFor && (
+                {/* Only show Add Students row for non-students */}
+                {showAddStudentsFor && !isStudent && (
                   <tr>
                     <td colSpan={7} style={{ padding: 12, background: '#fff8e1' }}>
                       <label style={{ display: 'block', marginBottom: 8 }}>
@@ -522,101 +722,104 @@ export default function Classes() {
               </tbody>
             </table>
 
-            {!showAddForm ? (
-              <button onClick={() => setShowAddForm(true)} style={addNewBtnStyle}>
-                + Add New Class
-              </button>
-            ) : (
-              <div style={addFormContainer}>
-                <h3 style={{ marginBottom: 12 }}>Add New Class</h3>
-                <div style={formRowStyle}>
-                  <label style={labelStyle}>Name:</label>
-                  <input name="name" value={addForm.name} onChange={handleAddChange} type="text" style={inputStyle} />
-                </div>
-                <div style={formRowStyle}>
-                  <label style={labelStyle}>Grade Level:</label>
-                  <select name="grade_level" value={addForm.grade_level} onChange={handleAddChange} style={inputStyle}>
-                    <option value="">Select Grade</option>
-                    <option value="Kindergarten">Kindergarten</option>
-                    <option value="1">1st Grade</option>
-                    <option value="2">2nd Grade</option>
-                    <option value="3">3rd Grade</option>
-                    <option value="4">4th Grade</option>
-                    <option value="5">5th Grade</option>
-                    <option value="6">6th Grade</option>
-                    <option value="7">7th Grade</option>
-                    <option value="8">8th Grade</option>
-                    <option value="9">9th Grade</option>
-                    <option value="10">10th Grade</option>
-                    <option value="11">11th Grade</option>
-                    <option value="12">12th Grade</option>
-                  </select>
-                </div>
-                <div style={formRowStyle}>
-                  <label style={labelStyle}>Teacher:</label>
-                  <select name="teacher_id" value={addForm.teacher_id} onChange={handleAddChange} style={inputStyle}>
-                    <option value="">Select Teacher</option>
-                    {teachers.map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.first_name} {t.last_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div style={formRowStyle}>
-                  <label style={labelStyle}>Start Date/Time:</label>
-                  <input name="start_date" type="date" value={addForm.start_date} onChange={handleAddChange} style={inputStyle} />
-                  <input name="start_time" type="time" value={addForm.start_time} onChange={handleAddChange} style={inputStyle} />
-                </div>
-                <div style={formRowStyle}>
-                  <label style={labelStyle}>End Date/Time:</label>
-                  <input name="end_date" type="date" value={addForm.end_date} onChange={handleAddChange} style={inputStyle} />
-                  <input name="end_time" type="time" value={addForm.end_time} onChange={handleAddChange} style={inputStyle} />
-                </div>
-                <div style={{ ...formRowStyle, alignItems: 'flex-start' }}>
-                  <label style={labelStyle}>Recurring Days:</label>
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(7, 1fr)',
-                      gap: 4,
-                      border: '1px solid #ccc',
-                      padding: 4,
-                      borderRadius: 4
-                    }}
-                  >
-                    {daysOfWeek.map(day => (
-                      <label
-                        key={day}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: 4,
-                          border: '1px solid #aaa',
-                          fontSize: 12
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={addForm.recurring_days.includes(day)}
-                          onChange={() => toggleAddRecurringDay(day)}
-                          style={{ marginRight: 4 }}
-                        />
-                        {day}
-                      </label>
-                    ))}
+            {/* Only show Add New Class button/form for non-students */}
+            {!isStudent && (
+              !showAddForm ? (
+                <button onClick={() => setShowAddForm(true)} style={addNewBtnStyle}>
+                  + Add New Class
+                </button>
+              ) : (
+                <div style={addFormContainer}>
+                  <h3 style={{ marginBottom: 12 }}>Add New Class</h3>
+                  <div style={formRowStyle}>
+                    <label style={{ ...labelStyle, width: 'auto' }}>Name:</label>
+                    <input name="name" value={addForm.name} onChange={handleAddChange} type="text" style={inputStyle} />
+                  </div>
+                  <div style={formRowStyle}>
+                    <label style={{ ...labelStyle, width: 'auto' }}>Grade Level:</label>
+                    <select name="grade_level" value={addForm.grade_level} onChange={handleAddChange} style={inputStyle}>
+                      <option value="">Select Grade</option>
+                      <option value="Kindergarten">Kindergarten</option>
+                      <option value="1">1st Grade</option>
+                      <option value="2">2nd Grade</option>
+                      <option value="3">3rd Grade</option>
+                      <option value="4">4th Grade</option>
+                      <option value="5">5th Grade</option>
+                      <option value="6">6th Grade</option>
+                      <option value="7">7th Grade</option>
+                      <option value="8">8th Grade</option>
+                      <option value="9">9th Grade</option>
+                      <option value="10">10th Grade</option>
+                      <option value="11">11th Grade</option>
+                      <option value="12">12th Grade</option>
+                    </select>
+                  </div>
+                  <div style={formRowStyle}>
+                    <label style={{ ...labelStyle, width: 'auto' }}>Teacher:</label>
+                    <select name="teacher_id" value={addForm.teacher_id} onChange={handleAddChange} style={inputStyle}>
+                      <option value="">Select Teacher</option>
+                      {teachers.map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.first_name} {t.last_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={formRowStyle}>
+                    <label style={{ ...labelStyle, width: 'auto' }}>Start Date/Time:</label>
+                    <input name="start_date" type="date" value={addForm.start_date} onChange={handleAddChange} style={inputStyle} />
+                    <input name="start_time" type="time" value={addForm.start_time} onChange={handleAddChange} style={inputStyle} />
+                  </div>
+                  <div style={formRowStyle}>
+                    <label style={{ ...labelStyle, width: 'auto' }}>End Date/Time:</label>
+                    <input name="end_date" type="date" value={addForm.end_date} onChange={handleAddChange} style={inputStyle} />
+                    <input name="end_time" type="time" value={addForm.end_time} onChange={handleAddChange} style={inputStyle} />
+                  </div>
+                  <div style={{ ...formRowStyle, alignItems: 'flex-start' }}>
+                    <label style={labelStyle}>Recurring Days:</label>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(7, 1fr)',
+                        gap: 4,
+                        border: '1px solid #ccc',
+                        padding: 4,
+                        borderRadius: 4
+                      }}
+                    >
+                      {daysOfWeek.map(day => (
+                        <label
+                          key={day}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 4,
+                            border: '1px solid #aaa',
+                            fontSize: 12
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={addForm.recurring_days.includes(day)}
+                            onChange={() => toggleAddRecurringDay(day)}
+                            style={{ marginRight: 4 }}
+                          />
+                          {day}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    <button onClick={addClass} style={saveBtnStyle}>
+                      Save Class
+                    </button>{' '}
+                    <button onClick={() => setShowAddForm(false)} style={cancelBtnStyle}>
+                      Cancel
+                    </button>
                   </div>
                 </div>
-                <div style={{ marginTop: 12 }}>
-                  <button onClick={addClass} style={saveBtnStyle}>
-                    Save Class
-                  </button>{' '}
-                  <button onClick={() => setShowAddForm(false)} style={cancelBtnStyle}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
+              )
             )}
           </>
         )}

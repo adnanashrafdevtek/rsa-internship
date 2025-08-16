@@ -30,7 +30,11 @@ export default function Sidebar() {
         display: "flex",
         flexDirection: "column",
         height: "100vh",
-        position: "relative"
+        position: "fixed",
+        top: 0,
+        left: 0,
+        zIndex: 100,
+        boxShadow: "2px 0 16px 0 rgba(44,62,80,0.10)"
       }}
     >
       <h2 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "20px" }}>
@@ -42,8 +46,8 @@ export default function Sidebar() {
       </p>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        <Link to="/home" style={linkStyle}>Home</Link>
-        <Link to="/class" style={linkStyle}>Classes</Link>
+        <SidebarLink to="/home">Home</SidebarLink>
+        <SidebarLink to="/class">Classes</SidebarLink>
 
         {isAdmin ? (
           <div
@@ -51,7 +55,7 @@ export default function Sidebar() {
             onMouseEnter={() => setHoveringSchedule(true)}
             onMouseLeave={() => setHoveringSchedule(false)}
           >
-            <div style={{ ...linkStyle, cursor: "pointer" }}>Schedule ▾</div>
+            <div style={hoverableLinkStyle}>Schedule ▾</div>
             {hoveringSchedule && (
               <div
                 style={{
@@ -61,25 +65,25 @@ export default function Sidebar() {
                   backgroundColor: "#34495e",
                   borderRadius: "4px",
                   zIndex: 10,
-                  minWidth: "140px"
+                  minWidth: "140px",
+                  boxShadow: "2px 2px 12px 0 rgba(44,62,80,0.13)"
                 }}
               >
-                <Link to="/teacher/schedules" style={submenuLinkStyle}>Teachers</Link>
-                <Link to="/student/schedules" style={submenuLinkStyle}>Students</Link>
+                <SidebarLink to="/teacher/schedules" submenu>Teachers</SidebarLink>
+                <SidebarLink to="/student/schedules" submenu>Students</SidebarLink>
               </div>
             )}
           </div>
         ) : (
-          <Link to="/schedule" style={linkStyle}>Schedule</Link>
+          <SidebarLink to="/schedule">Schedule</SidebarLink>
         )}
-
 
         {isAdmin && (
           <>
-            <Link to="/student" style={linkStyle}>Users</Link>
-            <Link to="/add-user" style={{ ...linkStyle, backgroundColor: "#16a085" }}>
+            <SidebarLink to="/student">Users</SidebarLink>
+            <SidebarLink to="/add-user" style={{ backgroundColor: "#16a085" }}>
               ➕ Add User
-            </Link>
+            </SidebarLink>
           </>
         )}
       </nav>
@@ -93,17 +97,49 @@ export default function Sidebar() {
   );
 }
 
+// SidebarLink component for hover effect
+function SidebarLink({ to, children, submenu, style }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <Link
+      to={to}
+      style={{
+        ...linkStyle,
+        ...(submenu ? submenuLinkStyle : {}),
+        ...(hover
+          ? {
+              boxShadow: "0 2px 12px 0 rgba(25,118,210,0.13)",
+              backgroundColor: submenu ? "#42516a" : "#22313a",
+              color: "#fff"
+            }
+          : {}),
+        ...style
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      {children}
+    </Link>
+  );
+}
+
 const linkStyle = {
   color: "white",
   textDecoration: "none",
   padding: "10px",
   borderRadius: "4px",
   backgroundColor: "#34495e",
+  cursor: "pointer",
+  transition: "box-shadow 0.18s, background 0.18s"
+};
+
+const hoverableLinkStyle = {
+  ...linkStyle,
+  transition: "box-shadow 0.18s, background 0.18s",
   cursor: "pointer"
 };
 
 const submenuLinkStyle = {
-  ...linkStyle,
   display: "block",
   padding: "8px 12px",
   fontSize: "14px",
@@ -118,3 +154,8 @@ const logoutStyle = {
   borderRadius: "4px",
   cursor: "pointer"
 };
+
+// To prevent overlay, update your main layout/page container (not here in Sidebar.js) to add a left margin or padding:
+// Example (in your main page components, e.g. App.js or main layout):
+// <div style={{ marginLeft: 250 }}>...</div>
+// This ensures your content is not hidden behind the fixed sidebar.

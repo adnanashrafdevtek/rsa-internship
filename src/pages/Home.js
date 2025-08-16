@@ -22,7 +22,7 @@ export default function Home() {
     <div style={{ display: "flex", height: "100vh" }}>
       <Sidebar onLogout={handleLogout} />
 
-      <div style={{ flex: 1, backgroundColor: "white", padding: "40px" }}>
+      <div style={{ flex: 1, backgroundColor: "white", padding: "40px", marginLeft: 300 }}>
         <h1 style={{ fontSize: "36px", fontWeight: "bold", marginBottom: "10px" }}>
           Welcome, <span style={{ color: "#26bedd" }}>{capitalizeFirst(user?.username)}</span>
         </h1>
