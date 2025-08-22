@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Calendar, momentLocalizer, Views } from "react-big-calendar";
 import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
-import Sidebar from "./Sidebar";
+import Sidebar from "./Sidebar"; // keep this
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
 
 const localizer = momentLocalizer(moment);
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -93,122 +92,71 @@ const HoverButton = ({ style, children, onClick, type, disabled }) => {
   );
 };
 
-export default function StudentList() {
+export default function MySchedule() {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
-
-  const [students, setStudents] = useState([]);
-  const [selectedStudent, setSelectedStudent] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [studentSchedules, setStudentSchedules] = useState({});
-  const [selectedEvents, setSelectedEvents] = useState(new Set());
-  const [view, setView] = useState(Views.WEEK);
-  const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
+  const [studentSchedules, setStudentSchedules] = useState([]);
   const [showCheckboxes, setShowCheckboxes] = useState(false);
-  const [date, setDate] = useState(new Date());
-
-  // Add event modal state
+  const [selectedEvents, setSelectedEvents] = useState(new Set());
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [newEvent, setNewEvent] = useState({
     title: "",
-    startDate: moment().format("YYYY-MM-DD"),
-    startTime: moment().format("HH:mm"),
-    endDate: moment().format("YYYY-MM-DD"),
-    endTime: moment().add(1, 'hour').format("HH:mm"),
+    startDate: moment().format("YYYY-MM-DD"), // Default to today
+    startTime: moment().format("HH:mm"), // Default to current time
+    endDate: moment().format("YYYY-MM-DD"), // Default to today
+    endTime: moment().add(1, 'hour').format("HH:mm"), // Default to 1 hour later
     recurringDays: [],
-    eventType: "event",
     description: "",
+    eventType: "event", // Default to regular event
   });
+  const [date, setDate] = useState(new Date());
+  const [view, setView] = useState(Views.WEEK);
+  const [deleting, setDeleting] = useState(false);
+  const [selectedEventDetails, setSelectedEventDetails] = useState(null);
+  const [showEventModal, setShowEventModal] = useState(false);
 
-  // Event details modal state
-  const [showEventDetails, setShowEventDetails] = useState(false);
-  const [eventDetails, setEventDetails] = useState(null);
+  const calendarRef = useRef(null);
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
   };
 
-  // --- Student Self-View Mode ---
-  const isStudent = user && user.role === "student";
-
-  // Always fetch all students for admin, or just self for student, but use same UI logic
+  // Fetch student classes + personal events
   useEffect(() => {
-    if (isStudent) {
-      // For student users, just set themselves as the only student
-      setStudents([{
-        id: user.id,
-        first_name: user.first_name,
-        last_name: user.last_name,
-      }]);
-      setSelectedStudent({
-        id: user.id,
-        first_name: user.first_name,
-        last_name: user.last_name,
-      });
-      setLoading(false);
-    } else {
-      // For admin users, fetch all students
-      fetch("http://localhost:3000/api/students")
-        .then(res => res.json())
-        .then(data => {
-          setStudents(data || []);
-          setLoading(false);
-        })
-        .catch(err => {
-          console.error(err);
-          setStudents([]);
-          setLoading(false);
+    if (!user) return;
+
+    const fetchEvents = async () => {
+      try {
+        // Classes
+        const classRes = await fetch(`http://localhost:3000/api/students/${user.id}/classes`);
+        const classes = classRes.ok ? await classRes.json() : [];
+        let classEvents = [];
+        classes.forEach(cls => {
+          classEvents = classEvents.concat(generateRecurringEvents(cls));
         });
-    }
-  }, [user, isStudent]);
 
-  // Fetch events for selected student (or self)
-  const fetchEventsForStudent = async (studentId) => {
-    try {
-      // Classes
-      const classRes = await fetch(`http://localhost:3000/api/students/${studentId}/classes`);
-      const classes = classRes.ok ? await classRes.json() : [];
-      let classEvents = [];
-      classes.forEach(cls => {
-        classEvents = classEvents.concat(generateRecurringEvents(cls));
-      });
+        // Personal events
+        const res = await fetch(`http://localhost:3000/myCalendar?userId=${user.id}`);
+        const personalEventsRaw = res.ok ? await res.json() : [];
+        const personalEvents = personalEventsRaw.map(event => ({
+          id: Number(event.id),
+          title: event.title || event.event_title || "No Title",
+          start: new Date(event.start_time),
+          end: new Date(event.end_time),
+          description: event.description || "",
+          classId: null,
+          isClass: false,
+          eventType: event.event_type || "event", // Include event type
+        }));
 
-      // Personal events
-      const res = await fetch(`http://localhost:3000/myCalendar?userId=${studentId}`);
-      const personalEventsRaw = res.ok ? await res.json() : [];
-      const personalEvents = personalEventsRaw.map(event => ({
-        id: Number(event.id),
-        title: event.title || event.event_title || "No Title",
-        start: new Date(event.start_time),
-        end: new Date(event.end_time),
-        description: event.description || "",
-        classId: null,
-        isClass: false,
-        eventType: event.event_type || "event",
-      }));
+        setStudentSchedules([...classEvents, ...personalEvents]);
+      } catch (err) {
+        console.error(err);
+        setStudentSchedules([]);
+      }
+    };
 
-      setStudentSchedules(prev => ({
-        ...prev,
-        [studentId]: [...classEvents, ...personalEvents]
-      }));
-    } catch (err) {
-      console.error(err);
-      setStudentSchedules(prev => ({ ...prev, [studentId]: [] }));
-    }
-  };
-
-  // Always use selectedStudent for fetching events, even for student
-  useEffect(() => {
-    if (selectedStudent) {
-      fetchEventsForStudent(selectedStudent.id);
-    }
-  }, [selectedStudent]);
-
-  const handleNavigate = (newDate) => {
-    setDate(newDate);
-  };
+    fetchEvents();
+  }, [user]);
 
   // Check for overlapping events
   const checkEventOverlaps = (events) => {
@@ -247,14 +195,6 @@ export default function StudentList() {
     return overlaps;
   };
 
-  // Show event description/details on click
-  const handleEventClick = (event) => {
-    if (!showCheckboxes) {
-      setEventDetails(event);
-      setShowEventDetails(true);
-    }
-  };
-
   const toggleSelectEvent = (eventId) => {
     setSelectedEvents(prev => {
       const newSet = new Set(prev);
@@ -264,14 +204,21 @@ export default function StudentList() {
     });
   };
 
-  const handleSelectAll = () => {
-    const currentEvents = studentSchedules[selectedStudent.id] || [];
-    const selectableEvents = currentEvents.filter(e => !e.isClass);
-    if (selectedEvents.size === selectableEvents.length) {
+  const handleDeleteSelected = async () => {
+    if (selectedEvents.size === 0) return;
+    if (!window.confirm(`Delete ${selectedEvents.size} selected event(s)?`)) return;
+    setDeleting(true);
+    try {
+      for (const eventId of selectedEvents) {
+        await fetch(`http://localhost:3000/api/calendar/${eventId}`, { method: "DELETE" });
+      }
+      setStudentSchedules(prev => prev.filter(e => !selectedEvents.has(e.id)));
       setSelectedEvents(new Set());
-    } else {
-      setSelectedEvents(new Set(selectableEvents.map(e => e.id)));
+      setShowCheckboxes(false);
+    } catch (err) {
+      alert(err.message);
     }
+    setDeleting(false);
   };
 
   const handleNewEventChange = (e) => {
@@ -310,7 +257,7 @@ export default function StudentList() {
             title,
             start_time: formatDT(curr.format("YYYY-MM-DD"), startTime),
             end_time: formatDT(curr.format("YYYY-MM-DD"), endTime),
-            user_id: selectedStudent.id,
+            user_id: user.id,
             description,
             event_type: eventType,
           });
@@ -321,8 +268,8 @@ export default function StudentList() {
       eventsToAdd.push({
         title,
         start_time: formatDT(actualStartDate, startTime),
-        end_time: formatDT(actualStartDate, endTime),
-        user_id: selectedStudent.id,
+        end_time: formatDT(actualStartDate, endTime), // Use same date for one-time events
+        user_id: user.id,
         description,
         event_type: eventType,
       });
@@ -336,8 +283,7 @@ export default function StudentList() {
       eventType: event.event_type
     }));
     
-    const currentEvents = studentSchedules[selectedStudent.id] || [];
-    const overlaps = checkEventOverlaps([...currentEvents, ...tempEvents]);
+    const overlaps = checkEventOverlaps([...studentSchedules, ...tempEvents]);
     
     if (overlaps.length > 0) {
       const overlapMessage = overlaps.map(overlap => 
@@ -369,28 +315,15 @@ export default function StudentList() {
         eventType: "event"
       });
       // Refresh events
-      fetchEventsForStudent(selectedStudent.id);
+      window.location.reload(); // Simple refresh for now
     } catch (err) {
       alert(err.message);
     }
   };
 
-  const handleDeleteSelected = async () => {
-    if (selectedEvents.size === 0) return;
-    if (!window.confirm(`Delete ${selectedEvents.size} selected event(s)?`)) return;
-    setDeleting(true);
-    try {
-      for (const eventId of selectedEvents) {
-        await fetch(`http://localhost:3000/api/calendar/${eventId}`, { method: "DELETE" });
-      }
-      // Refresh events
-      fetchEventsForStudent(selectedStudent.id);
-      setSelectedEvents(new Set());
-      setShowCheckboxes(false);
-    } catch (err) {
-      alert(err.message);
-    }
-    setDeleting(false);
+  const handleEventClick = (event) => {
+    setSelectedEventDetails(event);
+    setShowEventModal(true);
   };
 
   const eventStyleGetter = (event) => {
@@ -424,403 +357,215 @@ export default function StudentList() {
     };
   };
 
-  const filteredStudents = students.filter((student) =>
-    `${student.first_name} ${student.last_name}`
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase())
-  );
-
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       <Sidebar onLogout={handleLogout} />
       <div style={{ flex: 1, backgroundColor: "#f8f9fa", padding: 16, marginLeft: 300 }}>
-        
-        {loading ? (
+        <div style={{ 
+          backgroundColor: "white", 
+          borderRadius: "8px", 
+          padding: "12px 16px", 
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          marginBottom: "12px"
+        }}>
           <div style={{ 
-            backgroundColor: "white", 
-            borderRadius: "8px", 
-            padding: "40px", 
-            textAlign: "center",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)"
+            display: "flex", 
+            alignItems: "center", 
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "12px"
           }}>
-            <p style={{ color: "#888", fontSize: "16px" }}>Loading...</p>
-          </div>
-        ) : !selectedStudent ? (
-          <div>
-            <div style={{ 
-              backgroundColor: "white", 
-              borderRadius: "8px", 
-              padding: "16px 20px", 
-              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-              marginBottom: "16px"
-            }}>
+            <div>
               <h1 style={{ 
-                fontSize: 24, 
+                fontSize: 20, 
                 fontWeight: "bold", 
                 margin: 0, 
                 color: "#2c3e50",
                 display: "flex",
                 alignItems: "center",
-                gap: "8px"
+                gap: "6px"
               }}>
-                👥 Student Schedules
+                📅 My Schedule
               </h1>
-              <p style={{ 
-                margin: "8px 0 0 0", 
-                fontSize: "14px", 
-                color: "#7f8c8d" 
-              }}>
-                Select a student to view and manage their schedule
-              </p>
             </div>
 
-            <div style={{
-              backgroundColor: "white",
-              borderRadius: "12px",
-              padding: "24px",
-              boxShadow: "0 4px 16px rgba(0,0,0,0.05)"
+            <div style={{ 
+              display: "flex", 
+              gap: 8, 
+              flexWrap: "wrap" 
             }}>
-              <div style={{ marginBottom: "20px" }}>
-                <input
-                  type="text"
-                  placeholder="🔍 Search students..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    width: "100%",
-                    maxWidth: "400px",
-                    padding: "12px 16px",
-                    fontSize: "14px",
-                    border: "2px solid #e1e8ed",
-                    borderRadius: "8px",
-                    outline: "none",
-                    transition: "border-color 0.2s ease"
+              <HoverButton
+                style={{ 
+                  backgroundColor: "#27ae60", 
+                  color: "white",
+                  border: "2px solid transparent"
+                }}
+                onClick={() => setShowAddEventModal(true)}
+              >
+                ➕ Add Event
+              </HoverButton>
+
+              <HoverButton
+                style={{ 
+                  backgroundColor: showCheckboxes ? "#95a5a6" : "#e74c3c", 
+                  color: "white",
+                  border: "2px solid transparent"
+                }}
+                onClick={() => {
+                  setShowCheckboxes(prev => !prev);
+                  setSelectedEvents(new Set());
+                }}
+              >
+                {showCheckboxes ? "✖️ Cancel" : "🗑️ Delete Events"}
+              </HoverButton>
+
+              {showCheckboxes && selectedEvents.size > 0 && (
+                <HoverButton
+                  style={{ 
+                    backgroundColor: "#c0392b", 
+                    color: "white",
+                    border: "2px solid transparent"
                   }}
-                  onFocus={(e) => e.target.style.borderColor = "#3498db"}
-                  onBlur={(e) => e.target.style.borderColor = "#e1e8ed"}
-                />
-              </div>
-              
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                gap: "16px"
-              }}>
-                {filteredStudents.map((student) => (
-                  <div
-                    key={student.id}
-                    style={{
-                      backgroundColor: "#f8f9fa",
-                      border: "2px solid #e1e8ed",
-                      borderRadius: "12px",
-                      padding: "20px",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease"
-                    }}
-                    onClick={() => setSelectedStudent(student)}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "#3498db";
-                      e.currentTarget.style.backgroundColor = "#ffffff";
-                      e.currentTarget.style.transform = "translateY(-2px)";
-                      e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.1)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = "#e1e8ed";
-                      e.currentTarget.style.backgroundColor = "#f8f9fa";
-                      e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.boxShadow = "none";
-                    }}
-                  >
-                    <div style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "12px"
-                    }}>
-                      <div style={{
-                        width: "48px",
-                        height: "48px",
-                        borderRadius: "50%",
-                        backgroundColor: "#3498db",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "white",
-                        fontWeight: "bold",
-                        fontSize: "18px"
-                      }}>
-                        {student.first_name.charAt(0)}{student.last_name.charAt(0)}
-                      </div>
-                      <div>
-                        <h3 style={{
-                          margin: 0,
-                          fontSize: "16px",
-                          fontWeight: "600",
-                          color: "#2c3e50"
-                        }}>
-                          {student.first_name} {student.last_name}
-                        </h3>
-                        <p style={{
-                          margin: "4px 0 0 0",
-                          fontSize: "12px",
-                          color: "#7f8c8d"
-                        }}>
-                          Click to view schedule
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {filteredStudents.length === 0 && (
-                  <div style={{
-                    gridColumn: "1 / -1",
-                    textAlign: "center",
-                    padding: "40px",
-                    color: "#7f8c8d"
-                  }}>
-                    No students found matching your search.
-                  </div>
-                )}
-              </div>
+                  onClick={handleDeleteSelected}
+                  disabled={deleting}
+                >
+                  {deleting ? "⏳ Deleting..." : `🗑️ Delete Selected (${selectedEvents.size})`}
+                </HoverButton>
+              )}
             </div>
           </div>
-        ) : (
-          <div>
-            {/* Header */}
-            <div style={{ 
-              backgroundColor: "white", 
-              borderRadius: "8px", 
-              padding: "12px 16px", 
-              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-              marginBottom: "12px"
+        </div>
+
+        <div style={{
+          backgroundColor: "white",
+          borderRadius: "12px",
+          padding: "24px",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.05)"
+        }}>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "16px",
+            flexWrap: "wrap",
+            gap: "12px"
+          }}>
+            <div style={{
+              display: "flex",
+              gap: "16px",
+              fontSize: "12px",
+              fontWeight: "500",
+              flexWrap: "wrap"
             }}>
-              <div style={{ 
-                display: "flex", 
-                alignItems: "center", 
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: "12px"
-              }}>
-                <div>
-                  <h1 style={{ 
-                    fontSize: 20, 
-                    fontWeight: "bold", 
-                    margin: 0, 
-                    color: "#2c3e50",
+              <span>📚 Classes</span>
+              <span>📅 Events</span>
+              <span>🟣 Personal</span>
+              <span>🔴 Meetings</span>
+              <span>🟠 Appointments</span>
+              <span>⚫ Reminders</span>
+            </div>
+            
+            {/* Overlap detection indicator */}
+            {studentSchedules.length > 0 && (() => {
+              const overlaps = checkEventOverlaps(studentSchedules);
+              return overlaps.length > 0 ? (
+                <div style={{
+                  backgroundColor: "#e74c3c",
+                  color: "white",
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  fontSize: "11px",
+                  fontWeight: "500",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px"
+                }}>
+                  ⚠️ {overlaps.length} Overlap{overlaps.length > 1 ? 's' : ''} Detected
+                </div>
+              ) : (
+                <div style={{
+                  backgroundColor: "#27ae60",
+                  color: "white",
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  fontSize: "11px",
+                  fontWeight: "500",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px"
+                }}>
+                  ✅ No Overlaps
+                </div>
+              );
+            })()}
+          </div>
+          <Calendar
+            localizer={localizer}
+            events={studentSchedules}
+            startAccessor="start"
+            endAccessor="end"
+            style={{ height: 600 }}
+            views={["month", "week", "day"]}
+            view={view}
+            onView={setView}
+            date={date}
+            onNavigate={setDate}
+            eventPropGetter={eventStyleGetter}
+            selectable={false}
+            onSelectEvent={!showCheckboxes ? handleEventClick : null}
+            components={{
+              event: ({ event }) => (
+                <div 
+                  style={{ 
+                    padding: "4px 6px", 
+                    borderRadius: "4px",
                     display: "flex",
                     alignItems: "center",
-                    gap: "6px"
-                  }}>
-                    📅 {selectedStudent.first_name} {selectedStudent.last_name}'s Schedule
-                  </h1>
-                </div>
-
-                <div style={{ 
-                  display: "flex", 
-                  gap: 8, 
-                  flexWrap: "wrap" 
-                }}>
-                  <HoverButton
-                    style={{ 
-                      backgroundColor: "#95a5a6", 
-                      color: "white",
-                      border: "2px solid transparent"
-                    }}
-                    onClick={() => setSelectedStudent(null)}
-                  >
-                    ← Back to Student List
-                  </HoverButton>
-
-                  <HoverButton
-                    style={{ 
-                      backgroundColor: "#27ae60", 
-                      color: "white",
-                      border: "2px solid transparent"
-                    }}
-                    onClick={() => setShowAddEventModal(true)}
-                  >
-                    ➕ Add Event
-                  </HoverButton>
-
-                  <HoverButton
-                    style={{ 
-                      backgroundColor: showCheckboxes ? "#95a5a6" : "#e74c3c", 
-                      color: "white",
-                      border: "2px solid transparent"
-                    }}
-                    onClick={() => {
-                      setShowCheckboxes(prev => !prev);
-                      setSelectedEvents(new Set());
-                    }}
-                  >
-                    {showCheckboxes ? "✖️ Cancel" : "🗑️ Delete Events"}
-                  </HoverButton>
-
-                  {showCheckboxes && (
-                    <HoverButton
+                    gap: "6px",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    // Apply the proper background color based on event type
+                    backgroundColor: event.isClass ? "#3498db" : 
+                                   event.eventType === "personal" ? "#9b59b6" : 
+                                   event.eventType === "meeting" ? "#e74c3c" :
+                                   event.eventType === "appointment" ? "#f39c12" :
+                                   event.eventType === "reminder" ? "#95a5a6" : "#27ae60",
+                    color: "white"
+                  }}
+                  onClick={(e) => {
+                    // Only open event details if NOT in delete mode
+                    if (!showCheckboxes) {
+                      e.stopPropagation();
+                      handleEventClick(event);
+                    }
+                  }}
+                >
+                  {showCheckboxes && !event.isClass && (
+                    <input
+                      type="checkbox"
+                      checked={selectedEvents.has(event.id)}
+                      onChange={() => toggleSelectEvent(event.id)}
                       style={{ 
-                        backgroundColor: "#2980b9", 
-                        color: "white",
-                        border: "2px solid transparent"
+                        marginRight: 4,
+                        cursor: "pointer"
                       }}
-                      onClick={handleSelectAll}
-                    >
-                      {selectedEvents.size === (studentSchedules[selectedStudent.id]?.filter(e => !e.isClass).length || 0)
-                        ? "Unselect All"
-                        : "Select All"}
-                    </HoverButton>
+                      onClick={(e) => e.stopPropagation()}
+                    />
                   )}
-
-                  {showCheckboxes && selectedEvents.size > 0 && (
-                    <HoverButton
-                      style={{ 
-                        backgroundColor: "#c0392b", 
-                        color: "white",
-                        border: "2px solid transparent"
-                      }}
-                      onClick={handleDeleteSelected}
-                      disabled={deleting}
-                    >
-                      {deleting ? "⏳ Deleting..." : `🗑️ Delete Selected (${selectedEvents.size})`}
-                    </HoverButton>
-                  )}
+                  <span>{event.title}</span>
+                  {event.isClass && <span style={{ fontSize: "10px", opacity: 0.8 }}>📚</span>}
+                  {!event.isClass && event.eventType === "personal" && <span style={{ fontSize: "10px", opacity: 0.8 }}>💜</span>}
+                  {!event.isClass && event.eventType === "meeting" && <span style={{ fontSize: "10px", opacity: 0.8 }}>🔴</span>}
+                  {!event.isClass && event.eventType === "appointment" && <span style={{ fontSize: "10px", opacity: 0.8 }}>🟠</span>}
+                  {!event.isClass && event.eventType === "reminder" && <span style={{ fontSize: "10px", opacity: 0.8 }}>⚫</span>}
+                  {!event.isClass && !["personal", "meeting", "appointment", "reminder"].includes(event.eventType) && <span style={{ fontSize: "10px", opacity: 0.8 }}>📅</span>}
                 </div>
-              </div>
-            </div>
+              ),
+            }}
+          />
+        </div>
 
-            {/* Calendar */}
-            <div style={{
-              backgroundColor: "white",
-              borderRadius: "12px",
-              padding: "24px",
-              boxShadow: "0 4px 16px rgba(0,0,0,0.05)"
-            }}>
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "16px",
-                flexWrap: "wrap",
-                gap: "12px"
-              }}>
-                <div style={{
-                  display: "flex",
-                  gap: "16px",
-                  fontSize: "12px",
-                  fontWeight: "500",
-                  flexWrap: "wrap"
-                }}>
-                  <span>📚 Classes</span>
-                  <span>📅 Events</span>
-                  <span>🟣 Personal</span>
-                  <span>🔴 Meetings</span>
-                  <span>🟠 Appointments</span>
-                  <span>⚫ Reminders</span>
-                </div>
-                
-                {/* Overlap detection indicator */}
-                {studentSchedules[selectedStudent.id] && (() => {
-                  const overlaps = checkEventOverlaps(studentSchedules[selectedStudent.id]);
-                  return overlaps.length > 0 ? (
-                    <div style={{
-                      backgroundColor: "#e74c3c",
-                      color: "white",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      fontSize: "11px",
-                      fontWeight: "500",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px"
-                    }}>
-                      ⚠️ {overlaps.length} Overlap{overlaps.length > 1 ? 's' : ''} Detected
-                    </div>
-                  ) : (
-                    <div style={{
-                      backgroundColor: "#27ae60",
-                      color: "white",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      fontSize: "11px",
-                      fontWeight: "500",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px"
-                    }}>
-                      ✅ No Overlaps
-                    </div>
-                  );
-                })()}
-              </div>
-              <Calendar
-                localizer={localizer}
-                events={studentSchedules[selectedStudent.id] || []}
-                startAccessor="start"
-                endAccessor="end"
-                style={{ height: 600 }}
-                views={["month", "week", "day"]}
-                view={view}
-                onView={setView}
-                date={date}
-                onNavigate={setDate}
-                eventPropGetter={eventStyleGetter}
-                selectable={false}
-                onSelectEvent={!showCheckboxes ? handleEventClick : null}
-                components={{
-                  event: ({ event }) => (
-                    <div 
-                      style={{ 
-                        padding: "4px 6px", 
-                        borderRadius: "4px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        fontSize: "13px",
-                        fontWeight: 500,
-                        cursor: "pointer",
-                        // Apply the proper background color based on event type
-                        backgroundColor: event.isClass ? "#3498db" : 
-                                       event.eventType === "personal" ? "#9b59b6" : 
-                                       event.eventType === "meeting" ? "#e74c3c" :
-                                       event.eventType === "appointment" ? "#f39c12" :
-                                       event.eventType === "reminder" ? "#95a5a6" : "#27ae60",
-                        color: "white"
-                      }}
-                      onClick={(e) => {
-                        // Only open event details if NOT in delete mode
-                        if (!showCheckboxes) {
-                          e.stopPropagation();
-                          handleEventClick(event);
-                        }
-                      }}
-                    >
-                      {showCheckboxes && !event.isClass && (
-                        <input
-                          type="checkbox"
-                          checked={selectedEvents.has(event.id)}
-                          onChange={() => toggleSelectEvent(event.id)}
-                          style={{ 
-                            marginRight: 4,
-                            cursor: "pointer"
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      )}
-                      <span>{event.title}</span>
-                      {event.isClass && <span style={{ fontSize: "10px", opacity: 0.8 }}>📚</span>}
-                      {!event.isClass && event.eventType === "personal" && <span style={{ fontSize: "10px", opacity: 0.8 }}>💜</span>}
-                      {!event.isClass && event.eventType === "meeting" && <span style={{ fontSize: "10px", opacity: 0.8 }}>🔴</span>}
-                      {!event.isClass && event.eventType === "appointment" && <span style={{ fontSize: "10px", opacity: 0.8 }}>🟠</span>}
-                      {!event.isClass && event.eventType === "reminder" && <span style={{ fontSize: "10px", opacity: 0.8 }}>⚫</span>}
-                      {!event.isClass && !["personal", "meeting", "appointment", "reminder"].includes(event.eventType) && <span style={{ fontSize: "10px", opacity: 0.8 }}>📅</span>}
-                    </div>
-                  ),
-                }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Add Event Modal */}
         {showAddEventModal && (
           <div style={{
             position: "fixed", 
@@ -1131,8 +876,7 @@ export default function StudentList() {
           </div>
         )}
 
-        {/* Event Details Modal */}
-        {showEventDetails && eventDetails && (
+        {showEventModal && selectedEventDetails && (
           <div style={{
             position: "fixed", 
             top: 0, 
@@ -1169,10 +913,10 @@ export default function StudentList() {
                   alignItems: "center",
                   gap: "8px"
                 }}>
-                  {eventDetails.isClass ? "📚" : "📅"} Event Details
+                  {selectedEventDetails.isClass ? "📚" : "📅"} Event Details
                 </h2>
                 <button
-                  onClick={() => setShowEventDetails(false)}
+                  onClick={() => setShowEventModal(false)}
                   style={{
                     background: "none",
                     border: "none",
@@ -1193,14 +937,14 @@ export default function StudentList() {
                   color: "#34495e",
                   margin: "0 0 8px 0"
                 }}>
-                  {eventDetails.title}
+                  {selectedEventDetails.title}
                 </h3>
                 <div style={{
-                  backgroundColor: eventDetails.isClass ? "#3498db" : 
-                                  eventDetails.eventType === "personal" ? "#9b59b6" : 
-                                  eventDetails.eventType === "meeting" ? "#e74c3c" :
-                                  eventDetails.eventType === "appointment" ? "#f39c12" :
-                                  eventDetails.eventType === "reminder" ? "#95a5a6" : "#27ae60",
+                  backgroundColor: selectedEventDetails.isClass ? "#3498db" : 
+                                  selectedEventDetails.eventType === "personal" ? "#9b59b6" : 
+                                  selectedEventDetails.eventType === "meeting" ? "#e74c3c" :
+                                  selectedEventDetails.eventType === "appointment" ? "#f39c12" :
+                                  selectedEventDetails.eventType === "reminder" ? "#95a5a6" : "#27ae60",
                   color: "white",
                   padding: "4px 8px",
                   borderRadius: "4px",
@@ -1208,11 +952,11 @@ export default function StudentList() {
                   fontSize: "12px",
                   fontWeight: "500"
                 }}>
-                  {eventDetails.isClass ? "📚 Class" : 
-                   eventDetails.eventType === "personal" ? "💜 Personal Event" : 
-                   eventDetails.eventType === "meeting" ? "🔴 Meeting" :
-                   eventDetails.eventType === "appointment" ? "🟠 Appointment" :
-                   eventDetails.eventType === "reminder" ? "⚫ Reminder" : "📅 Regular Event"}
+                  {selectedEventDetails.isClass ? "📚 Class" : 
+                   selectedEventDetails.eventType === "personal" ? "💜 Personal Event" : 
+                   selectedEventDetails.eventType === "meeting" ? "🔴 Meeting" :
+                   selectedEventDetails.eventType === "appointment" ? "🟠 Appointment" :
+                   selectedEventDetails.eventType === "reminder" ? "⚫ Reminder" : "📅 Regular Event"}
                 </div>
               </div>
 
@@ -1226,10 +970,10 @@ export default function StudentList() {
                   📅 Date & Time
                 </div>
                 <div style={{ fontSize: "14px", color: "#2c3e50" }}>
-                  <strong>Start:</strong> {moment(eventDetails.start).format("MMMM Do, YYYY [at] h:mm A")}
+                  <strong>Start:</strong> {moment(selectedEventDetails.start).format("MMMM Do, YYYY [at] h:mm A")}
                 </div>
                 <div style={{ fontSize: "14px", color: "#2c3e50" }}>
-                  <strong>End:</strong> {moment(eventDetails.end).format("MMMM Do, YYYY [at] h:mm A")}
+                  <strong>End:</strong> {moment(selectedEventDetails.end).format("MMMM Do, YYYY [at] h:mm A")}
                 </div>
               </div>
 
@@ -1250,9 +994,9 @@ export default function StudentList() {
                   fontSize: "14px",
                   color: "#2c3e50",
                   minHeight: "60px",
-                  fontStyle: eventDetails.description ? "normal" : "italic"
+                  fontStyle: selectedEventDetails.description ? "normal" : "italic"
                 }}>
-                  {eventDetails.description || "No description provided"}
+                  {selectedEventDetails.description || "No description provided"}
                 </div>
               </div>
 
@@ -1263,7 +1007,7 @@ export default function StudentList() {
                     color: "white",
                     border: "2px solid transparent"
                   }} 
-                  onClick={() => setShowEventDetails(false)}
+                  onClick={() => setShowEventModal(false)}
                 >
                   Close
                 </HoverButton>
