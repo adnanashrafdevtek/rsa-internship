@@ -1,59 +1,42 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import "./Login.css"; // We'll create this CSS file
 
 function Login() {
-  const [email, setEmail] = useState(""); // now using email
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
 
-  const { login } = useAuth();
-  const navigate = useNavigate();
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    const success = await login(email, password); // pass email instead of username
-    if (success) {
-      navigate("/home");
-    } else {
-      setError("Invalid credentials. Please try again.");
-    }
-  };
-
-  const handleResetPassword = () => {
-    navigate("/reset-password");
+    // Handle login logic here
+    console.log("Username:", username, "Password:", password);
   };
 
   return (
-    <div style={{ maxWidth: "400px", margin: "100px auto" }}>
-      <h2>LOGIN</h2>
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      <form onSubmit={handleSubmit}>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ display: "block", marginBottom: "10px", width: "100%" }}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{ display: "block", marginBottom: "10px", width: "100%" }}
-          required
-        />
-        <button type="submit">Login</button>
-        <button
-          type="button"
-          onClick={handleResetPassword}
-          style={{ marginLeft: "10px" }}
-        >
-          Reset Password
-        </button>
-      </form>
+    <div className="login-container">
+      <div className="login-box">
+        <div className="login-icon">
+          {/* Replace with actual icon or image */}
+          <img src="/calendar-icon.png" alt="School Scheduler" />
+        </div>
+        <h2>Welcome to Plannify</h2>
+        <p>Manage your school schedule with ease.</p>
+        <form onSubmit={handleSubmit}>
+          <input
+            type="text"
+            placeholder="Enter your username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+          <input
+            type="password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button type="submit">Log In</button>
+        </form>
+        <p className="forgot-password">Forgot your password?</p>
+      </div>
     </div>
   );
 }
