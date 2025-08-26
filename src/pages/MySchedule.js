@@ -177,7 +177,8 @@ export default function MySchedule() {
         const date2 = moment(start2).format("YYYY-MM-DD");
         
         // Only check for time overlap if events are on the same date
-        if (date1 === date2 && start1 < end2 && start2 < end1) {
+        // Fix: Use getTime() for proper time comparison
+        if (date1 === date2 && start1.getTime() < end2.getTime() && start2.getTime() < end1.getTime()) {
           // Events overlap on the same date
           const overlapStart = new Date(Math.max(start1.getTime(), start2.getTime()));
           const overlapEnd = new Date(Math.min(end1.getTime(), end2.getTime()));
@@ -347,12 +348,11 @@ export default function MySchedule() {
       style: {
         backgroundColor,
         color: "white",
-        borderRadius: 6,
-        padding: "4px 6px",
+        borderRadius: 4,
         border: "none",
         fontSize: "13px",
         fontWeight: 500,
-        boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
       },
     };
   };
@@ -457,12 +457,30 @@ export default function MySchedule() {
               fontWeight: "500",
               flexWrap: "wrap"
             }}>
-              <span>📚 Classes</span>
-              <span>📅 Events</span>
-              <span>🟣 Personal</span>
-              <span>🔴 Meetings</span>
-              <span>🟠 Appointments</span>
-              <span>⚫ Reminders</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <div style={{ width: "12px", height: "12px", backgroundColor: "#3498db", borderRadius: "2px" }}></div>
+                📚 Classes
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <div style={{ width: "12px", height: "12px", backgroundColor: "#27ae60", borderRadius: "2px" }}></div>
+                📅 Events
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <div style={{ width: "12px", height: "12px", backgroundColor: "#9b59b6", borderRadius: "2px" }}></div>
+                🟣 Personal
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <div style={{ width: "12px", height: "12px", backgroundColor: "#e74c3c", borderRadius: "2px" }}></div>
+                🔴 Meetings
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <div style={{ width: "12px", height: "12px", backgroundColor: "#f39c12", borderRadius: "2px" }}></div>
+                🟠 Appointments
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <div style={{ width: "12px", height: "12px", backgroundColor: "#95a5a6", borderRadius: "2px" }}></div>
+                ⚫ Reminders
+              </span>
             </div>
             
             {/* Overlap detection indicator */}
@@ -525,12 +543,6 @@ export default function MySchedule() {
                     fontSize: "13px",
                     fontWeight: 500,
                     cursor: "pointer",
-                    // Apply the proper background color based on event type
-                    backgroundColor: event.isClass ? "#3498db" : 
-                                   event.eventType === "personal" ? "#9b59b6" : 
-                                   event.eventType === "meeting" ? "#e74c3c" :
-                                   event.eventType === "appointment" ? "#f39c12" :
-                                   event.eventType === "reminder" ? "#95a5a6" : "#27ae60",
                     color: "white"
                   }}
                   onClick={(e) => {
@@ -975,30 +987,33 @@ export default function MySchedule() {
                 <div style={{ fontSize: "14px", color: "#2c3e50" }}>
                   <strong>End:</strong> {moment(selectedEventDetails.end).format("MMMM Do, YYYY [at] h:mm A")}
                 </div>
+                <div style={{ fontSize: "14px", color: "#2c3e50", marginTop: "4px" }}>
+                  <strong>Duration:</strong> {moment.duration(moment(selectedEventDetails.end).diff(moment(selectedEventDetails.start))).humanize()}
+                </div>
               </div>
 
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ 
-                  fontSize: "14px", 
-                  color: "#7f8c8d",
-                  marginBottom: 8,
-                  fontWeight: "500"
-                }}>
-                  📝 Description
+              {selectedEventDetails.description && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ 
+                    fontSize: "14px", 
+                    color: "#7f8c8d",
+                    marginBottom: 8,
+                    fontWeight: "500"
+                  }}>
+                    📝 Description
+                  </div>
+                  <div style={{
+                    backgroundColor: "#f8f9fa",
+                    padding: "12px",
+                    borderRadius: "8px",
+                    border: "1px solid #e1e8ed",
+                    fontSize: "14px",
+                    color: "#2c3e50"
+                  }}>
+                    {selectedEventDetails.description}
+                  </div>
                 </div>
-                <div style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "12px",
-                  borderRadius: "8px",
-                  border: "1px solid #e1e8ed",
-                  fontSize: "14px",
-                  color: "#2c3e50",
-                  minHeight: "60px",
-                  fontStyle: selectedEventDetails.description ? "normal" : "italic"
-                }}>
-                  {selectedEventDetails.description || "No description provided"}
-                </div>
-              </div>
+              )}
 
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <HoverButton 
@@ -1015,7 +1030,6 @@ export default function MySchedule() {
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
