@@ -92,21 +92,22 @@ const HoverButton = ({ style, children, onClick, type, disabled }) => {
   );
 };
 
+
 export default function MySchedule() {
   const { user, logout } = useAuth();
-  const [studentSchedules, setStudentSchedules] = useState([]);
+  const [scheduleEvents, setScheduleEvents] = useState([]);
   const [showCheckboxes, setShowCheckboxes] = useState(false);
   const [selectedEvents, setSelectedEvents] = useState(new Set());
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [newEvent, setNewEvent] = useState({
     title: "",
-    startDate: moment().format("YYYY-MM-DD"), // Default to today
-    startTime: moment().format("HH:mm"), // Default to current time
-    endDate: moment().format("YYYY-MM-DD"), // Default to today
-    endTime: moment().add(1, 'hour').format("HH:mm"), // Default to 1 hour later
+    startDate: moment().format("YYYY-MM-DD"),
+    startTime: moment().format("HH:mm"),
+    endDate: moment().format("YYYY-MM-DD"),
+    endTime: moment().add(1, 'hour').format("HH:mm"),
     recurringDays: [],
     description: "",
-    eventType: "event", // Default to regular event
+    eventType: "event",
   });
   const [date, setDate] = useState(new Date());
   const [view, setView] = useState(Views.WEEK);
@@ -116,19 +117,28 @@ export default function MySchedule() {
 
   const calendarRef = useRef(null);
 
+  const getRole = u => (u && u.role ? u.role.trim().toLowerCase() : "");
+  const isStudent = getRole(user) === "student";
+  const isTeacher = getRole(user) === "teacher";
+
   const handleLogout = () => {
     logout();
   };
 
-  // Fetch student classes + personal events
+  // Fetch classes (student or teacher) + personal events
   useEffect(() => {
     if (!user) return;
 
     const fetchEvents = async () => {
       try {
-        // Classes
-        const classRes = await fetch(`http://localhost:3000/api/students/${user.id}/classes`);
-        const classes = classRes.ok ? await classRes.json() : [];
+        let classes = [];
+        if (isStudent) {
+          const classRes = await fetch(`http://localhost:3000/api/students/${user.id}/classes`);
+          classes = classRes.ok ? await classRes.json() : [];
+        } else if (isTeacher) {
+          const classRes = await fetch(`http://localhost:3000/api/teachers/${user.id}/classes`);
+          classes = classRes.ok ? await classRes.json() : [];
+        }
         let classEvents = [];
         classes.forEach(cls => {
           classEvents = classEvents.concat(generateRecurringEvents(cls));
@@ -145,13 +155,13 @@ export default function MySchedule() {
           description: event.description || "",
           classId: null,
           isClass: false,
-          eventType: event.event_type || "event", // Include event type
+          eventType: event.event_type || "event",
         }));
 
-        setStudentSchedules([...classEvents, ...personalEvents]);
+        setScheduleEvents([...classEvents, ...personalEvents]);
       } catch (err) {
         console.error(err);
-        setStudentSchedules([]);
+        setScheduleEvents([]);
       }
     };
 
@@ -165,24 +175,15 @@ export default function MySchedule() {
       for (let j = i + 1; j < events.length; j++) {
         const event1 = events[i];
         const event2 = events[j];
-        
-        // Check if events overlap in time AND date
         const start1 = new Date(event1.start);
         const end1 = new Date(event1.end);
         const start2 = new Date(event2.start);
         const end2 = new Date(event2.end);
-        
-        // Check if events are on the same date first
         const date1 = moment(start1).format("YYYY-MM-DD");
         const date2 = moment(start2).format("YYYY-MM-DD");
-        
-        // Only check for time overlap if events are on the same date
-        // Fix: Use getTime() for proper time comparison
         if (date1 === date2 && start1.getTime() < end2.getTime() && start2.getTime() < end1.getTime()) {
-          // Events overlap on the same date
           const overlapStart = new Date(Math.max(start1.getTime(), start2.getTime()));
           const overlapEnd = new Date(Math.min(end1.getTime(), end2.getTime()));
-          
           overlaps.push({
             event1: event1.title,
             event2: event2.title,
@@ -213,7 +214,7 @@ export default function MySchedule() {
       for (const eventId of selectedEvents) {
         await fetch(`http://localhost:3000/api/calendar/${eventId}`, { method: "DELETE" });
       }
-      setStudentSchedules(prev => prev.filter(e => !selectedEvents.has(e.id)));
+  setScheduleEvents(prev => prev.filter(e => !selectedEvents.has(e.id)));
       setSelectedEvents(new Set());
       setShowCheckboxes(false);
     } catch (err) {
@@ -284,7 +285,7 @@ export default function MySchedule() {
       eventType: event.event_type
     }));
     
-    const overlaps = checkEventOverlaps([...studentSchedules, ...tempEvents]);
+  const overlaps = checkEventOverlaps([...scheduleEvents, ...tempEvents]);
     
     if (overlaps.length > 0) {
       const overlapMessage = overlaps.map(overlap => 
@@ -484,8 +485,8 @@ export default function MySchedule() {
             </div>
             
             {/* Overlap detection indicator */}
-            {studentSchedules.length > 0 && (() => {
-              const overlaps = checkEventOverlaps(studentSchedules);
+            {scheduleEvents.length > 0 && (() => {
+              const overlaps = checkEventOverlaps(scheduleEvents);
               return overlaps.length > 0 ? (
                 <div style={{
                   backgroundColor: "#e74c3c",
@@ -519,7 +520,7 @@ export default function MySchedule() {
           </div>
           <Calendar
             localizer={localizer}
-            events={studentSchedules}
+            events={scheduleEvents}
             startAccessor="start"
             endAccessor="end"
             style={{ height: 600 }}

@@ -28,6 +28,7 @@ export default function Classes() {
   const [showAddRecurring, setShowAddRecurring] = useState(false);
   const [showEditRecurring, setShowEditRecurring] = useState(false);
   const [showAddStudentsFor, setShowAddStudentsFor] = useState(null);
+  const [addStudentsLoading, setAddStudentsLoading] = useState(false);
   const [allStudents, setAllStudents] = useState([]);
   const [showAllStudents, setShowAllStudents] = useState(false);
 
@@ -98,7 +99,8 @@ export default function Classes() {
     setEditForm({
       name: cls.name || '',
       grade_level: cls.grade_level || '',
-      teacher_id: cls.teacher_id !== undefined && cls.teacher_id !== null ? cls.teacher_id : '',
+      // Always preserve the teacher_id as a number (never empty string)
+      teacher_id: (cls.teacher_id !== undefined && cls.teacher_id !== null) ? cls.teacher_id : (user && user.role === 'teacher' ? user.id : ''),
       start_date: cls.start_time?.slice(0, 10) || '',
       start_time: cls.start_time?.slice(11, 16) || '',
       end_date: cls.end_time?.slice(0, 10) || '',
@@ -225,14 +227,23 @@ export default function Classes() {
     try {
       const startDatetime = combineLocalDatetime(editForm.start_date, editForm.start_time);
       const endDatetime = combineLocalDatetime(editForm.end_date, editForm.end_time);
-
+      // Always send a valid teacher_id (never empty string)
+      let teacherIdToSend = editForm.teacher_id;
+      if (!teacherIdToSend && user && user.role === 'teacher') {
+        teacherIdToSend = user.id;
+      }
+      // If still empty, fallback to original class teacher_id (shouldn't happen)
+      if (!teacherIdToSend) {
+        const original = classes.find(c => c.id === editingId);
+        teacherIdToSend = original ? original.teacher_id : '';
+      }
       const res = await fetch(`http://localhost:3000/api/classes/${editingId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editForm.name,
           grade_level: editForm.grade_level,
-          teacher_id: editForm.teacher_id,
+          teacher_id: teacherIdToSend,
           start_time: startDatetime,
           end_time: endDatetime,
           recurring_days: editForm.recurring_days.join(','),
@@ -299,11 +310,21 @@ export default function Classes() {
     }
   };
 
-  const handleOpenAddStudents = (cls) => {
-    setShowAddStudentsFor(cls.id);
+  const handleOpenAddStudents = async (cls) => {
+    setAddStudentsLoading(true);
     setSelectedStudentIds([]);
     setShowAllStudents(false);
     fetchStudentsByGrade(cls.grade_level);
+    try {
+      const res = await fetch(`http://localhost:3000/api/classes/${cls.id}/students`);
+      let students = [];
+      if (res.ok) {
+        students = await res.json();
+      }
+      setClasses(prev => prev.map(c => c.id === cls.id ? { ...c, students } : c));
+    } catch {}
+    setShowAddStudentsFor(cls.id);
+    setAddStudentsLoading(false);
   };
   const handleToggleShowAllStudents = () => {
     const next = !showAllStudents;
@@ -506,6 +527,14 @@ export default function Classes() {
       <Sidebar />
       <div style={{ flex: 1, padding: '40px', marginLeft: 300 }}>
         <h1 style={{ marginBottom: 20 }}>Class List</h1>
+        <p style={{
+          fontSize: 17,
+          color: '#3949ab',
+          marginBottom: 18,
+          fontWeight: 500
+        }}>
+          These are your classes. <b>Click the name of a class</b> to see the roster. You can also edit or manage classes using the buttons in the Actions column.{isAdmin && ' As an admin, you can add new classes.'}
+        </p>
         {loading ? (
           <p>Loading classes...</p>
         ) : (
@@ -525,12 +554,31 @@ export default function Classes() {
               <tbody>
                 {classes.map(c =>
                   (editingId === c.id) ? (
-                    <tr key={c.id} style={{ backgroundColor: '#f9f9f9' }}>
-                      <td style={tdStyle}>
-                        <input name="name" value={editForm.name} onChange={handleEditChange} style={inputStyle} />
+                    <tr
+                      key={c.id}
+                      style={{
+                        background: 'linear-gradient(90deg, #e3f0ff 0%, #f9f9fb 100%)',
+                        borderRadius: 16,
+                        boxShadow: '0 2px 12px 0 rgba(30, 64, 175, 0.10)',
+                        transition: 'box-shadow 0.18s, transform 0.18s',
+                        outline: 'none',
+                        position: 'relative',
+                        zIndex: 2
+                      }}
+                      onMouseOver={e => {
+                        e.currentTarget.style.boxShadow = '0 6px 24px 0 rgba(30, 64, 175, 0.18)';
+                        e.currentTarget.style.transform = 'translateY(-2px) scale(1.012)';
+                      }}
+                      onMouseOut={e => {
+                        e.currentTarget.style.boxShadow = '0 2px 12px 0 rgba(30, 64, 175, 0.10)';
+                        e.currentTarget.style.transform = 'none';
+                      }}
+                    >
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
+                        <input name="name" value={editForm.name} onChange={handleEditChange} style={{ ...inputStyle, borderRadius: 8, background: '#fff' }} />
                       </td>
-                      <td style={tdStyle}>
-                        <select name="grade_level" value={editForm.grade_level} onChange={handleEditChange} style={inputStyle}>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
+                        <select name="grade_level" value={editForm.grade_level} onChange={handleEditChange} style={{ ...inputStyle, borderRadius: 8, background: '#fff' }}>
                           <option value="">Select Grade</option>
                           <option value="Kindergarten">Kindergarten</option>
                           <option value="1">1st Grade</option>
@@ -547,54 +595,79 @@ export default function Classes() {
                           <option value="12">12th Grade</option>
                         </select>
                       </td>
-                      <td style={tdStyle}>
-                        <select name="teacher_id" value={editForm.teacher_id} onChange={handleEditChange} style={inputStyle}>
-                          <option value="">Select Teacher</option>
-                          {teachers.map(t => (
-                            <option key={t.id} value={t.id}>
-                              {t.first_name} {t.last_name}
-                            </option>
-                          ))}
-                        </select>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
+                        {/* Teacher cannot edit teacher field, admin can */}
+                        {isAdmin ? (
+                          <select name="teacher_id" value={editForm.teacher_id} onChange={handleEditChange} style={{ ...inputStyle, borderRadius: 8, background: '#fff' }}>
+                            <option value="">Select Teacher</option>
+                            {teachers.map(t => (
+                              <option key={t.id} value={t.id}>
+                                {t.first_name} {t.last_name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            value={(() => {
+                              const t = teachers.find(t => t.id === Number(editForm.teacher_id));
+                              return t ? `${t.first_name} ${t.last_name}` : 'N/A';
+                            })()}
+                            disabled
+                            style={{ ...inputStyle, borderRadius: 8, backgroundColor: '#f5f5f5', color: '#888', fontStyle: 'italic' }}
+                          />
+                        )}
                       </td>
-                      <td style={tdStyle}>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
                         <input
                           name="start_date"
                           type="date"
                           value={editForm.start_date}
                           onChange={handleEditChange}
-                          style={{ ...inputStyle, marginBottom: 6 }}
+                          style={{ ...inputStyle, borderRadius: 8, marginBottom: 6, background: '#fff' }}
                         />
                         <input
                           name="start_time"
                           type="time"
                           value={editForm.start_time}
                           onChange={handleEditChange}
-                          style={inputStyle}
+                          style={{ ...inputStyle, borderRadius: 8, background: '#fff' }}
                         />
                       </td>
-                      <td style={tdStyle}>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
                         <input
                           name="end_date"
                           type="date"
                           value={editForm.end_date}
                           onChange={handleEditChange}
-                          style={{ ...inputStyle, marginBottom: 6 }}
+                          style={{ ...inputStyle, borderRadius: 8, marginBottom: 6, background: '#fff' }}
                         />
                         <input
                           name="end_time"
                           type="time"
                           value={editForm.end_time}
                           onChange={handleEditChange}
-                          style={inputStyle}
+                          style={{ ...inputStyle, borderRadius: 8, background: '#fff' }}
                         />
                       </td>
-                      <td style={tdStyle}>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
                         <div style={{ position: 'relative', display: 'inline-block' }}>
                           <button
                             type="button"
                             onClick={() => setShowEditRecurring(prev => (prev === c.id ? false : c.id))}
-                            style={{ ...editButtonStyle, minWidth: 90 }}
+                            style={{
+                              ...editButtonStyle,
+                              minWidth: 90,
+                              background: '#4caf50',
+                              color: '#fff',
+                              borderRadius: 8,
+                              fontWeight: 600,
+                              boxShadow: '0 1px 4px rgba(76,175,80,0.08)',
+                              transition: 'all 0.18s',
+                              marginBottom: 6
+                            }}
+                            onMouseOver={e => e.currentTarget.style.background = '#388e3c'}
+                            onMouseOut={e => e.currentTarget.style.background = '#4caf50'}
                           >
                             {editForm.recurring_days.length > 0
                               ? editForm.recurring_days.join(', ')
@@ -616,66 +689,106 @@ export default function Classes() {
                           )}
                         </div>
                       </td>
-                      <td style={tdStyle}>
-                        <button onClick={saveEdit} style={saveBtnStyle}>
-                          Save
-                        </button>{' '}
-                        <button onClick={cancelEditing} style={cancelBtnStyle}>
-                          Cancel
-                        </button>{' '}
-                        <button onClick={() => deleteClass(c.id)} style={deleteBtnStyle}>
-                          Delete
-                        </button>{' '}
-                        <button
-                          onClick={() => {
-                            if (showAddStudentsFor === c.id) {
-                              setShowAddStudentsFor(null);
-                            } else {
-                              fetchStudentsByGrade(c.grade_level);
-                              setSelectedStudentIds([]);
-                              setShowAddStudentsFor(c.id);
-                            }
-                          }}
-                          style={{ ...editButtonStyle, backgroundColor: '#ff9800', marginLeft: 8 }}
-                        >
-                          Add Students
-                        </button>
+                      <td style={{ ...tdStyle, background: 'transparent', minWidth: 260 }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                          <button onClick={saveEdit} style={{ ...saveBtnStyle, borderRadius: 8, fontWeight: 600, boxShadow: '0 1px 4px rgba(33,150,243,0.08)', transition: 'all 0.18s' }}
+                            onMouseOver={e => e.currentTarget.style.background = '#1565c0'}
+                            onMouseOut={e => e.currentTarget.style.background = '#2196f3'}>
+                            Save
+                          </button>
+                          <button onClick={cancelEditing} style={{ ...cancelBtnStyle, borderRadius: 8, fontWeight: 600, boxShadow: '0 1px 4px rgba(244,67,54,0.08)', transition: 'all 0.18s' }}
+                            onMouseOver={e => e.currentTarget.style.background = '#b71c1c'}
+                            onMouseOut={e => e.currentTarget.style.background = '#f44336'}>
+                            Cancel
+                          </button>
+                          <button onClick={() => deleteClass(c.id)} style={{ ...deleteBtnStyle, borderRadius: 8, fontWeight: 600, boxShadow: '0 1px 4px rgba(211,47,47,0.08)', transition: 'all 0.18s' }}
+                            onMouseOver={e => e.currentTarget.style.background = '#b71c1c'}
+                            onMouseOut={e => e.currentTarget.style.background = '#d32f2f'}>
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (showAddStudentsFor === c.id) {
+                                setShowAddStudentsFor(null);
+                              } else {
+                                handleOpenAddStudents(c);
+                              }
+                            }}
+                            style={{
+                              ...editButtonStyle,
+                              backgroundColor: '#ff9800',
+                              color: '#fff',
+                              borderRadius: 8,
+                              fontWeight: 600,
+                              boxShadow: '0 1px 4px rgba(255,152,0,0.08)',
+                              transition: 'all 0.18s',
+                              marginLeft: 0
+                            }}
+                            onMouseOver={e => e.currentTarget.style.background = '#f57c00'}
+                            onMouseOut={e => e.currentTarget.style.background = '#ff9800'}
+                          >
+                            Add Students
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ) : (
-                    <tr key={c.id}>
-                      <td style={tdStyle}>
-                        <Link to={`/rosters/${c.id}`} style={{ color: '#2196f3', textDecoration: 'underline', cursor: 'pointer' }}>
+                    <tr
+                      key={c.id}
+                      style={{
+                        background: 'linear-gradient(90deg, #f9f9fb 0%, #e3f0ff 100%)',
+                        borderRadius: 16,
+                        boxShadow: '0 1px 6px 0 rgba(30, 64, 175, 0.07)',
+                        transition: 'box-shadow 0.18s, transform 0.18s',
+                        outline: 'none',
+                        position: 'relative',
+                        zIndex: 1
+                      }}
+                      onMouseOver={e => {
+                        e.currentTarget.style.boxShadow = '0 6px 24px 0 rgba(30, 64, 175, 0.13)';
+                        e.currentTarget.style.transform = 'translateY(-2px) scale(1.008)';
+                      }}
+                      onMouseOut={e => {
+                        e.currentTarget.style.boxShadow = '0 1px 6px 0 rgba(30, 64, 175, 0.07)';
+                        e.currentTarget.style.transform = 'none';
+                      }}
+                    >
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
+                        <Link to={`/rosters/${c.id}`} style={{ color: '#2196f3', textDecoration: 'underline', cursor: 'pointer', fontWeight: 700, fontSize: 16 }}>
                           {c.name}
                         </Link>
                       </td>
-                      <td style={tdStyle}>{c.grade_level}</td>
-                      <td style={tdStyle}>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>{c.grade_level}</td>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
                         {c.teacher_first_name && c.teacher_last_name
                           ? `${c.teacher_first_name} ${c.teacher_last_name}`
                           : 'N/A'}
                       </td>
-                      <td style={tdStyle}>{formatDateTime(c.start_time)}</td>
-                      <td style={tdStyle}>{formatDateTime(c.end_time)}</td>
-                      <td style={tdStyle}>{c.recurring_days ? c.recurring_days : '—'}</td>
-                      <td style={tdStyle}>
-                        <button onClick={() => startEditing(c)} style={editButtonStyle}>
-                          Edit
-                        </button>{' '}
-                        <button
-                          onClick={() => {
-                            if (showAddStudentsFor === c.id) {
-                              setShowAddStudentsFor(null);
-                            } else {
-                              fetchStudentsByGrade(c.grade_level);
-                              setSelectedStudentIds([]);
-                              setShowAddStudentsFor(c.id);
-                            }
-                          }}
-                          style={{ ...editButtonStyle, backgroundColor: '#ff9800', marginLeft: 8 }}
-                        >
-                          Add Students
-                        </button>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>{formatDateTime(c.start_time)}</td>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>{formatDateTime(c.end_time)}</td>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>{c.recurring_days ? c.recurring_days : '—'}</td>
+                      <td style={{ ...tdStyle, background: 'transparent', minWidth: 180 }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                          <button onClick={() => startEditing(c)} style={{ ...editButtonStyle, borderRadius: 8, fontWeight: 600, boxShadow: '0 1px 4px rgba(76,175,80,0.08)', transition: 'all 0.18s' }}
+                            onMouseOver={e => e.currentTarget.style.background = '#1565c0'}
+                            onMouseOut={e => e.currentTarget.style.background = '#4caf50'}>
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (showAddStudentsFor === c.id) {
+                                setShowAddStudentsFor(null);
+                              } else {
+                                handleOpenAddStudents(c);
+                              }
+                            }}
+                            style={{ ...editButtonStyle, backgroundColor: '#ff9800', borderRadius: 8, fontWeight: 600, boxShadow: '0 1px 4px rgba(255,152,0,0.08)', transition: 'all 0.18s', marginLeft: 0 }}
+                            onMouseOver={e => e.currentTarget.style.background = '#f57c00'}
+                            onMouseOut={e => e.currentTarget.style.background = '#ff9800'}
+                          >
+                            Add Students
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -684,55 +797,73 @@ export default function Classes() {
                 {showAddStudentsFor && (
                   <tr>
                     <td colSpan={7} style={{ padding: 12, background: '#fff8e1' }}>
-                      <label style={{ display: 'block', marginBottom: 8 }}>
-                        <input
-                          type="checkbox"
-                          checked={showAllStudents}
-                          onChange={handleToggleShowAllStudents}
-                          style={{ marginRight: 6 }}
-                        />
-                        Show All Students
-                      </label>
-                      <div style={{ maxHeight: 150, overflowY: 'auto', marginTop: 8 }}>
-                        {(showAllStudents ? allStudents : studentsForGrade).map(s => (
-                          <label
-                            key={s.id}
-                            style={{ display: 'block', cursor: 'pointer', padding: '4px 8px' }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedStudentIds.includes(s.id)}
-                              onChange={() => {
-                                setSelectedStudentIds(prev =>
-                                  prev.includes(s.id)
-                                    ? prev.filter(id => id !== s.id)
-                                    : [...prev, s.id]
-                                );
-                              }}
-                              style={{ marginRight: 6 }}
-                            />
-                            {s.first_name} {s.last_name} (Grade {s.grade_level})
-                          </label>
-                        ))}
-                      </div>
-                      <div style={{ marginTop: 12 }}>
-                        <button onClick={saveStudentsToClass} style={{ ...saveBtnStyle, marginRight: 8 }}>
-                          Save Students
-                        </button>
-                        <button
-                          onClick={() => setShowAddStudentsFor(null)}
-                          style={cancelBtnStyle}
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                      {(() => {
+                        const currentClass = classes.find(c => c.id === showAddStudentsFor);
+                        if (!currentClass || !currentClass.students) {
+                          return <div style={{ color: '#888', fontSize: 15, padding: 8 }}>Loading students...</div>;
+                        }
+                        return (
+                          <>
+                            <label style={{ display: 'block', marginBottom: 8 }}>
+                              <input
+                                type="checkbox"
+                                checked={showAllStudents}
+                                onChange={handleToggleShowAllStudents}
+                                style={{ marginRight: 6 }}
+                              />
+                              Show All Students
+                            </label>
+                            <div style={{ maxHeight: 150, overflowY: 'auto', marginTop: 8 }}>
+                              {(() => {
+                                const alreadyInClassIds = currentClass.students.map(s => s.id);
+                                const availableStudents = (showAllStudents ? allStudents : studentsForGrade)
+                                  .filter(s => !alreadyInClassIds.includes(s.id));
+                                if (availableStudents.length === 0) {
+                                  return <div style={{ color: '#888', fontSize: 15, padding: 8 }}>All students are already in this class.</div>;
+                                }
+                                return availableStudents.map(s => (
+                                  <label
+                                    key={s.id}
+                                    style={{ display: 'block', cursor: 'pointer', padding: '4px 8px' }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedStudentIds.includes(s.id)}
+                                      onChange={() => {
+                                        setSelectedStudentIds(prev =>
+                                          prev.includes(s.id)
+                                            ? prev.filter(id => id !== s.id)
+                                            : [...prev, s.id]
+                                        );
+                                      }}
+                                      style={{ marginRight: 6 }}
+                                    />
+                                    {s.first_name} {s.last_name} (Grade {s.grade_level})
+                                  </label>
+                                ));
+                              })()}
+                            </div>
+                            <div style={{ marginTop: 12 }}>
+                              <button onClick={saveStudentsToClass} style={{ ...saveBtnStyle, marginRight: 8 }}>
+                                Save Students
+                              </button>
+                              <button
+                                onClick={() => setShowAddStudentsFor(null)}
+                                style={cancelBtnStyle}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
 
-            {!showAddForm ? (
+            {isAdmin && (!showAddForm ? (
               <button onClick={() => setShowAddForm(true)} style={addNewBtnStyle}>
                 + Add New Class
               </button>
@@ -827,7 +958,7 @@ export default function Classes() {
                   </button>
                 </div>
               </div>
-            )}
+            ))}
           </>
         )}
       </div>
