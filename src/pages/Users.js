@@ -10,7 +10,7 @@ export default function Users() {
 
   if (!user || user.role !== "admin") {
     return (
-      <div style={{ padding: "40px" }}>
+      <div style={{ padding: "40px", marginLeft: 300 }}>
         <h2>Unauthorized</h2>
         <p>You do not have access to view this page.</p>
       </div>
@@ -29,7 +29,7 @@ export default function Users() {
   return (
     <div style={{ display: "flex" }}>
       <Sidebar />
-      <div style={{ padding: "40px", flex: 1 }}>
+      <div style={{ padding: "40px", flex: 1, marginLeft: 300 }}>
         <h1>All Users</h1>
         {message && <p style={{ color: "green" }}>{message}</p>}
         <table

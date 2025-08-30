@@ -9,6 +9,7 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "./Sidebar";
+import StudentList from "./StudentList";
 
 const locales = {
   "en-US": require("date-fns/locale/en-US"),
@@ -65,25 +66,6 @@ export default function Schedule() {
 
   if (loading) return <p>Loading schedule...</p>;
 
-  return (
-    <div style={{ display: "flex", height: "100vh" }}>
-      <Sidebar onLogout={handleLogout} />
-
-      <div style={{ flex: 1, padding: "20px" }}>
-        <h1 style={{ fontSize: "32px", fontWeight: "bold", marginBottom: "20px" }}>
-          {user?.username}'s Schedule
-        </h1>
-
-        <Calendar
-          localizer={localizer}
-          events={events}
-          startAccessor="start"
-          endAccessor="end"
-          selectable
-          onSelectSlot={handleSelectSlot}
-          style={{ height: "80vh" }}
-        />
-      </div>
-    </div>
-  );
+  // Just render the StudentList component for both students and admin/teacher
+  return <StudentList />;
 }

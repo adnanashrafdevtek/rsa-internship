@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from "../context/AuthContext";
 
 
 
@@ -11,6 +12,7 @@ export default function Classes() {
   const [studentsForGrade, setStudentsForGrade] = useState([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const { user } = useAuth();
   const [editForm, setEditForm] = useState({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({
@@ -26,17 +28,26 @@ export default function Classes() {
   const [showAddRecurring, setShowAddRecurring] = useState(false);
   const [showEditRecurring, setShowEditRecurring] = useState(false);
   const [showAddStudentsFor, setShowAddStudentsFor] = useState(null);
+  const [addStudentsLoading, setAddStudentsLoading] = useState(false);
   const [allStudents, setAllStudents] = useState([]);
   const [showAllStudents, setShowAllStudents] = useState(false);
 
   const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const TIMEZONE = 'America/Chicago'; // CST/CDT
+  const navigate = useNavigate();
 
-  
-
+  // Role-based fetch: admin sees all, teacher sees their classes, student sees their classes
   const fetchClasses = () => {
     setLoading(true);
-    fetch('http://localhost:3000/api/classes')
+    let url = 'http://localhost:3000/api/classes';
+    if (user) {
+      if (user.role === "student") {
+        url = `http://localhost:3000/api/students/${user.id}/classes`;
+      } else if (user.role === "teacher") {
+        url = `http://localhost:3000/api/teachers/${user.id}/classes`;
+      }
+    }
+    fetch(url)
       .then(res => res.json())
       .then(data => {
         setClasses(data);
@@ -76,17 +87,20 @@ export default function Classes() {
   };
 
   useEffect(() => {
+  if (user) {
     fetchClasses();
     fetchTeachers();
     fetchAllStudents();
-  }, []);
+  }
+}, [user]);
 
   const startEditing = (cls) => {
     setEditingId(cls.id);
     setEditForm({
       name: cls.name || '',
       grade_level: cls.grade_level || '',
-      teacher_id: cls.teacher_id !== undefined && cls.teacher_id !== null ? cls.teacher_id : '',
+      // Always preserve the teacher_id as a number (never empty string)
+      teacher_id: (cls.teacher_id !== undefined && cls.teacher_id !== null) ? cls.teacher_id : (user && user.role === 'teacher' ? user.id : ''),
       start_date: cls.start_time?.slice(0, 10) || '',
       start_time: cls.start_time?.slice(11, 16) || '',
       end_date: cls.end_time?.slice(0, 10) || '',
@@ -172,6 +186,18 @@ export default function Classes() {
     return '';
   };
 
+  // Helper to format only time in 12-hour format
+  const formatTimeOnly = (dt) => {
+    if (!dt) return '';
+    const time24 = dt.slice(11, 16);
+    if (!time24) return '';
+    const [hourStr, min] = time24.split(':');
+    let hour = parseInt(hourStr, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12 || 12;
+    return `${hour}:${min} ${ampm}`;
+  };
+
   const saveStudentsToClass = async () => {
     if (!showAddStudentsFor || selectedStudentIds.length === 0) return alert('Select a class and students first');
 
@@ -201,14 +227,23 @@ export default function Classes() {
     try {
       const startDatetime = combineLocalDatetime(editForm.start_date, editForm.start_time);
       const endDatetime = combineLocalDatetime(editForm.end_date, editForm.end_time);
-
+      // Always send a valid teacher_id (never empty string)
+      let teacherIdToSend = editForm.teacher_id;
+      if (!teacherIdToSend && user && user.role === 'teacher') {
+        teacherIdToSend = user.id;
+      }
+      // If still empty, fallback to original class teacher_id (shouldn't happen)
+      if (!teacherIdToSend) {
+        const original = classes.find(c => c.id === editingId);
+        teacherIdToSend = original ? original.teacher_id : '';
+      }
       const res = await fetch(`http://localhost:3000/api/classes/${editingId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editForm.name,
           grade_level: editForm.grade_level,
-          teacher_id: editForm.teacher_id,
+          teacher_id: teacherIdToSend,
           start_time: startDatetime,
           end_time: endDatetime,
           recurring_days: editForm.recurring_days.join(','),
@@ -275,11 +310,21 @@ export default function Classes() {
     }
   };
 
-  const handleOpenAddStudents = (cls) => {
-    setShowAddStudentsFor(cls.id);
+  const handleOpenAddStudents = async (cls) => {
+    setAddStudentsLoading(true);
     setSelectedStudentIds([]);
     setShowAllStudents(false);
     fetchStudentsByGrade(cls.grade_level);
+    try {
+      const res = await fetch(`http://localhost:3000/api/classes/${cls.id}/students`);
+      let students = [];
+      if (res.ok) {
+        students = await res.json();
+      }
+      setClasses(prev => prev.map(c => c.id === cls.id ? { ...c, students } : c));
+    } catch {}
+    setShowAddStudentsFor(cls.id);
+    setAddStudentsLoading(false);
   };
   const handleToggleShowAllStudents = () => {
     const next = !showAllStudents;
@@ -291,11 +336,205 @@ export default function Classes() {
     }
   };
 
+
+  // Role helpers (robust to whitespace/case)
+  const getRole = u => (u && u.role ? u.role.trim().toLowerCase() : "");
+  const isStudent = getRole(user) === "student";
+  const isTeacher = getRole(user) === "teacher";
+  const isAdmin = getRole(user) === "admin";
+
+  if (!user) {
+    return (
+      <div style={{ display: 'flex' }}>
+        <Sidebar />
+        <div style={{ flex: 1, padding: '40px', marginLeft: 300 }}>
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Student UI: Card layout (improved look)
+  if (isStudent) {
+    return (
+      <div style={{ display: 'flex' }}>
+        <Sidebar />
+        <div style={{
+          flex: 1,
+          padding: '40px',
+          background: 'linear-gradient(120deg, #e3f0ff 0%, #f9f9fb 100%)',
+          minHeight: '100vh',
+          marginLeft: 300
+        }}>
+          <h1 style={{
+            marginBottom: 28,
+            color: '#1a237e',
+            fontWeight: 800,
+            letterSpacing: 0.5,
+            fontSize: 36
+          }}>
+            My Classes
+          </h1>
+          <p style={{
+            fontSize: 18,
+            color: '#3949ab',
+            marginBottom: 28,
+            fontWeight: 500
+          }}>
+            These are your classes. Click a class to see the roster, teacher, and more details.
+          </p>
+          {loading ? (
+            <p>Loading classes...</p>
+          ) : (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gap: 36
+            }}>
+              {classes.length === 0 && (
+                <div style={{
+                  fontSize: 20,
+                  color: '#888',
+                  marginTop: 40,
+                  textAlign: 'center',
+                  gridColumn: '1/-1'
+                }}>
+                  No classes found.
+                </div>
+              )}
+              {classes.map(c => (
+                <div
+                  key={c.id}
+                  style={{
+                    background: 'linear-gradient(135deg, #e3f0ff 0%, #f9f9fb 100%)',
+                    borderRadius: 18,
+                    boxShadow: '0 6px 24px 0 rgba(30, 64, 175, 0.10)',
+                    padding: '36px 38px 30px 38px',
+                    minWidth: 320,
+                    maxWidth: 420,
+                    marginBottom: 8,
+                    border: '1px solid #e3e8f0',
+                    position: 'relative',
+                    transition: 'box-shadow 0.18s, transform 0.18s',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    overflow: 'hidden',
+                  }}
+                  tabIndex={0}
+                  onClick={() => navigate(`/rosters/${c.id}`)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      navigate(`/rosters/${c.id}`);
+                    }
+                  }}
+                  onMouseOver={e => {
+                    e.currentTarget.style.boxShadow = '0 12px 36px 0 rgba(30, 64, 175, 0.18)';
+                    e.currentTarget.style.transform = 'translateY(-3px) scale(1.018)';
+                  }}
+                  onMouseOut={e => {
+                    e.currentTarget.style.boxShadow = '0 6px 24px 0 rgba(30, 64, 175, 0.10)';
+                    e.currentTarget.style.transform = 'none';
+                  }}
+                >
+                  <span style={{
+                    color: '#1565c0',
+                    fontWeight: 900,
+                    fontSize: 26,
+                    textDecoration: 'none',
+                    marginBottom: 10,
+                    display: 'inline-block',
+                    letterSpacing: 0.2,
+                    transition: 'color 0.15s',
+                    textShadow: '0 1px 0 #fff',
+                  }}>
+                    {c.name}
+                  </span>
+                  <div style={{ margin: '16px 0 0 0', fontSize: 17 }}>
+                    <span style={{ fontWeight: 600, color: '#3949ab' }}>Time:</span>{' '}
+                    <span style={{ color: '#1976d2', fontWeight: 700 }}>
+                      {formatTimeOnly(c.start_time)}
+                    </span>
+                    {' '}<span style={{ color: '#b0bec5' }}>to</span>{' '}
+                    <span style={{ color: '#1976d2', fontWeight: 700 }}>
+                      {formatTimeOnly(c.end_time)}
+                    </span>
+                  </div>
+                  <div style={{ margin: '16px 0 0 0', fontSize: 17 }}>
+                    <span style={{ fontWeight: 600, color: '#3949ab' }}>Recurring:</span>{' '}
+                    {c.recurring_days
+                      ? (
+                        <span>
+                          {c.recurring_days.split(',').map(day => (
+                            <span
+                              key={day}
+                              style={{
+                                display: 'inline-block',
+                                background: '#e8f5e9',
+                                color: '#388e3c',
+                                borderRadius: 8,
+                                padding: '3px 13px',
+                                marginRight: 7,
+                                fontSize: 15,
+                                fontWeight: 700,
+                                letterSpacing: 0.5,
+                                boxShadow: '0 1px 3px 0 rgba(56,142,60,0.07)'
+                              }}
+                            >
+                              {day}
+                            </span>
+                          ))}
+                        </span>
+                      )
+                      : <span style={{ color: '#b0bec5' }}>—</span>
+                    }
+                  </div>
+                  <div style={{
+                    position: 'absolute',
+                    top: 22,
+                    right: 28,
+                    fontSize: 16,
+                    color: '#607d8b',
+                    fontWeight: 700,
+                    letterSpacing: 0.5,
+                    background: '#e3f2fd',
+                    borderRadius: 8,
+                    padding: '2px 12px',
+                    boxShadow: '0 1px 2px 0 rgba(30,64,175,0.04)'
+                  }}>
+                    {c.grade_level}
+                  </div>
+                  <div style={{ marginTop: 18, fontSize: 15, color: '#333', fontWeight: 500 }}>
+                    <span style={{ color: '#3949ab', fontWeight: 600 }}>Teacher:</span>{' '}
+                    {c.teacher_first_name && c.teacher_last_name
+                      ? `${c.teacher_first_name} ${c.teacher_last_name}`
+                      : 'N/A'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Admin and Teacher UI: same permissions, but teacher only sees their classes
   return (
     <div style={{ display: 'flex' }}>
       <Sidebar />
-      <div style={{ flex: 1, padding: '40px' }}>
+      <div style={{ flex: 1, padding: '40px', marginLeft: 300 }}>
         <h1 style={{ marginBottom: 20 }}>Class List</h1>
+        <p style={{
+          fontSize: 17,
+          color: '#3949ab',
+          marginBottom: 18,
+          fontWeight: 500
+        }}>
+          These are your classes. <b>Click the name of a class</b> to see the roster. You can also edit or manage classes using the buttons in the Actions column.{isAdmin && ' As an admin, you can add new classes.'}
+        </p>
         {loading ? (
           <p>Loading classes...</p>
         ) : (
@@ -314,13 +553,32 @@ export default function Classes() {
               </thead>
               <tbody>
                 {classes.map(c =>
-                  editingId === c.id ? (
-                    <tr key={c.id} style={{ backgroundColor: '#f9f9f9' }}>
-                      <td style={tdStyle}>
-                        <input name="name" value={editForm.name} onChange={handleEditChange} style={inputStyle} />
+                  (editingId === c.id) ? (
+                    <tr
+                      key={c.id}
+                      style={{
+                        background: 'linear-gradient(90deg, #e3f0ff 0%, #f9f9fb 100%)',
+                        borderRadius: 16,
+                        boxShadow: '0 2px 12px 0 rgba(30, 64, 175, 0.10)',
+                        transition: 'box-shadow 0.18s, transform 0.18s',
+                        outline: 'none',
+                        position: 'relative',
+                        zIndex: 2
+                      }}
+                      onMouseOver={e => {
+                        e.currentTarget.style.boxShadow = '0 6px 24px 0 rgba(30, 64, 175, 0.18)';
+                        e.currentTarget.style.transform = 'translateY(-2px) scale(1.012)';
+                      }}
+                      onMouseOut={e => {
+                        e.currentTarget.style.boxShadow = '0 2px 12px 0 rgba(30, 64, 175, 0.10)';
+                        e.currentTarget.style.transform = 'none';
+                      }}
+                    >
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
+                        <input name="name" value={editForm.name} onChange={handleEditChange} style={{ ...inputStyle, borderRadius: 8, background: '#fff' }} />
                       </td>
-                      <td style={tdStyle}>
-                        <select name="grade_level" value={editForm.grade_level} onChange={handleEditChange} style={inputStyle}>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
+                        <select name="grade_level" value={editForm.grade_level} onChange={handleEditChange} style={{ ...inputStyle, borderRadius: 8, background: '#fff' }}>
                           <option value="">Select Grade</option>
                           <option value="Kindergarten">Kindergarten</option>
                           <option value="1">1st Grade</option>
@@ -337,54 +595,79 @@ export default function Classes() {
                           <option value="12">12th Grade</option>
                         </select>
                       </td>
-                      <td style={tdStyle}>
-                        <select name="teacher_id" value={editForm.teacher_id} onChange={handleEditChange} style={inputStyle}>
-                          <option value="">Select Teacher</option>
-                          {teachers.map(t => (
-                            <option key={t.id} value={t.id}>
-                              {t.first_name} {t.last_name}
-                            </option>
-                          ))}
-                        </select>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
+                        {/* Teacher cannot edit teacher field, admin can */}
+                        {isAdmin ? (
+                          <select name="teacher_id" value={editForm.teacher_id} onChange={handleEditChange} style={{ ...inputStyle, borderRadius: 8, background: '#fff' }}>
+                            <option value="">Select Teacher</option>
+                            {teachers.map(t => (
+                              <option key={t.id} value={t.id}>
+                                {t.first_name} {t.last_name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            value={(() => {
+                              const t = teachers.find(t => t.id === Number(editForm.teacher_id));
+                              return t ? `${t.first_name} ${t.last_name}` : 'N/A';
+                            })()}
+                            disabled
+                            style={{ ...inputStyle, borderRadius: 8, backgroundColor: '#f5f5f5', color: '#888', fontStyle: 'italic' }}
+                          />
+                        )}
                       </td>
-                      <td style={tdStyle}>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
                         <input
                           name="start_date"
                           type="date"
                           value={editForm.start_date}
                           onChange={handleEditChange}
-                          style={{ ...inputStyle, marginBottom: 6 }}
+                          style={{ ...inputStyle, borderRadius: 8, marginBottom: 6, background: '#fff' }}
                         />
                         <input
                           name="start_time"
                           type="time"
                           value={editForm.start_time}
                           onChange={handleEditChange}
-                          style={inputStyle}
+                          style={{ ...inputStyle, borderRadius: 8, background: '#fff' }}
                         />
                       </td>
-                      <td style={tdStyle}>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
                         <input
                           name="end_date"
                           type="date"
                           value={editForm.end_date}
                           onChange={handleEditChange}
-                          style={{ ...inputStyle, marginBottom: 6 }}
+                          style={{ ...inputStyle, borderRadius: 8, marginBottom: 6, background: '#fff' }}
                         />
                         <input
                           name="end_time"
                           type="time"
                           value={editForm.end_time}
                           onChange={handleEditChange}
-                          style={inputStyle}
+                          style={{ ...inputStyle, borderRadius: 8, background: '#fff' }}
                         />
                       </td>
-                      <td style={tdStyle}>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
                         <div style={{ position: 'relative', display: 'inline-block' }}>
                           <button
                             type="button"
                             onClick={() => setShowEditRecurring(prev => (prev === c.id ? false : c.id))}
-                            style={{ ...editButtonStyle, minWidth: 90 }}
+                            style={{
+                              ...editButtonStyle,
+                              minWidth: 90,
+                              background: '#4caf50',
+                              color: '#fff',
+                              borderRadius: 8,
+                              fontWeight: 600,
+                              boxShadow: '0 1px 4px rgba(76,175,80,0.08)',
+                              transition: 'all 0.18s',
+                              marginBottom: 6
+                            }}
+                            onMouseOver={e => e.currentTarget.style.background = '#388e3c'}
+                            onMouseOut={e => e.currentTarget.style.background = '#4caf50'}
                           >
                             {editForm.recurring_days.length > 0
                               ? editForm.recurring_days.join(', ')
@@ -406,66 +689,106 @@ export default function Classes() {
                           )}
                         </div>
                       </td>
-                      <td style={tdStyle}>
-                        <button onClick={saveEdit} style={saveBtnStyle}>
-                          Save
-                        </button>{' '}
-                        <button onClick={cancelEditing} style={cancelBtnStyle}>
-                          Cancel
-                        </button>{' '}
-                        <button onClick={() => deleteClass(c.id)} style={deleteBtnStyle}>
-                          Delete
-                        </button>{' '}
-                        <button
-                          onClick={() => {
-                            if (showAddStudentsFor === c.id) {
-                              setShowAddStudentsFor(null);
-                            } else {
-                              fetchStudentsByGrade(c.grade_level);
-                              setSelectedStudentIds([]);
-                              setShowAddStudentsFor(c.id);
-                            }
-                          }}
-                          style={{ ...editButtonStyle, backgroundColor: '#ff9800', marginLeft: 8 }}
-                        >
-                          Add Students
-                        </button>
+                      <td style={{ ...tdStyle, background: 'transparent', minWidth: 260 }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                          <button onClick={saveEdit} style={{ ...saveBtnStyle, borderRadius: 8, fontWeight: 600, boxShadow: '0 1px 4px rgba(33,150,243,0.08)', transition: 'all 0.18s' }}
+                            onMouseOver={e => e.currentTarget.style.background = '#1565c0'}
+                            onMouseOut={e => e.currentTarget.style.background = '#2196f3'}>
+                            Save
+                          </button>
+                          <button onClick={cancelEditing} style={{ ...cancelBtnStyle, borderRadius: 8, fontWeight: 600, boxShadow: '0 1px 4px rgba(244,67,54,0.08)', transition: 'all 0.18s' }}
+                            onMouseOver={e => e.currentTarget.style.background = '#b71c1c'}
+                            onMouseOut={e => e.currentTarget.style.background = '#f44336'}>
+                            Cancel
+                          </button>
+                          <button onClick={() => deleteClass(c.id)} style={{ ...deleteBtnStyle, borderRadius: 8, fontWeight: 600, boxShadow: '0 1px 4px rgba(211,47,47,0.08)', transition: 'all 0.18s' }}
+                            onMouseOver={e => e.currentTarget.style.background = '#b71c1c'}
+                            onMouseOut={e => e.currentTarget.style.background = '#d32f2f'}>
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (showAddStudentsFor === c.id) {
+                                setShowAddStudentsFor(null);
+                              } else {
+                                handleOpenAddStudents(c);
+                              }
+                            }}
+                            style={{
+                              ...editButtonStyle,
+                              backgroundColor: '#ff9800',
+                              color: '#fff',
+                              borderRadius: 8,
+                              fontWeight: 600,
+                              boxShadow: '0 1px 4px rgba(255,152,0,0.08)',
+                              transition: 'all 0.18s',
+                              marginLeft: 0
+                            }}
+                            onMouseOver={e => e.currentTarget.style.background = '#f57c00'}
+                            onMouseOut={e => e.currentTarget.style.background = '#ff9800'}
+                          >
+                            Add Students
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ) : (
-                    <tr key={c.id}>
-                      <td style={tdStyle}>
-                        <Link to={`/rosters/${c.id}`} style={{ color: '#2196f3', textDecoration: 'underline', cursor: 'pointer' }}>
+                    <tr
+                      key={c.id}
+                      style={{
+                        background: 'linear-gradient(90deg, #f9f9fb 0%, #e3f0ff 100%)',
+                        borderRadius: 16,
+                        boxShadow: '0 1px 6px 0 rgba(30, 64, 175, 0.07)',
+                        transition: 'box-shadow 0.18s, transform 0.18s',
+                        outline: 'none',
+                        position: 'relative',
+                        zIndex: 1
+                      }}
+                      onMouseOver={e => {
+                        e.currentTarget.style.boxShadow = '0 6px 24px 0 rgba(30, 64, 175, 0.13)';
+                        e.currentTarget.style.transform = 'translateY(-2px) scale(1.008)';
+                      }}
+                      onMouseOut={e => {
+                        e.currentTarget.style.boxShadow = '0 1px 6px 0 rgba(30, 64, 175, 0.07)';
+                        e.currentTarget.style.transform = 'none';
+                      }}
+                    >
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
+                        <Link to={`/rosters/${c.id}`} style={{ color: '#2196f3', textDecoration: 'underline', cursor: 'pointer', fontWeight: 700, fontSize: 16 }}>
                           {c.name}
                         </Link>
                       </td>
-                      <td style={tdStyle}>{c.grade_level}</td>
-                      <td style={tdStyle}>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>{c.grade_level}</td>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>
                         {c.teacher_first_name && c.teacher_last_name
                           ? `${c.teacher_first_name} ${c.teacher_last_name}`
                           : 'N/A'}
                       </td>
-                      <td style={tdStyle}>{formatDateTime(c.start_time)}</td>
-                      <td style={tdStyle}>{formatDateTime(c.end_time)}</td>
-                      <td style={tdStyle}>{c.recurring_days ? c.recurring_days : '—'}</td>
-                      <td style={tdStyle}>
-                        <button onClick={() => startEditing(c)} style={editButtonStyle}>
-                          Edit
-                        </button>{' '}
-                        <button
-                          onClick={() => {
-                            if (showAddStudentsFor === c.id) {
-                              setShowAddStudentsFor(null);
-                            } else {
-                              fetchStudentsByGrade(c.grade_level);
-                              setSelectedStudentIds([]);
-                              setShowAddStudentsFor(c.id);
-                            }
-                          }}
-                          style={{ ...editButtonStyle, backgroundColor: '#ff9800', marginLeft: 8 }}
-                        >
-                          Add Students
-                        </button>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>{formatDateTime(c.start_time)}</td>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>{formatDateTime(c.end_time)}</td>
+                      <td style={{ ...tdStyle, background: 'transparent' }}>{c.recurring_days ? c.recurring_days : '—'}</td>
+                      <td style={{ ...tdStyle, background: 'transparent', minWidth: 180 }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                          <button onClick={() => startEditing(c)} style={{ ...editButtonStyle, borderRadius: 8, fontWeight: 600, boxShadow: '0 1px 4px rgba(76,175,80,0.08)', transition: 'all 0.18s' }}
+                            onMouseOver={e => e.currentTarget.style.background = '#1565c0'}
+                            onMouseOut={e => e.currentTarget.style.background = '#4caf50'}>
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (showAddStudentsFor === c.id) {
+                                setShowAddStudentsFor(null);
+                              } else {
+                                handleOpenAddStudents(c);
+                              }
+                            }}
+                            style={{ ...editButtonStyle, backgroundColor: '#ff9800', borderRadius: 8, fontWeight: 600, boxShadow: '0 1px 4px rgba(255,152,0,0.08)', transition: 'all 0.18s', marginLeft: 0 }}
+                            onMouseOver={e => e.currentTarget.style.background = '#f57c00'}
+                            onMouseOut={e => e.currentTarget.style.background = '#ff9800'}
+                          >
+                            Add Students
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -474,55 +797,73 @@ export default function Classes() {
                 {showAddStudentsFor && (
                   <tr>
                     <td colSpan={7} style={{ padding: 12, background: '#fff8e1' }}>
-                      <label style={{ display: 'block', marginBottom: 8 }}>
-                        <input
-                          type="checkbox"
-                          checked={showAllStudents}
-                          onChange={handleToggleShowAllStudents}
-                          style={{ marginRight: 6 }}
-                        />
-                        Show All Students
-                      </label>
-                      <div style={{ maxHeight: 150, overflowY: 'auto', marginTop: 8 }}>
-                        {(showAllStudents ? allStudents : studentsForGrade).map(s => (
-                          <label
-                            key={s.id}
-                            style={{ display: 'block', cursor: 'pointer', padding: '4px 8px' }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedStudentIds.includes(s.id)}
-                              onChange={() => {
-                                setSelectedStudentIds(prev =>
-                                  prev.includes(s.id)
-                                    ? prev.filter(id => id !== s.id)
-                                    : [...prev, s.id]
-                                );
-                              }}
-                              style={{ marginRight: 6 }}
-                            />
-                            {s.first_name} {s.last_name} (Grade {s.grade_level})
-                          </label>
-                        ))}
-                      </div>
-                      <div style={{ marginTop: 12 }}>
-                        <button onClick={saveStudentsToClass} style={{ ...saveBtnStyle, marginRight: 8 }}>
-                          Save Students
-                        </button>
-                        <button
-                          onClick={() => setShowAddStudentsFor(null)}
-                          style={cancelBtnStyle}
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                      {(() => {
+                        const currentClass = classes.find(c => c.id === showAddStudentsFor);
+                        if (!currentClass || !currentClass.students) {
+                          return <div style={{ color: '#888', fontSize: 15, padding: 8 }}>Loading students...</div>;
+                        }
+                        return (
+                          <>
+                            <label style={{ display: 'block', marginBottom: 8 }}>
+                              <input
+                                type="checkbox"
+                                checked={showAllStudents}
+                                onChange={handleToggleShowAllStudents}
+                                style={{ marginRight: 6 }}
+                              />
+                              Show All Students
+                            </label>
+                            <div style={{ maxHeight: 150, overflowY: 'auto', marginTop: 8 }}>
+                              {(() => {
+                                const alreadyInClassIds = currentClass.students.map(s => s.id);
+                                const availableStudents = (showAllStudents ? allStudents : studentsForGrade)
+                                  .filter(s => !alreadyInClassIds.includes(s.id));
+                                if (availableStudents.length === 0) {
+                                  return <div style={{ color: '#888', fontSize: 15, padding: 8 }}>All students are already in this class.</div>;
+                                }
+                                return availableStudents.map(s => (
+                                  <label
+                                    key={s.id}
+                                    style={{ display: 'block', cursor: 'pointer', padding: '4px 8px' }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedStudentIds.includes(s.id)}
+                                      onChange={() => {
+                                        setSelectedStudentIds(prev =>
+                                          prev.includes(s.id)
+                                            ? prev.filter(id => id !== s.id)
+                                            : [...prev, s.id]
+                                        );
+                                      }}
+                                      style={{ marginRight: 6 }}
+                                    />
+                                    {s.first_name} {s.last_name} (Grade {s.grade_level})
+                                  </label>
+                                ));
+                              })()}
+                            </div>
+                            <div style={{ marginTop: 12 }}>
+                              <button onClick={saveStudentsToClass} style={{ ...saveBtnStyle, marginRight: 8 }}>
+                                Save Students
+                              </button>
+                              <button
+                                onClick={() => setShowAddStudentsFor(null)}
+                                style={cancelBtnStyle}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
 
-            {!showAddForm ? (
+            {isAdmin && (!showAddForm ? (
               <button onClick={() => setShowAddForm(true)} style={addNewBtnStyle}>
                 + Add New Class
               </button>
@@ -530,11 +871,11 @@ export default function Classes() {
               <div style={addFormContainer}>
                 <h3 style={{ marginBottom: 12 }}>Add New Class</h3>
                 <div style={formRowStyle}>
-                  <label style={labelStyle}>Name:</label>
+                  <label style={{ ...labelStyle, width: 'auto' }}>Name:</label>
                   <input name="name" value={addForm.name} onChange={handleAddChange} type="text" style={inputStyle} />
                 </div>
                 <div style={formRowStyle}>
-                  <label style={labelStyle}>Grade Level:</label>
+                  <label style={{ ...labelStyle, width: 'auto' }}>Grade Level:</label>
                   <select name="grade_level" value={addForm.grade_level} onChange={handleAddChange} style={inputStyle}>
                     <option value="">Select Grade</option>
                     <option value="Kindergarten">Kindergarten</option>
@@ -553,7 +894,7 @@ export default function Classes() {
                   </select>
                 </div>
                 <div style={formRowStyle}>
-                  <label style={labelStyle}>Teacher:</label>
+                  <label style={{ ...labelStyle, width: 'auto' }}>Teacher:</label>
                   <select name="teacher_id" value={addForm.teacher_id} onChange={handleAddChange} style={inputStyle}>
                     <option value="">Select Teacher</option>
                     {teachers.map(t => (
@@ -564,12 +905,12 @@ export default function Classes() {
                   </select>
                 </div>
                 <div style={formRowStyle}>
-                  <label style={labelStyle}>Start Date/Time:</label>
+                  <label style={{ ...labelStyle, width: 'auto' }}>Start Date/Time:</label>
                   <input name="start_date" type="date" value={addForm.start_date} onChange={handleAddChange} style={inputStyle} />
                   <input name="start_time" type="time" value={addForm.start_time} onChange={handleAddChange} style={inputStyle} />
                 </div>
                 <div style={formRowStyle}>
-                  <label style={labelStyle}>End Date/Time:</label>
+                  <label style={{ ...labelStyle, width: 'auto' }}>End Date/Time:</label>
                   <input name="end_date" type="date" value={addForm.end_date} onChange={handleAddChange} style={inputStyle} />
                   <input name="end_time" type="time" value={addForm.end_time} onChange={handleAddChange} style={inputStyle} />
                 </div>
@@ -617,7 +958,7 @@ export default function Classes() {
                   </button>
                 </div>
               </div>
-            )}
+            ))}
           </>
         )}
       </div>

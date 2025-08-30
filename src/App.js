@@ -14,6 +14,8 @@ import ActivationForm from "./pages/ActivationForm";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import './App.css';
+import MySchedule from "./pages/MySchedule";
+
 
 function App() {
   return (
@@ -65,6 +67,23 @@ function App() {
             path="/student/schedules"
             element={<StudentList />}
           />
+          <Route
+  path="/student/schedule"
+  element={
+    <ProtectedRoute>
+      <MySchedule />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/teacher/schedule"
+  element={
+    <ProtectedRoute>
+      <MySchedule />
+    </ProtectedRoute>
+  }
+/>
+
           <Route
             path="/reset-password"
             element={<ResetPassword />}
