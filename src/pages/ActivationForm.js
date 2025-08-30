@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import "./ActivationForm.css";
 
 export default function ActivationForm() {
   const [searchParams] = useSearchParams();
@@ -59,41 +60,40 @@ export default function ActivationForm() {
   };
 
   return (
-    <div style={{ padding: "20px", maxWidth: "400px", margin: "50px auto" }}>
-      <h1>Activate Your Account</h1>
-      {message && <p style={{ color: "green" }}>{message}</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: "10px" }}>
+    <div className="activation-container">
+      <div className="activation-box">
+        <h2>Activate Your Plannify Account</h2>
+        <p>Set your new password to secure your account and get started.</p>
+
+        {message && <p className="message">{message}</p>}
+        {error && <p className="error-message">{error}</p>}
+
+        <form onSubmit={handleSubmit}>
           <input
             type={showPassword ? "text" : "password"}
             placeholder="New Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            style={{ width: "100%", padding: "8px" }}
             required
           />
-        </div>
-        <div style={{ marginBottom: "10px" }}>
           <input
             type={showPassword ? "text" : "password"}
             placeholder="Confirm Password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            style={{ width: "100%", padding: "8px" }}
             required
           />
-          <label style={{ fontSize: "14px", display: "flex", marginTop: "4px" }}>
+          <label className="show-password">
             <input
               type="checkbox"
               checked={showPassword}
               onChange={() => setShowPassword(!showPassword)}
-            />{" "}
-            Show Password
+            />
+            Show password
           </label>
-        </div>
-        <button type="submit" style={{ padding: "8px 16px" }}>Activate</button>
-      </form>
+          <button type="submit">Activate Account</button>
+        </form>
+      </div>
     </div>
   );
 }
