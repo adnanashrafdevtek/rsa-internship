@@ -94,11 +94,15 @@ export default function Sidebar() {
                 backgroundColor: hoveringSchedule ? "#22313a" : "#34495e",
                 justifyContent: "space-between",
                 paddingLeft: "24px",
-                paddingRight: "24px"
+                paddingRight: "24px",
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10
               }}
             >
+              <span style={{fontSize: 18}}>📅</span>
               <span>Schedule</span>
-              <span style={{ transition: "transform 0.3s" }}>
+              <span style={{ transition: "transform 0.3s", marginLeft: 'auto' }}>
                 {hoveringSchedule ? "▴" : "▾"}
               </span>
             </div>
@@ -117,15 +121,13 @@ export default function Sidebar() {
                   padding: "6px"
                 }}
               >
-                <SidebarLink to="/teacher/schedules" submenu>Teachers</SidebarLink>
-                <SidebarLink to="/student/schedules" submenu>Students</SidebarLink>
+                <SidebarLink to="/teacher/schedules" submenu iconOverride="👨‍🏫">Teachers</SidebarLink>
+                <SidebarLink to="/student/schedules" submenu iconOverride="🧑‍🎓">Students</SidebarLink>
               </div>
             )}
           </div>
-        ) : isTeacher ? (
-          <SidebarLink to="/teacher/schedule">Schedule</SidebarLink>
         ) : (
-          <SidebarLink to="/student/schedule">Schedule</SidebarLink>
+          <SidebarLink to={isTeacher ? "/teacher/schedule" : "/student/schedule"} iconOverride="📅">Schedule</SidebarLink>
         )}
 
         {isAdmin && (
@@ -145,7 +147,10 @@ export default function Sidebar() {
         style={{
           ...logoutStyle,
           marginLeft: "4px",
-          marginBottom: "20px"
+          marginBottom: "20px",
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.backgroundColor = "#c0392b";
@@ -158,15 +163,23 @@ export default function Sidebar() {
           e.currentTarget.style.boxShadow = "none";
         }}
       >
-        Logout
+        <span style={{fontSize: 18}}>🚪</span> Logout
       </button>
     </div>
   );
 }
 
 // SidebarLink component for hover effect
-function SidebarLink({ to, children, submenu, style }) {
+function SidebarLink({ to, children, submenu, style, iconOverride }) {
   const [hover, setHover] = useState(false);
+  // Icon mapping based on route or label
+  let icon = iconOverride || null;
+  if (!iconOverride && !submenu) {
+    if (to === "/home") icon = "🏠";
+    else if (to === "/class") icon = "📚";
+    else if (to === "/student") icon = "👥";
+    // No icon for add-user or schedule submenu
+  }
   return (
     <Link
       to={to}
@@ -186,6 +199,7 @@ function SidebarLink({ to, children, submenu, style }) {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
+      {icon && <span style={{ marginRight: 10, fontSize: submenu ? 16 : 18 }}>{icon}</span>}
       {children}
     </Link>
   );

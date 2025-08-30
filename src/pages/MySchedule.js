@@ -460,27 +460,27 @@ export default function MySchedule() {
             }}>
               <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                 <div style={{ width: "12px", height: "12px", backgroundColor: "#3498db", borderRadius: "2px" }}></div>
-                📚 Classes
+                 Classes
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                 <div style={{ width: "12px", height: "12px", backgroundColor: "#27ae60", borderRadius: "2px" }}></div>
-                📅 Events
+                 Events
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                 <div style={{ width: "12px", height: "12px", backgroundColor: "#9b59b6", borderRadius: "2px" }}></div>
-                🟣 Personal
+                Personal
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                 <div style={{ width: "12px", height: "12px", backgroundColor: "#e74c3c", borderRadius: "2px" }}></div>
-                🔴 Meetings
+                 Meetings
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                 <div style={{ width: "12px", height: "12px", backgroundColor: "#f39c12", borderRadius: "2px" }}></div>
-                🟠 Appointments
+                Appointments
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                 <div style={{ width: "12px", height: "12px", backgroundColor: "#95a5a6", borderRadius: "2px" }}></div>
-                ⚫ Reminders
+                Reminders
               </span>
             </div>
             

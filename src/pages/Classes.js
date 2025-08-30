@@ -361,24 +361,24 @@ export default function Classes() {
         <Sidebar />
         <div style={{
           flex: 1,
-          padding: '40px',
+          padding: '32px 16px 32px 16px',
           background: 'linear-gradient(120deg, #e3f0ff 0%, #f9f9fb 100%)',
           minHeight: '100vh',
           marginLeft: 300
         }}>
           <h1 style={{
-            marginBottom: 28,
+            marginBottom: 20,
             color: '#1a237e',
             fontWeight: 800,
             letterSpacing: 0.5,
-            fontSize: 36
+            fontSize: 32
           }}>
             My Classes
           </h1>
           <p style={{
-            fontSize: 18,
+            fontSize: 16,
             color: '#3949ab',
-            marginBottom: 28,
+            marginBottom: 24,
             fontWeight: 500
           }}>
             These are your classes. Click a class to see the roster, teacher, and more details.
@@ -386,14 +386,21 @@ export default function Classes() {
           {loading ? (
             <p>Loading classes...</p>
           ) : (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-              gap: 36
-            }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: 18,
+                alignItems: 'stretch',
+                justifyItems: 'center',
+                width: '100%',
+                maxWidth: 1400,
+                margin: '0 auto',
+              }}
+            >
               {classes.length === 0 && (
                 <div style={{
-                  fontSize: 20,
+                  fontSize: 18,
                   color: '#888',
                   marginTop: 40,
                   textAlign: 'center',
@@ -407,12 +414,13 @@ export default function Classes() {
                   key={c.id}
                   style={{
                     background: 'linear-gradient(135deg, #e3f0ff 0%, #f9f9fb 100%)',
-                    borderRadius: 18,
-                    boxShadow: '0 6px 24px 0 rgba(30, 64, 175, 0.10)',
-                    padding: '36px 38px 30px 38px',
-                    minWidth: 320,
-                    maxWidth: 420,
-                    marginBottom: 8,
+                    borderRadius: 14,
+                    boxShadow: '0 2px 10px 0 rgba(30, 64, 175, 0.10)',
+                    padding: '18px 18px 14px 18px',
+                    minWidth: 0,
+                    width: '100%',
+                    maxWidth: 260,
+                    marginBottom: 0,
                     border: '1px solid #e3e8f0',
                     position: 'relative',
                     transition: 'box-shadow 0.18s, transform 0.18s',
@@ -431,28 +439,29 @@ export default function Classes() {
                     }
                   }}
                   onMouseOver={e => {
-                    e.currentTarget.style.boxShadow = '0 12px 36px 0 rgba(30, 64, 175, 0.18)';
-                    e.currentTarget.style.transform = 'translateY(-3px) scale(1.018)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px 0 rgba(30, 64, 175, 0.16)';
+                    e.currentTarget.style.transform = 'translateY(-2px) scale(1.012)';
                   }}
                   onMouseOut={e => {
-                    e.currentTarget.style.boxShadow = '0 6px 24px 0 rgba(30, 64, 175, 0.10)';
+                    e.currentTarget.style.boxShadow = '0 2px 10px 0 rgba(30, 64, 175, 0.10)';
                     e.currentTarget.style.transform = 'none';
                   }}
                 >
                   <span style={{
                     color: '#1565c0',
-                    fontWeight: 900,
-                    fontSize: 26,
+                    fontWeight: 800,
+                    fontSize: 20,
                     textDecoration: 'none',
-                    marginBottom: 10,
+                    marginBottom: 6,
                     display: 'inline-block',
                     letterSpacing: 0.2,
                     transition: 'color 0.15s',
                     textShadow: '0 1px 0 #fff',
+                    wordBreak: 'break-word',
                   }}>
                     {c.name}
                   </span>
-                  <div style={{ margin: '16px 0 0 0', fontSize: 17 }}>
+                  <div style={{ margin: '10px 0 0 0', fontSize: 14 }}>
                     <span style={{ fontWeight: 600, color: '#3949ab' }}>Time:</span>{' '}
                     <span style={{ color: '#1976d2', fontWeight: 700 }}>
                       {formatTimeOnly(c.start_time)}
@@ -462,7 +471,7 @@ export default function Classes() {
                       {formatTimeOnly(c.end_time)}
                     </span>
                   </div>
-                  <div style={{ margin: '16px 0 0 0', fontSize: 17 }}>
+                  <div style={{ margin: '10px 0 0 0', fontSize: 14 }}>
                     <span style={{ fontWeight: 600, color: '#3949ab' }}>Recurring:</span>{' '}
                     {c.recurring_days
                       ? (
@@ -475,9 +484,9 @@ export default function Classes() {
                                 background: '#e8f5e9',
                                 color: '#388e3c',
                                 borderRadius: 8,
-                                padding: '3px 13px',
-                                marginRight: 7,
-                                fontSize: 15,
+                                padding: '2px 9px',
+                                marginRight: 5,
+                                fontSize: 12,
                                 fontWeight: 700,
                                 letterSpacing: 0.5,
                                 boxShadow: '0 1px 3px 0 rgba(56,142,60,0.07)'
@@ -491,22 +500,7 @@ export default function Classes() {
                       : <span style={{ color: '#b0bec5' }}>—</span>
                     }
                   </div>
-                  <div style={{
-                    position: 'absolute',
-                    top: 22,
-                    right: 28,
-                    fontSize: 16,
-                    color: '#607d8b',
-                    fontWeight: 700,
-                    letterSpacing: 0.5,
-                    background: '#e3f2fd',
-                    borderRadius: 8,
-                    padding: '2px 12px',
-                    boxShadow: '0 1px 2px 0 rgba(30,64,175,0.04)'
-                  }}>
-                    {c.grade_level}
-                  </div>
-                  <div style={{ marginTop: 18, fontSize: 15, color: '#333', fontWeight: 500 }}>
+                  <div style={{ marginTop: 10, fontSize: 13, color: '#333', fontWeight: 500 }}>
                     <span style={{ color: '#3949ab', fontWeight: 600 }}>Teacher:</span>{' '}
                     {c.teacher_first_name && c.teacher_last_name
                       ? `${c.teacher_first_name} ${c.teacher_last_name}`
