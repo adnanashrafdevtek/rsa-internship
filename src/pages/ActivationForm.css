@@ -1,0 +1,69 @@
+.activation-container {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: Arial, sans-serif;
+  background-color: #000; /* dark background */
+}
+
+.activation-box {
+  background-color: #1e1e2f;
+  padding: 40px;
+  border-radius: 10px;
+  width: 400px;
+  text-align: center;
+  border: 2px solid #8c82ff;
+}
+
+.activation-box h2 {
+  color: #fff;
+  margin-bottom: 10px;
+}
+
+.activation-box p {
+  color: #aaa;
+  margin-bottom: 20px;
+}
+
+.activation-box input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 15px;
+  border: none;
+  border-radius: 5px;
+  background-color: #2a2a3c;
+  color: #fff;
+}
+
+.activation-box input::placeholder {
+  color: #777;
+}
+
+.activation-box .show-password {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #aaa;
+  margin-bottom: 15px;
+  cursor: pointer;
+}
+
+.activation-box .show-password input {
+  margin-right: 5px;
+}
+
+.activation-box button {
+  width: 100%;
+  padding: 12px;
+  background-color: #7b3fff;
+  border: none;
+  border-radius: 5px;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.activation-box button:hover {
+  background-color: #6a33e0;
+}

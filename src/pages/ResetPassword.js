@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 
 function ResetPassword() {
+  const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -8,8 +9,14 @@ function ResetPassword() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const handleReset = (e) => {
+  const handleReset = async (e) => {
     e.preventDefault();
+
+    // Basic validation
+    if (!email) {
+      setError("Email is required.");
+      return;
+    }
 
     if (newPassword.length < 6) {
       setError("Password must be at least 6 characters long.");
@@ -32,7 +39,24 @@ function ResetPassword() {
     }
 
     setError("");
-    setMessage("Your password has been reset successfully!");
+
+    // Call backend API
+    try {
+      const response = await fetch("http://localhost:3000/api/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, newPassword }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setMessage(data.message);
+      } else {
+        setError(data.error || "Failed to reset password.");
+      }
+    } catch (err) {
+      setError("Something went wrong. Please try again later.");
+      console.error("Reset password error:", err);
+    }
   };
 
   return (
@@ -42,6 +66,17 @@ function ResetPassword() {
         <p style={{ color: "green" }}>{message}</p>
       ) : (
         <form onSubmit={handleReset}>
+          <div style={{ marginBottom: "10px" }}>
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={{ width: "100%", padding: "8px" }}
+              required
+            />
+          </div>
+
           <div style={{ marginBottom: "10px" }}>
             <input
               type={showPassword ? "text" : "password"}
@@ -68,7 +103,7 @@ function ResetPassword() {
               onChange={(e) => setConfirmPassword(e.target.value)}
               style={{ width: "100%", padding: "8px" }}
             />
-            <label style={{ fontSize: "14px", display: "flex", marginTop: "4px"}}>
+            <label style={{ fontSize: "14px", display: "flex", marginTop: "4px" }}>
               <input
                 type="checkbox"
                 checked={showConfirmPassword}

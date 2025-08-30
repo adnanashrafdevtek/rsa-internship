@@ -1,15 +1,39 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import "./ActivationForm.css";
 
 export default function ActivationForm() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
 
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const validatePassword = (pwd) => {
+    if (pwd.length < 6) return "Password must be at least 6 characters long.";
+    if (!/\d/.test(pwd)) return "Password must include at least one number.";
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) return "Password must include at least one special character.";
+    return null;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const pwdError = validatePassword(password);
+    if (pwdError) {
+      setError(pwdError);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setError("");
 
     try {
       const res = await fetch("http://localhost:3000/api/activate", {
@@ -24,26 +48,52 @@ export default function ActivationForm() {
         throw new Error(data.error || "Activation failed");
       }
 
-      setMessage("✅ Your account has been activated! You can now log in.");
+      setMessage("✅ Your account has been activated! Redirecting to login...");
+
+      setTimeout(() => {
+        window.location.href = "http://localhost:3001"; // redirect to login page
+      }, 2000);
+
     } catch (err) {
-      setMessage(`❌ ${err.message}`);
+      setError(`❌ ${err.message}`);
     }
   };
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h1>Activate Your Account</h1>
-      {message && <p>{message}</p>}
-      <form onSubmit={handleSubmit}>
-        <input
-          type="password"
-          placeholder="New Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        <button type="submit">Activate</button>
-      </form>
+    <div className="activation-container">
+      <div className="activation-box">
+        <h2>Activate Your Plannify Account</h2>
+        <p>Set your new password to secure your account and get started.</p>
+
+        {message && <p className="message">{message}</p>}
+        {error && <p className="error-message">{error}</p>}
+
+        <form onSubmit={handleSubmit}>
+          <input
+            type={showPassword ? "text" : "password"}
+            placeholder="New Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          <input
+            type={showPassword ? "text" : "password"}
+            placeholder="Confirm Password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+          />
+          <label className="show-password">
+            <input
+              type="checkbox"
+              checked={showPassword}
+              onChange={() => setShowPassword(!showPassword)}
+            />
+            Show password
+          </label>
+          <button type="submit">Activate Account</button>
+        </form>
+      </div>
     </div>
   );
 }
