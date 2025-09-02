@@ -26,6 +26,7 @@ export default function Users() {
     setNewPasswords((prev) => ({ ...prev, [username]: "" }));
   };
 
+  const safeUsers = Array.isArray(users) ? users : [];
   return (
     <div style={{ display: "flex" }}>
       <Sidebar />
@@ -51,7 +52,7 @@ export default function Users() {
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => (
+            {safeUsers.map((u) => (
               <tr key={u.username}>
                 <td style={tdStyle}>{`${u.first_name} ${u.last_name}`}</td>
                 <td style={tdStyle}>{u.username}</td>
