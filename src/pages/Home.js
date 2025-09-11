@@ -94,10 +94,10 @@ export default function Home() {
   const [time, setTime] = useState(new Date());
 
   // Admin data
-  const [pendingTasks, setPendingTasks] = useState(null);
+  // const [pendingTasks, setPendingTasks] = useState(null); // Removed unused state
   const [quickStats, setQuickStats] = useState({ students: 0, teachers: 0, classes: 0 });
-  const [recentSignups, setRecentSignups] = useState([]);
-  const [systemAlerts, setSystemAlerts] = useState([]);
+  // const [recentSignups, setRecentSignups] = useState([]); // Removed unused state
+  // const [systemAlerts, setSystemAlerts] = useState([]); // Removed unused state
 
   // Master schedule events
   const [masterEvents, setMasterEvents] = useState([]);
