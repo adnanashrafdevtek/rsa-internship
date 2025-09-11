@@ -15,6 +15,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import './App.css';
 import MySchedule from "./pages/MySchedule";
+import Schedules from "./pages/Schedules";
 
 
 function App() {
@@ -56,7 +57,7 @@ function App() {
             }
           />
           <Route
-            path="/teacher/schedules"
+            path="/teacher-list"
             element={
               <ProtectedRoute>
                 <TeacherList />
@@ -64,40 +65,19 @@ function App() {
             }
           />
           <Route
-            path="/student/schedules"
-            element={<StudentList />}
+            path="/student-list"
+            element={
+              <ProtectedRoute>
+                <StudentList />
+              </ProtectedRoute>
+            }
           />
-          <Route
-  path="/student/schedule"
-  element={
-    <ProtectedRoute>
-      <MySchedule />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/teacher/schedule"
-  element={
-    <ProtectedRoute>
-      <MySchedule />
-    </ProtectedRoute>
-  }
-/>
-
           <Route
             path="/reset-password"
             element={<ResetPassword />}
           />
           <Route
             path="/rosters/:classId"
-            element={
-              <ProtectedRoute>
-                <ClassRosters />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/rosters"
             element={
               <ProtectedRoute>
                 <ClassRosters />
@@ -116,6 +96,16 @@ function App() {
             path="/activation-form"
             element={<ActivationForm />}
           />
+          <Route
+            path="/my-schedule"
+            element={
+              <ProtectedRoute>
+                <MySchedule />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/schedules" element={<Schedules />} />
+          {/* Add other routes as needed */}
         </Routes>
       </Router>
     </AuthProvider>

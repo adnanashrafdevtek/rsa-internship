@@ -83,49 +83,7 @@ export default function Sidebar() {
         <SidebarLink to="/class">Classes</SidebarLink>
 
         {isAdmin ? (
-          <div
-            style={{ position: "relative" }}
-            onMouseEnter={() => setHoveringSchedule(true)}
-            onMouseLeave={() => setHoveringSchedule(false)}
-          >
-            <div 
-              style={{
-                ...hoverableLinkStyle, 
-                backgroundColor: hoveringSchedule ? "#22313a" : "#34495e",
-                justifyContent: "space-between",
-                paddingLeft: "24px",
-                paddingRight: "24px",
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10
-              }}
-            >
-              <span style={{fontSize: 18}}>📅</span>
-              <span>Schedule</span>
-              <span style={{ transition: "transform 0.3s", marginLeft: 'auto' }}>
-                {hoveringSchedule ? "▴" : "▾"}
-              </span>
-            </div>
-            {hoveringSchedule && (
-              <div
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  top: "100%",
-                  backgroundColor: "#34495e",
-                  borderRadius: "8px",
-                  zIndex: 999,
-                  minWidth: "180px",
-                  boxShadow: "0 6px 16px 0 rgba(0,0,0,0.25)",
-                  animation: "fadeIn 0.2s ease-in-out",
-                  padding: "6px"
-                }}
-              >
-                <SidebarLink to="/teacher/schedules" submenu iconOverride="👨‍🏫">Teachers</SidebarLink>
-                <SidebarLink to="/student/schedules" submenu iconOverride="🧑‍🎓">Students</SidebarLink>
-              </div>
-            )}
-          </div>
+            <SidebarLink to="/schedules" iconOverride="📅">Schedule</SidebarLink>
         ) : (
           <SidebarLink to={isTeacher ? "/teacher/schedule" : "/student/schedule"} iconOverride="📅">Schedule</SidebarLink>
         )}
