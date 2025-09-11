@@ -246,23 +246,55 @@ export default function Home() {
                 );
               })}
             </div>
-            {/* Main Content Row: Master Schedule and Recent Signups */}
-            <div style={{ display: "flex", gap: 48, flexWrap: "wrap", justifyContent: "center", alignItems: "stretch", margin: "0 auto 32px auto", width: "100%" }}>
-              {/* Master Schedule Calendar */}
-              <div style={{ ...cardStyle, alignItems: "flex-start", minWidth: 700, flex: 2, width: '100%', padding: 48, maxWidth: 1100 }}>
+            {/* Main Content: Master Schedule Grid */}
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "stretch", margin: "0 auto 32px auto", width: "100%" }}>
+              <div style={{ ...cardStyle, alignItems: "flex-start", minWidth: 700, flex: 1, width: '100%', padding: 48, maxWidth: 1100 }}>
                 <h2 style={{ fontSize: 36, marginBottom: 28 }}>Master Schedule</h2>
                 <div style={{ width: '100%', minHeight: 650 }}>
-                  <Calendar
-                    localizer={localizer}
-                    events={masterEvents}
-                    startAccessor="start"
-                    endAccessor="end"
-                    style={{ height: 650, width: '100%' }}
-                    views={[Views.MONTH, Views.WEEK, Views.DAY]}
-                    defaultView={Views.WEEK}
-                    popup
-                    onSelectEvent={event => setSelectedEvent(event)}
-                  />
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 18 }}>
+                    <thead>
+                      <tr style={{ background: '#e0f7fa', fontWeight: 700 }}>
+                        <th style={{ padding: '12px 8px', border: '1px solid #b2ebf2' }}>Time</th>
+                        <th style={{ padding: '12px 8px', border: '1px solid #b2ebf2' }}>Event Title</th>
+                        <th style={{ padding: '12px 8px', border: '1px solid #b2ebf2' }}>Class</th>
+                        <th style={{ padding: '12px 8px', border: '1px solid #b2ebf2' }}>Room</th>
+                        <th style={{ padding: '12px 8px', border: '1px solid #b2ebf2' }}>Teacher</th>
+                        <th style={{ padding: '12px 8px', border: '1px solid #b2ebf2' }}>Description</th>
+                        <th style={{ padding: '12px 8px', border: '1px solid #b2ebf2' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {masterEvents.length === 0 ? (
+                        <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: '#888' }}>No events scheduled.</td></tr>
+                      ) : (
+                        masterEvents.map(ev => (
+                          <tr key={ev.idcalendar || ev.id} style={{ background: selectedEvent && (selectedEvent.idcalendar || selectedEvent.id) === (ev.idcalendar || ev.id) ? '#e6fafd' : 'white' }}>
+                            <td style={{ padding: '10px 8px', border: '1px solid #b2ebf2' }}>{new Date(ev.start).toLocaleString()} - {new Date(ev.end).toLocaleString()}</td>
+                            <td style={{ padding: '10px 8px', border: '1px solid #b2ebf2' }}>{ev.title}</td>
+                            <td style={{ padding: '10px 8px', border: '1px solid #b2ebf2' }}>{ev.class_id || '-'}</td>
+                            <td style={{ padding: '10px 8px', border: '1px solid #b2ebf2' }}>{ev.room || '-'}</td>
+                            <td style={{ padding: '10px 8px', border: '1px solid #b2ebf2' }}>{ev.teacher || '-'}</td>
+                            <td style={{ padding: '10px 8px', border: '1px solid #b2ebf2' }}>{ev.description || '-'}</td>
+                            <td style={{ padding: '10px 8px', border: '1px solid #b2ebf2' }}>
+                              <button style={{ background: '#eee', border: 'none', borderRadius: 6, padding: '6px 14px', fontWeight: 600, cursor: 'pointer', marginRight: 8 }} onClick={() => setSelectedEvent(ev)}>Details</button>
+                              <button style={{ background: '#ff4d4f', color: 'white', border: 'none', borderRadius: 6, padding: '6px 14px', fontWeight: 600, cursor: 'pointer' }} onClick={async () => {
+                                setDeleting(true);
+                                try {
+                                  await fetch(`/api/calendar/${ev.idcalendar || ev.id}`, { method: 'DELETE' });
+                                  setMasterEvents(events => events.filter(e => (e.idcalendar || e.id) !== (ev.idcalendar || ev.id)));
+                                  setSelectedEvent(null);
+                                } catch (e) {
+                                  alert('Failed to delete event');
+                                } finally {
+                                  setDeleting(false);
+                                }
+                              }}>Delete</button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                   <EventModal
                     event={selectedEvent}
                     onClose={() => setSelectedEvent(null)}
@@ -281,21 +313,6 @@ export default function Home() {
                     }}
                   />
                 </div>
-              </div>
-              {/* Recent Signups / Pending Activations */}
-              <div style={{ ...cardStyle, alignItems: "flex-start", minWidth: 400, flex: 1, fontSize: 24, padding: 48, maxWidth: 600 }}>
-                <h2 style={{ fontSize: 36, marginBottom: 28 }}>Recent Signups / Pending Activations</h2>
-                {recentSignups.length === 0 ? (
-                  <p style={{ fontSize: 22 }}>No recent signups.</p>
-                ) : (
-                  <ul style={{ margin: 0, paddingLeft: 32, fontSize: 22 }}>
-                    {recentSignups.map((u, idx) => (
-                      <li key={idx} style={{ marginBottom: 16 }}>
-                        <strong>{u.name}</strong> ({u.email}) - {u.status} <span style={{ color: '#888', fontSize: 16 }}>({u.date})</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </div>
             </div>
           </>
