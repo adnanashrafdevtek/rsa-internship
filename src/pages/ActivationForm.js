@@ -44,15 +44,19 @@ export default function ActivationForm() {
 
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || "Activation failed");
-      }
+if (!res.ok) {
+  throw new Error(data.error || "Activation failed");
+}
 
-      setMessage("✅ Your account has been activated! Redirecting to login...");
+setMessage("✅ Your account has been activated! Redirecting...");
 
-      setTimeout(() => {
-        window.location.href = "http://localhost:3001"; // redirect to login page
-      }, 2000);
+setTimeout(() => {
+  if (data.role === "TEACHER") {
+    window.location.href = `http://localhost:3001/availability?user_id=${data.user_id}`;
+  } else {
+    window.location.href = "http://localhost:3001"; // login page
+  }
+}, 2000);
 
     } catch (err) {
       setError(`❌ ${err.message}`);

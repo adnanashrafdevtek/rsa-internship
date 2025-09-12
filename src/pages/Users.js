@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import Sidebar from "./Sidebar";
 
 export default function Users() {
-  const { user, users, changeUserPassword, toggleUserActiveStatus } = useAuth();
+  const { user, users: usersFromContext = [], changeUserPassword, toggleUserActiveStatus } = useAuth();
   const [newPasswords, setNewPasswords] = useState({});
   const [message, setMessage] = useState("");
 
@@ -32,6 +32,7 @@ export default function Users() {
       <div style={{ padding: "40px", flex: 1, marginLeft: 300 }}>
         <h1>All Users</h1>
         {message && <p style={{ color: "green" }}>{message}</p>}
+
         <table
           style={{
             width: "100%",
@@ -51,42 +52,50 @@ export default function Users() {
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => (
-              <tr key={u.username}>
-                <td style={tdStyle}>{`${u.first_name} ${u.last_name}`}</td>
-                <td style={tdStyle}>{u.username}</td>
-                <td style={tdStyle}>{u.role}</td>
-                <td style={tdStyle}>
-                  <span style={{ color: u.active ? "green" : "gray" }}>
-                    {u.active ? "Active" : "Inactive"}
-                  </span>
-                </td>
-                <td style={tdStyle}>
-                  <input
-                    type="password"
-                    value={newPasswords[u.username] || ""}
-                    onChange={(e) =>
-                      setNewPasswords((prev) => ({
-                        ...prev,
-                        [u.username]: e.target.value,
-                      }))
-                    }
-                    placeholder="Enter new password"
-                    style={{ width: "100%" }}
-                  />
-                </td>
-                <td style={tdStyle}>
-                  <button onClick={() => handlePasswordChange(u.username)}>
-                    Change
-                  </button>
-                </td>
-                <td style={tdStyle}>
-                  <button onClick={() => toggleUserActiveStatus(u.username)}>
-                    {u.active ? "Inactivate" : "Activate"}
-                  </button>
+            {Array.isArray(usersFromContext) && usersFromContext.length > 0 ? (
+              usersFromContext.map((u) => (
+                <tr key={u.username}>
+                  <td style={tdStyle}>{`${u.first_name} ${u.last_name}`}</td>
+                  <td style={tdStyle}>{u.username}</td>
+                  <td style={tdStyle}>{u.role}</td>
+                  <td style={tdStyle}>
+                    <span style={{ color: u.active ? "green" : "gray" }}>
+                      {u.active ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                  <td style={tdStyle}>
+                    <input
+                      type="password"
+                      value={newPasswords[u.username] || ""}
+                      onChange={(e) =>
+                        setNewPasswords((prev) => ({
+                          ...prev,
+                          [u.username]: e.target.value,
+                        }))
+                      }
+                      placeholder="Enter new password"
+                      style={{ width: "100%" }}
+                    />
+                  </td>
+                  <td style={tdStyle}>
+                    <button onClick={() => handlePasswordChange(u.username)}>
+                      Change
+                    </button>
+                  </td>
+                  <td style={tdStyle}>
+                    <button onClick={() => toggleUserActiveStatus(u.username)}>
+                      {u.active ? "Inactivate" : "Activate"}
+                    </button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={7} style={{ textAlign: "center", padding: "20px" }}>
+                  No users found
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
