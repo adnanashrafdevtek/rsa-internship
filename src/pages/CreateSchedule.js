@@ -153,6 +153,7 @@ function CreateSchedule() {
           <div style={{ display: "flex", alignItems: "center", marginBottom: 32, gap: 16 }}>
             <h1 style={{ fontSize: "36px", fontWeight: "bold", margin: 0 }}>Create Schedule</h1>
           </div>
+          {/* Labels removed for cleaner look */}
           <div style={{ display: "flex", alignItems: "center", marginBottom: 18, gap: 16 }}>
             <button
               onClick={() => window.location.href = "/schedules"}
@@ -216,6 +217,9 @@ function CreateSchedule() {
             )}
           </div>
           <div style={{ background: "#f8f9fa", borderRadius: 16, padding: 24, boxShadow: "0 2px 8px rgba(0,0,0,0.07)", maxWidth: 900 }}>
+            <div style={{ fontWeight: 700, fontSize: 20, color: "#222", marginBottom: 8 }}>
+              Master Schedule Calendar
+            </div>
             <Calendar
               localizer={localizer}
               events={[
@@ -280,17 +284,42 @@ function CreateSchedule() {
                 event: ({ event }) => {
                   const isSelected = selectedToDelete.includes(event.id);
                   if (event.availability) {
-                    // Show only colored block, no text
+                    // Teacher availability block: show colored block with label
                     return (
                       <div style={{
                         width: "100%",
                         height: "100%",
-                        background: "transparent",
+                        background: event.color || "#27ae60",
+                        opacity: 0.85,
+                        borderRadius: 8,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        position: "relative",
                         pointerEvents: "none",
                         userSelect: "none"
-                      }} />
+                      }}>
+                          <span style={{
+                            position: "absolute",
+                            top: 4,
+                            left: 8,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: "#fff",
+                            textAlign: "left",
+                            background: "rgba(0,0,0,0.18)",
+                            borderRadius: 6,
+                            padding: "2px 8px",
+                            maxWidth: "80%",
+                            overflow: "hidden",
+                            whiteSpace: "nowrap",
+                            textOverflow: "ellipsis"
+                          }}>Available</span>
+                      </div>
                     );
                   }
+                  // Scheduled class block: show class label and color
                   return (
                     <div
                       style={{
@@ -302,7 +331,7 @@ function CreateSchedule() {
                         padding: "6px 8px 4px 8px",
                         boxShadow: isSelected ? "0 0 0 3px #e74c3c" : undefined,
                         border: isSelected ? "2px solid #e74c3c" : undefined,
-                        background: isSelected ? "#fff0f0" : undefined,
+                        background: isSelected ? "#fff0f0" : "#26bedd",
                         transition: "box-shadow 0.2s, border 0.2s, background 0.2s",
                         cursor: deleteMode ? "pointer" : "pointer"
                       }}
@@ -324,7 +353,20 @@ function CreateSchedule() {
                         }
                       }}
                     >
-                      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2, color: "#222", textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{event.title}</div>
+                      <span style={{
+                        position: "absolute",
+                        top: 4,
+                        left: 0,
+                        right: 0,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#fff",
+                        textAlign: "center",
+                        background: "#26bedd",
+                        borderRadius: 6,
+                        padding: "2px 0"
+                      }}>Class</span>
+                      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2, color: "#222", textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 16 }}>{event.title}</div>
                       {event.teacher && (
                         <div style={{ fontSize: 11, color: "#fff", opacity: 0.8, textAlign: "right", marginTop: "auto" }}>{event.teacher}</div>
                       )}
@@ -408,6 +450,9 @@ function CreateSchedule() {
         </div>
         {/* Teacher sidebar */}
         <div style={{ width: 220, marginLeft: 32, background: "#f8f9fa", borderRadius: 16, padding: 24, boxShadow: "0 2px 8px rgba(0,0,0,0.07)", height: "fit-content" }}>
+          <div style={{ fontWeight: 700, fontSize: 20, color: "#222", marginBottom: 8 }}>
+            Teacher Selection
+          </div>
           <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 18 }}>Teachers</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
@@ -432,7 +477,7 @@ function CreateSchedule() {
                 >Unselect All</button>
               )}
             </div>
-            {teachers.map(t => (
+            {teachers.map((t, idx) => (
               <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 16, fontWeight: 500, borderRadius: 8, padding: "6px 8px", transition: "background 0.2s" }}
                 onMouseEnter={e => e.currentTarget.style.background = "#e1e8ed"}
                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}
@@ -447,8 +492,9 @@ function CreateSchedule() {
                         : sel.filter(id => id !== t.id)
                     );
                   }}
-                  style={{ width: 18, height: 18, accentColor: "#27ae60" }}
+                  style={{ width: 18, height: 18, accentColor: teacherColors[idx] }}
                 />
+                <span style={{ width: 16, height: 16, background: teacherColors[idx], borderRadius: 4, display: "inline-block", border: "1px solid #ccc" }}></span>
                 {t.name}
               </label>
             ))}
