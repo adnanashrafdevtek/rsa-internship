@@ -26,10 +26,10 @@ export default function AddUserPage() {
   setIsLoading(true);
 
   try {
-    // make role uppercase before sending
+    // make role lowercase before sending
     const payload = {
       ...formData,
-      role: formData.role.toUpperCase(),
+      role: formData.role.toLowerCase(),
     };
 
     const res = await fetch("http://localhost:3000/api/user", {

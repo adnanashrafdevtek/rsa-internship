@@ -51,7 +51,7 @@ if (!res.ok) {
 setMessage("✅ Your account has been activated! Redirecting...");
 
 setTimeout(() => {
-  if (data.role === "TEACHER") {
+  if (data.role === "teacher") {
     window.location.href = `http://localhost:3001/availability?user_id=${data.user_id}`;
   } else {
     window.location.href = "http://localhost:3001"; // login page
