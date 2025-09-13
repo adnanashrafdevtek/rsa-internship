@@ -16,6 +16,7 @@ import { AuthProvider } from "./context/AuthContext";
 import './App.css';
 
 import MySchedule from "./pages/MySchedule";
+import MasterSchedule from "./pages/MasterSchedule";
 import Schedules from "./pages/Schedules";
 import CreateSchedule from "./pages/CreateSchedule";
 
@@ -108,7 +109,7 @@ function App() {
           />
           <Route path="/schedules" element={<Schedules />} />
           <Route path="/create-schedule" element={<ProtectedRoute><CreateSchedule /></ProtectedRoute>} />
-          {/* Add other routes as needed */}
+          <Route path="/master-schedule" element={<MasterSchedule />} />
         </Routes>
       </Router>
     </AuthProvider>

@@ -16,7 +16,7 @@ function CreateSchedule() {
     { id: 4, name: "David Kim" }
   ];
   const rooms = ["101", "102", "201", "202", "301", "302"];
-  const grades = ["K", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
+  const grades = ["K", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "Not here?"];
 
   const [events, setEvents] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -24,6 +24,7 @@ function CreateSchedule() {
   const [details, setDetails] = useState({
     teacherId: "",
     grade: "",
+    customGrade: "",
     subject: "",
     room: "",
     startTime: "",
@@ -89,10 +90,14 @@ function CreateSchedule() {
     setDetails(d => ({ ...d, [name]: value }));
   };
 
+  // Helper to determine if custom grade input should show
+  const showCustomGrade = details.grade === "Not here?";
+
   // Save event from modal
   const handleSaveEvent = (e) => {
     e.preventDefault();
-    if (!details.teacherId || !details.grade || !details.subject || !details.room) return;
+    // If custom grade is shown, require it
+    if (!details.teacherId || !details.grade || !details.subject || !details.room || (showCustomGrade && !details.customGrade)) return;
     setEvents(evts => [
       ...evts,
       {
@@ -102,14 +107,14 @@ function CreateSchedule() {
         start: selectedSlot.start,
         end: selectedSlot.end,
         teacher: teachers.find(t => t.id == details.teacherId)?.name,
-        grade: details.grade,
+        grade: showCustomGrade ? details.customGrade : details.grade,
         subject: details.subject,
         room: details.room
       }
     ]);
     setModalOpen(false);
     setSelectedSlot(null);
-    setDetails({ teacherId: "", grade: "", subject: "", room: "" });
+    setDetails({ teacherId: "", grade: "", customGrade: "", subject: "", room: "" });
   };
 
   // Toggle delete mode
@@ -188,7 +193,7 @@ function CreateSchedule() {
               }}
               onMouseEnter={e => e.target.style.background = "#c0392b"}
               onMouseLeave={e => e.target.style.background = deleteMode ? "#c0392b" : "#e74c3c"}
-            >{deleteMode ? "Cancel Delete" : "Delete"}</button>
+            >{deleteMode ? "Cancel Delete" : "Select to Delete"}</button>
             {deleteMode && (
               <button
                 onClick={handleConfirmDelete}
@@ -283,8 +288,8 @@ function CreateSchedule() {
               components={{
                 event: ({ event }) => {
                   const isSelected = selectedToDelete.includes(event.id);
+                  // Teacher availability block: show only colored block, no text, never outlined/clickable
                   if (event.availability) {
-                    // Teacher availability block: show colored block with label
                     return (
                       <div style={{
                         width: "100%",
@@ -298,48 +303,28 @@ function CreateSchedule() {
                         justifyContent: "center",
                         position: "relative",
                         pointerEvents: "none",
-                        userSelect: "none"
+                        userSelect: "none",
+                        border: "none"
                       }}>
-                          <span style={{
-                            position: "absolute",
-                            top: 4,
-                            left: 8,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: "#fff",
-                            textAlign: "left",
-                            background: "rgba(0,0,0,0.18)",
-                            borderRadius: 6,
-                            padding: "2px 8px",
-                            maxWidth: "80%",
-                            overflow: "hidden",
-                            whiteSpace: "nowrap",
-                            textOverflow: "ellipsis"
-                          }}>Available</span>
+                        {/* No text at all inside availability blocks */}
                       </div>
                     );
                   }
-                  // Scheduled class block: show class label and color
+                  // Scheduled class block: outline orange in delete mode, red if selected
+                  // Remove background color change for selected events
                   return (
                     <div
                       style={{
                         position: "relative",
                         display: "flex",
                         flexDirection: "column",
-                        justifyContent: "space-between",
+                        justifyContent: "center",
+                        alignItems: "center",
                         height: "100%",
-                        padding: "6px 8px 4px 8px",
-                        boxShadow: isSelected ? "0 0 0 3px #e74c3c" : undefined,
-                        border: isSelected ? "2px solid #e74c3c" : undefined,
-                        background: isSelected ? "#fff0f0" : "#26bedd",
-                        transition: "box-shadow 0.2s, border 0.2s, background 0.2s",
+                        padding: "10px 10px 8px 10px",
+                        background: "#26bedd",
+                        transition: "background 0.2s",
                         cursor: deleteMode ? "pointer" : "pointer"
-                      }}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.boxShadow = "0 0 12px #26bedd";
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.boxShadow = isSelected ? "0 0 0 3px #e74c3c" : "0 0 4px #26bedd";
                       }}
                       onClick={() => {
                         if (deleteMode) {
@@ -353,27 +338,41 @@ function CreateSchedule() {
                         }
                       }}
                     >
+                      <span style={{ fontSize: 18, marginBottom: 2 }}>📘</span>
                       <span style={{
-                        position: "absolute",
-                        top: 4,
-                        left: 0,
-                        right: 0,
-                        fontSize: 11,
                         fontWeight: 700,
-                        color: "#fff",
+                        fontSize: 15,
+                        color: "#222",
                         textAlign: "center",
-                        background: "#26bedd",
-                        borderRadius: 6,
-                        padding: "2px 0"
-                      }}>Class</span>
-                      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2, color: "#222", textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 16 }}>{event.title}</div>
-                      {event.teacher && (
-                        <div style={{ fontSize: 11, color: "#fff", opacity: 0.8, textAlign: "right", marginTop: "auto" }}>{event.teacher}</div>
-                      )}
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        maxWidth: "120px",
+                        padding: "0 2px"
+                      }}>{event.title}</span>
                       {deleteMode && (
-                        <span style={{ position: "absolute", right: 0, top: 2, fontSize: 12, color: isSelected ? "#e74c3c" : "#888", fontWeight: 700 }}>
-                          {isSelected ? "Selected" : "Click to select"}
+                        <span
+                          style={{
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            margin: "10px auto 0 auto",
+                            width: 36,
+                            height: 36,
+                            border: "2px solid #bbb",
+                            borderRadius: 8,
+                            background: "#fff",
+                            fontSize: 26,
+                            color: "#444",
+                            zIndex: 2,
+                            cursor: "pointer"
+                          }}
+                        >
+                          {isSelected ? <span style={{fontSize: 26, color: "#444"}}>✔️</span> : null}
                         </span>
+                      )}
+                      {event.teacher && (
+                        <div style={{ fontSize: 11, color: "#fff", opacity: 0.8, textAlign: "center", marginTop: "auto" }}>{event.teacher}</div>
                       )}
                     </div>
                   );
@@ -387,36 +386,48 @@ function CreateSchedule() {
               position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
               background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000
             }}>
-              <form onSubmit={handleSaveEvent} style={{ background: "#fff", padding: 32, borderRadius: 16, minWidth: 340, boxShadow: "0 8px 32px rgba(38,190,221,0.18)" }}>
+              <form onSubmit={handleSaveEvent} style={{ background: "#fff", padding: "40px 32px 40px 32px", borderRadius: 16, minWidth: 340, boxShadow: "0 8px 32px rgba(38,190,221,0.18)", width: 400, boxSizing: "border-box" }}>
                 <h2 style={{ marginBottom: 18, fontWeight: 700, fontSize: 24 }}>Add Schedule Details</h2>
                 <div style={{ marginBottom: 18, fontWeight: 600, fontSize: 16 }}>
                   <span>Start Time: {details.startTime || (selectedSlot && moment(selectedSlot.start).format("h:mm A"))}</span>
                   <div style={{ height: 12 }} />
                   <span>End Time: {details.endTime || (selectedSlot && moment(selectedSlot.end).format("h:mm A"))}</span>
                 </div>
-                <label style={{ fontWeight: 600, marginBottom: 8, display: "block" }}>Teacher</label>
-                <select name="teacherId" value={details.teacherId} onChange={handleDetailChange} required style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 18, fontSize: 16 }}>
+                <label style={{ fontWeight: 600, marginBottom: 8, display: "block", marginLeft: 2 }}>Teacher</label>
+                <select name="teacherId" value={details.teacherId} onChange={handleDetailChange} required style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 22, fontSize: 16, boxSizing: "border-box" }}>
                   <option value="">Select a teacher...</option>
                   {teachers.map(t => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
                 </select>
-                <label style={{ fontWeight: 600, marginBottom: 8, display: "block" }}>Grade</label>
-                <select name="grade" value={details.grade} onChange={handleDetailChange} required style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 18, fontSize: 16 }}>
+                <label style={{ fontWeight: 600, marginBottom: 8, display: "block", marginLeft: 2 }}>Grade</label>
+                <select name="grade" value={details.grade} onChange={handleDetailChange} required style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: showCustomGrade ? 10 : 22, fontSize: 16, boxSizing: "border-box" }}>
                   <option value="">Select grade...</option>
                   {grades.map(g => (
                     <option key={g} value={g}>{g}</option>
                   ))}
                 </select>
-                <label style={{ fontWeight: 600, marginBottom: 8, display: "block" }}>Subject</label>
-                <input name="subject" value={details.subject} onChange={handleDetailChange} required placeholder="Enter subject..." style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 18, fontSize: 16 }} />
-                <label style={{ fontWeight: 600, marginBottom: 8, display: "block" }}>Room Number</label>
-                <select name="room" value={details.room} onChange={handleDetailChange} required style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 18, fontSize: 16 }}>
-                  <option value="">Select room...</option>
-                  {rooms.map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
+                {showCustomGrade && (
+                  <input
+                    name="customGrade"
+                    value={details.customGrade}
+                    onChange={handleDetailChange}
+                    required
+                    placeholder="Enter custom grade..."
+                    style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 22, fontSize: 16, boxSizing: "border-box" }}
+                  />
+                )}
+                <label style={{ fontWeight: 600, marginBottom: 8, display: "block", marginLeft: 2 }}>Subject</label>
+                <input name="subject" value={details.subject} onChange={handleDetailChange} required placeholder="Enter subject..." style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 22, fontSize: 16, boxSizing: "border-box" }} />
+                <label style={{ fontWeight: 600, marginBottom: 8, display: "block", marginLeft: 2 }}>Room Number</label>
+                <input
+                  name="room"
+                  value={details.room}
+                  onChange={handleDetailChange}
+                  required
+                  placeholder="Enter room number..."
+                  style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 22, fontSize: 16, boxSizing: "border-box" }}
+                />
                 <div style={{ display: "flex", gap: 12, marginTop: 18 }}>
                   <button type="button" onClick={() => setModalOpen(false)} style={{ background: "#95a5a6", color: "white", fontWeight: 700, fontSize: 16, border: "none", borderRadius: 8, padding: "10px 22px", cursor: "pointer" }}>Cancel</button>
                   <button type="submit" style={{ background: "#26bedd", color: "white", fontWeight: 700, fontSize: 16, border: "none", borderRadius: 8, padding: "10px 22px", cursor: "pointer" }}>Save</button>
@@ -450,10 +461,7 @@ function CreateSchedule() {
         </div>
         {/* Teacher sidebar */}
         <div style={{ width: 220, marginLeft: 32, background: "#f8f9fa", borderRadius: 16, padding: 24, boxShadow: "0 2px 8px rgba(0,0,0,0.07)", height: "fit-content" }}>
-          <div style={{ fontWeight: 700, fontSize: 20, color: "#222", marginBottom: 8 }}>
-            Teacher Selection
-          </div>
-          <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 18 }}>Teachers</h3>
+          <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 18 }}>Teacher Availability</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <button
