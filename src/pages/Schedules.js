@@ -1,13 +1,15 @@
 
 
 
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+
 import Sidebar from "./Sidebar";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 export default function Schedules() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   if (!user || user.role !== "admin") {
     return <div style={{ padding: 40 }}><h2>Only admins can view schedules. Please log in as admin.</h2></div>;
   }

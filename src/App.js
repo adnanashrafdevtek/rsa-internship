@@ -14,8 +14,10 @@ import ActivationForm from "./pages/ActivationForm";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import './App.css';
+
 import MySchedule from "./pages/MySchedule";
 import Schedules from "./pages/Schedules";
+import CreateSchedule from "./pages/CreateSchedule";
 
 
 function App() {
@@ -105,6 +107,7 @@ function App() {
             }
           />
           <Route path="/schedules" element={<Schedules />} />
+          <Route path="/create-schedule" element={<ProtectedRoute><CreateSchedule /></ProtectedRoute>} />
           {/* Add other routes as needed */}
         </Routes>
       </Router>
