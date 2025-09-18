@@ -461,7 +461,7 @@ function CreateSchedule() {
       )}
     </div>
     {/* Teacher list stretches to fill sidebar, even if few teachers */}
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, minHeight: 300 }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 300 }}>
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
         {teachers
           .filter(t =>
