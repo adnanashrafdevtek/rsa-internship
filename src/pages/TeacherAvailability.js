@@ -7,7 +7,7 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 const localizer = dateFnsLocalizer({
   format,
   parse,
-  startOfWeek: (date) => dfStartOfWeek(date, { weekStartsOn: 1 }), // week starts on Monday
+  startOfWeek: (date) => dfStartOfWeek(date, { weekStartsOn: 1 }),
   getDay: dfGetDay,
   locales: { "en-US": enUS },
 });
@@ -17,6 +17,7 @@ export default function TeacherAvailability() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [calendarView, setCalendarView] = useState("week");
+  const [showModal, setShowModal] = useState(false); // <-- modal state
 
   const userId = new URLSearchParams(window.location.search).get("user_id");
 
@@ -48,7 +49,7 @@ export default function TeacherAvailability() {
 
   const handleSelectSlot = ({ start, end }) => {
     const day = start.getDay();
-    if (day === 0 || day === 6) return; // ignore weekends
+    if (day === 0 || day === 6) return;
     const exists = events.find(
       (e) => e.start.getTime() === start.getTime() && e.end.getTime() === end.getTime()
     );
@@ -68,7 +69,9 @@ export default function TeacherAvailability() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save availability");
+
       setMessage("✅ Availability saved!");
+      setShowModal(true); // <-- show modal after save
     } catch (err) {
       console.error(err);
       setMessage("❌ Error saving availability: " + err.message);
@@ -129,14 +132,74 @@ export default function TeacherAvailability() {
         eventPropGetter={() => ({ style: { backgroundColor: "green", color: "white" } })}
         formats={{
           dateHeaderFormat: (date, culture, localizer) =>
-            localizer.format(date, "EEE", culture), // Only weekday name, no numbers
+            localizer.format(date, "EEE", culture),
         }}
         dayPropGetter={(date) => {
           const day = date.getDay();
-          if (day === 0 || day === 6) return { style: { display: "none" } }; // hide weekends
+          if (day === 0 || day === 6) return { style: { display: "none" } };
           return {};
         }}
       />
+
+      {/* Modal */}
+      {showModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: 40,
+              borderRadius: 12,
+              textAlign: "center",
+              maxWidth: 400,
+              width: "80%",
+              boxShadow: "0 5px 15px rgba(0,0,0,0.3)",
+            }}
+          >
+            <h3>Availability Saved!</h3>
+            <p>Do you want to go to the login page or stay here?</p>
+            <div style={{ marginTop: 20, display: "flex", justifyContent: "space-around" }}>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: 8,
+                  border: "1px solid #ccc",
+                  backgroundColor: "#f0f0f0",
+                  cursor: "pointer",
+                }}
+              >
+                Stay Here
+              </button>
+              <button
+                onClick={() => (window.location.href = "http://localhost:3001")}
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: 8,
+                  border: "none",
+                  backgroundColor: "green",
+                  color: "white",
+                  cursor: "pointer",
+                }}
+              >
+                Go to Login
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

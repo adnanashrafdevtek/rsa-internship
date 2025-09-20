@@ -34,7 +34,6 @@ export default function Sidebar() {
   const isStudent = user.role === "student";
   const isTeacher = user.role === "teacher";
 
-
   return (
     <div
       style={{
@@ -127,7 +126,14 @@ export default function Sidebar() {
             )}
           </div>
         ) : (
-          <SidebarLink to={isTeacher ? "/teacher/schedule" : "/student/schedule"} iconOverride="📅">Schedule</SidebarLink>
+          <>
+            {isTeacher && (
+              <SidebarLink to="/availability" iconOverride="⏰">Availability</SidebarLink>
+            )}
+            {isStudent && (
+              <SidebarLink to="/student/schedule" iconOverride="📅">Schedule</SidebarLink>
+            )}
+          </>
         )}
 
         {isAdmin && (
@@ -178,7 +184,6 @@ function SidebarLink({ to, children, submenu, style, iconOverride }) {
     if (to === "/home") icon = "🏠";
     else if (to === "/class") icon = "📚";
     else if (to === "/student") icon = "👥";
-    // No icon for add-user or schedule submenu
   }
   return (
     <Link
