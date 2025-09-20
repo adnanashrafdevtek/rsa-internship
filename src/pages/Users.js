@@ -1,16 +1,18 @@
-
-import React from "react";
+import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import Sidebar from "./Sidebar";
 
 export default function Users() {
-
-  const { user, users: usersFromContext = [], changeUserPassword, toggleUserActiveStatus } = useAuth();
+  const {
+    user,
+    users: usersFromContext = [],
+    changeUserPassword,
+    toggleUserActiveStatus,
+  } = useAuth();
   const [newPasswords, setNewPasswords] = useState({});
   const [message, setMessage] = useState("");
 
-  const { user, users, usersLoading, usersError } = useAuth();
-
+  const { users, usersLoading, usersError } = useAuth();
 
   if (!user || user.role !== "admin") {
     return (
@@ -58,7 +60,7 @@ export default function Users() {
     );
   }
 
-  const safeUsers = Array.isArray(users) ? users : [];
+  const safeUsers2 = Array.isArray(users) ? users : [];
   return (
     <div style={{ display: "flex" }}>
       <Sidebar />
@@ -85,7 +87,6 @@ export default function Users() {
             </tr>
           </thead>
           <tbody>
-
             {Array.isArray(usersFromContext) && usersFromContext.length > 0 ? (
               usersFromContext.map((u) => (
                 <tr key={u.username}>
@@ -127,8 +128,11 @@ export default function Users() {
               <tr>
                 <td colSpan={7} style={{ textAlign: "center", padding: "20px" }}>
                   No users found
+                </td>
+              </tr>
+            )}
 
-            {safeUsers.map((u) => (
+            {safeUsers2.map((u) => (
               <tr key={u.username}>
                 <td style={tdStyle}>{`${u.first_name} ${u.last_name}`}</td>
                 <td style={tdStyle}>{u.username}</td>
@@ -161,16 +165,31 @@ export default function Users() {
                   <button onClick={() => toggleUserActiveStatus(u.username)}>
                     {u.active ? "Inactivate" : "Activate"}
                   </button>
-
                 </td>
               </tr>
-            )}
+            ))}
           </tbody>
         </table>
         {content}
       </div>
     </div>
   );
+
+  // Add the missing handler for password change
+  const handlePasswordChange = async (username) => {
+    const newPassword = newPasswords[username];
+    if (!newPassword) {
+      setMessage("Please enter a new password.");
+      return;
+    }
+    try {
+      await changeUserPassword(username, newPassword);
+      setMessage(`Password changed for ${username}`);
+      setNewPasswords((prev) => ({ ...prev, [username]: "" }));
+    } catch (err) {
+      setMessage("Failed to change password.");
+    }
+  };
 }
 
 const thStyle = {
