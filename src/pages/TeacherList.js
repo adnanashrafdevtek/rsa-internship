@@ -412,8 +412,27 @@ export default function TeacherList() {
     <div style={{ display: "flex", height: "100vh" }}>
       <Sidebar onLogout={handleLogout} />
       <div style={{ flex: 1, backgroundColor: "#f8f9fa", padding: 16, marginLeft: 300 }}>
+        <div style={{ margin: "24px 0 16px 0" }}>
+          <button
+            onClick={() => navigate(-1)}
+            style={{
+              padding: "10px 22px",
+              background: "#26bedd",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              fontWeight: 700,
+              fontSize: 18,
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(38,190,221,0.08)",
+              transition: "background 0.2s"
+            }}
+          >
+            ← Back
+          </button>
+        </div>
         
-        {loading ? (
+  {loading ? (
           <div style={{ 
             backgroundColor: "white", 
             borderRadius: "8px", 
@@ -597,16 +616,6 @@ export default function TeacherList() {
                   gap: 8, 
                   flexWrap: "wrap" 
                 }}>
-                  <HoverButton
-                    style={{ 
-                      backgroundColor: "#95a5a6", 
-                      color: "white",
-                      border: "2px solid transparent"
-                    }}
-                    onClick={() => setSelectedTeacher(null)}
-                  >
-                    ← Back to Teacher List
-                  </HoverButton>
 
                   <HoverButton
                     style={{ 
