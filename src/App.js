@@ -113,7 +113,6 @@ function App() {
           <Route path="/master-schedule" element={<MasterSchedule />} />
             path="/availability"
             element={<TeacherAvailability />}
-            />
         </Routes>
       </Router>
     </AuthProvider>
