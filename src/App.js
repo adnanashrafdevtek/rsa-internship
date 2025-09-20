@@ -15,6 +15,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import './App.css';
 import MySchedule from "./pages/MySchedule";
+import TeacherAvailability from "./pages/TeacherAvailability";
 
 
 function App() {
@@ -116,6 +117,10 @@ function App() {
             path="/activation-form"
             element={<ActivationForm />}
           />
+          <Route
+            path="/availability"
+            element={<TeacherAvailability />}
+            />
         </Routes>
       </Router>
     </AuthProvider>
