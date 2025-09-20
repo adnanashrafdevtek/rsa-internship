@@ -3,6 +3,7 @@ import { Calendar, dateFnsLocalizer, Views } from "react-big-calendar";
 import { format, parse, startOfWeek as dfStartOfWeek, getDay as dfGetDay } from "date-fns";
 import enUS from "date-fns/locale/en-US";
 import "react-big-calendar/lib/css/react-big-calendar.css";
+import { useAuth } from "../context/AuthContext"; // <-- import auth
 
 const localizer = dateFnsLocalizer({
   format,
@@ -13,24 +14,27 @@ const localizer = dateFnsLocalizer({
 });
 
 export default function TeacherAvailability() {
+  const { user } = useAuth();
+  const urlUserId = new URLSearchParams(window.location.search).get("user_id");
+
+  // ✅ Use URL user_id if present (onboarding), otherwise fallback to logged-in user
+  const userId = urlUserId || user?.id;
+
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [calendarView, setCalendarView] = useState("week");
-  const [showModal, setShowModal] = useState(false); // <-- modal state
-
-  const userId = new URLSearchParams(window.location.search).get("user_id");
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
+    if (!userId) return; // wait until we have a valid ID
+    setLoading(true);
     fetch(`http://localhost:3000/api/teacher-availability/${userId}`)
       .then((res) => res.json())
       .then((data) => {
         const parsedEvents = (data || [])
           .map((e) => ({ ...e, start: new Date(e.start), end: new Date(e.end) }))
-          .filter((e) => {
-            const day = e.start.getDay();
-            return day !== 0 && day !== 6; // remove Sat/Sun
-          });
+          .filter((e) => e.start.getDay() !== 0 && e.start.getDay() !== 6);
         setEvents(parsedEvents);
       })
       .catch(console.error)
@@ -57,6 +61,10 @@ export default function TeacherAvailability() {
   };
 
   const handleDone = async () => {
+    if (!userId) {
+      setMessage("❌ Error: Teacher not found.");
+      return;
+    }
     try {
       const formattedEvents = events.map((e) => ({
         start: format(e.start, "yyyy-MM-dd HH:mm:ss"),
@@ -71,7 +79,7 @@ export default function TeacherAvailability() {
       if (!res.ok) throw new Error(data.error || "Failed to save availability");
 
       setMessage("✅ Availability saved!");
-      setShowModal(true); // <-- show modal after save
+      setShowModal(true);
     } catch (err) {
       console.error(err);
       setMessage("❌ Error saving availability: " + err.message);
