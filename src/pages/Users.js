@@ -1,12 +1,16 @@
-// components/Users.js
-import React, { useState } from "react";
+
+import React from "react";
 import { useAuth } from "../context/AuthContext";
 import Sidebar from "./Sidebar";
 
 export default function Users() {
+
   const { user, users: usersFromContext = [], changeUserPassword, toggleUserActiveStatus } = useAuth();
   const [newPasswords, setNewPasswords] = useState({});
   const [message, setMessage] = useState("");
+
+  const { user, users, usersLoading, usersError } = useAuth();
+
 
   if (!user || user.role !== "admin") {
     return (
@@ -17,15 +21,44 @@ export default function Users() {
     );
   }
 
-  const handlePasswordChange = (username) => {
-    const newPassword = newPasswords[username];
-    if (!newPassword) return;
+  // Always use a safe array
+  const safeUsers = Array.isArray(users) ? users : [];
 
-    changeUserPassword(username, newPassword);
-    setMessage(`✅ Password updated for ${username}`);
-    setNewPasswords((prev) => ({ ...prev, [username]: "" }));
-  };
+  let content = null;
+  if (usersLoading) {
+    content = <p>Loading users...</p>;
+  } else if (usersError) {
+    content = <p style={{ color: "red" }}>Error: {usersError}</p>;
+  } else {
+    content = (
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          marginTop: "20px",
+        }}
+      >
+        <thead>
+          <tr style={{ backgroundColor: "#eee" }}>
+            <th style={thStyle}>Name</th>
+            <th style={thStyle}>Username</th>
+            <th style={thStyle}>Role</th>
+          </tr>
+        </thead>
+        <tbody>
+          {safeUsers.map((u) => (
+            <tr key={u.id || u.email}>
+              <td style={tdStyle}>{`${u.first_name} ${u.last_name}`}</td>
+              <td style={tdStyle}>{u.username || u.email}</td>
+              <td style={tdStyle}>{u.role}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
 
+  const safeUsers = Array.isArray(users) ? users : [];
   return (
     <div style={{ display: "flex" }}>
       <Sidebar />
@@ -52,6 +85,7 @@ export default function Users() {
             </tr>
           </thead>
           <tbody>
+
             {Array.isArray(usersFromContext) && usersFromContext.length > 0 ? (
               usersFromContext.map((u) => (
                 <tr key={u.username}>
@@ -93,11 +127,47 @@ export default function Users() {
               <tr>
                 <td colSpan={7} style={{ textAlign: "center", padding: "20px" }}>
                   No users found
+
+            {safeUsers.map((u) => (
+              <tr key={u.username}>
+                <td style={tdStyle}>{`${u.first_name} ${u.last_name}`}</td>
+                <td style={tdStyle}>{u.username}</td>
+                <td style={tdStyle}>{u.role}</td>
+                <td style={tdStyle}>
+                  <span style={{ color: u.active ? "green" : "gray" }}>
+                    {u.active ? "Active" : "Inactive"}
+                  </span>
+                </td>
+                <td style={tdStyle}>
+                  <input
+                    type="password"
+                    value={newPasswords[u.username] || ""}
+                    onChange={(e) =>
+                      setNewPasswords((prev) => ({
+                        ...prev,
+                        [u.username]: e.target.value,
+                      }))
+                    }
+                    placeholder="Enter new password"
+                    style={{ width: "100%" }}
+                  />
+                </td>
+                <td style={tdStyle}>
+                  <button onClick={() => handlePasswordChange(u.username)}>
+                    Change
+                  </button>
+                </td>
+                <td style={tdStyle}>
+                  <button onClick={() => toggleUserActiveStatus(u.username)}>
+                    {u.active ? "Inactivate" : "Activate"}
+                  </button>
+
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        {content}
       </div>
     </div>
   );
