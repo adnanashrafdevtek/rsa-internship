@@ -512,7 +512,7 @@ function CreateSchedule() {
       fontWeight: 500, 
       fontSize: 16, 
       color: "#444", 
-      marginTop: 32, 
+      marginTop: 135, 
       background: "#eaf6fb", 
       borderRadius: 8, 
       padding: "12px 18px",
