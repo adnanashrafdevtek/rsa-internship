@@ -266,9 +266,6 @@ function CreateSchedule() {
             )}
           </div>
           <div style={{ background: "#f8f9fa", borderRadius: 16, padding: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.07)", maxWidth: 900, minWidth: 0, width: "100%" }}>
-            <div style={{ fontWeight: 700, fontSize: 20, color: "#222", marginBottom: 8 }}>
-              Master Schedule Calendar
-            </div>
             <Calendar
               localizer={localizer}
               events={[
