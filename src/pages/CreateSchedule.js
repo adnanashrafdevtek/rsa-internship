@@ -23,7 +23,8 @@ function CreateSchedule() {
     subject: "",
     room: "",
     startTime: "",
-    endTime: ""
+    endTime: "",
+    recurringDays: [] // Array of selected days (0=Monday, ... 4=Friday)
   });
   const [eventDetailsModal, setEventDetailsModal] = useState({ open: false, event: null });
   const [selectedTeachers, setSelectedTeachers] = useState([]);
@@ -110,7 +111,8 @@ function CreateSchedule() {
                 })(),
                 grade: showCustomGrade ? details.customGrade : details.grade,
                 subject: details.subject,
-                room: details.room
+                room: details.room,
+                recurringDays: details.recurringDays || []
               }
             : ev
         )
@@ -129,13 +131,14 @@ function CreateSchedule() {
           })(),
           grade: showCustomGrade ? details.customGrade : details.grade,
           subject: details.subject,
-          room: details.room
+          room: details.room,
+          recurringDays: details.recurringDays || []
         }
       ]);
     }
     setModalOpen(false);
     setSelectedSlot(null);
-    setDetails({ teacherId: "", grade: "", customGrade: "", subject: "", room: "" });
+    setDetails({ teacherId: "", grade: "", customGrade: "", subject: "", room: "", recurringDays: [] });
     setEditMode(false);
     setEditingEventId(null);
   };
@@ -192,6 +195,32 @@ function CreateSchedule() {
       }
     }
     return Array.from(ids);
+  };
+
+  // Helper: expand recurring events for calendar
+  const getCalendarEvents = () => {
+    const expanded = [];
+    for (const ev of events) {
+      if (Array.isArray(ev.recurringDays) && ev.recurringDays.length > 0 && ev.start && ev.end) {
+        // Find the week of the original event
+        const baseStart = moment(ev.start);
+        const baseEnd = moment(ev.end);
+        // The day of week for the original event (0=Sunday, 1=Monday, ...)
+        const origDay = baseStart.day();
+        for (const recurDay of ev.recurringDays) {
+          // Map 0=Monday, ... 4=Friday to moment's 1=Monday, ... 5=Friday
+          const momentDay = recurDay + 1;
+          // Calculate the diff from original event's day to recurring day
+          const diff = momentDay - origDay;
+          const newStart = baseStart.clone().add(diff, 'days');
+          const newEnd = baseEnd.clone().add(diff, 'days');
+          expanded.push({ ...ev, start: newStart.toDate(), end: newEnd.toDate(), _recurringInstance: recurDay });
+        }
+      } else {
+        expanded.push(ev);
+      }
+    }
+    return expanded;
   };
 
   return (
@@ -269,7 +298,7 @@ function CreateSchedule() {
             <Calendar
               localizer={localizer}
               events={[
-                ...events,
+                ...getCalendarEvents(),
                 ...selectedAvailabilities
               ]}
               startAccessor="start"
@@ -558,22 +587,21 @@ function CreateSchedule() {
           position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
           background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000
         }}>
-          <form onSubmit={handleSaveEvent} style={{ background: "#fff", padding: "40px 32px 40px 32px", borderRadius: 16, minWidth: 340, boxShadow: "0 8px 32px rgba(38,190,221,0.18)", width: 400, boxSizing: "border-box" }}>
-            <h2 style={{ marginBottom: 18, fontWeight: 700, fontSize: 24 }}>{editMode ? "Edit Schedule Details" : "Add Schedule Details"}</h2>
-            <div style={{ marginBottom: 18, fontWeight: 600, fontSize: 16 }}>
+          <form onSubmit={handleSaveEvent} style={{ background: "#fff", padding: "24px 16px 24px 16px", borderRadius: 16, minWidth: 300, maxWidth: 340, boxShadow: "0 8px 32px rgba(38,190,221,0.18)", width: 340, boxSizing: "border-box" }}>
+            <h2 style={{ marginBottom: 10, fontWeight: 700, fontSize: 22 }}>{editMode ? "Edit Schedule Details" : "Add Schedule Details"}</h2>
+            <div style={{ marginBottom: 10, fontWeight: 600, fontSize: 15, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <span>Start Time: {details.startTime || (selectedSlot && moment(selectedSlot.start).format("h:mm A"))}</span>
-              <div style={{ height: 12 }} />
               <span>End Time: {details.endTime || (selectedSlot && moment(selectedSlot.end).format("h:mm A"))}</span>
             </div>
-            <label style={{ fontWeight: 600, marginBottom: 8, display: "block", marginLeft: 2 }}>Teacher</label>
-            <select name="teacherId" value={details.teacherId} onChange={handleDetailChange} required style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 22, fontSize: 16, boxSizing: "border-box" }}>
+            <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Teacher</label>
+            <select name="teacherId" value={details.teacherId} onChange={handleDetailChange} required style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 12, fontSize: 15, boxSizing: "border-box" }}>
               <option value="">Select a teacher...</option>
               {teachers.map(t => (
                 <option key={t.id} value={t.id}>{t.first_name} {t.last_name}</option>
               ))}
             </select>
-            <label style={{ fontWeight: 600, marginBottom: 8, display: "block", marginLeft: 2 }}>Grade</label>
-            <select name="grade" value={details.grade} onChange={handleDetailChange} required style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: showCustomGrade ? 10 : 22, fontSize: 16, boxSizing: "border-box" }}>
+            <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Grade</label>
+            <select name="grade" value={details.grade} onChange={handleDetailChange} required style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: showCustomGrade ? 6 : 12, fontSize: 15, boxSizing: "border-box" }}>
               <option value="">Select grade...</option>
               {grades.map(g => (
                 <option key={g} value={g}>{g}</option>
@@ -586,23 +614,47 @@ function CreateSchedule() {
                 onChange={handleDetailChange}
                 required
                 placeholder="Enter custom grade..."
-                style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 22, fontSize: 16, boxSizing: "border-box" }}
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 12, fontSize: 15, boxSizing: "border-box" }}
               />
             )}
-            <label style={{ fontWeight: 600, marginBottom: 8, display: "block", marginLeft: 2 }}>Subject</label>
-            <input name="subject" value={details.subject} onChange={handleDetailChange} required placeholder="Enter subject..." style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 22, fontSize: 16, boxSizing: "border-box" }} />
-            <label style={{ fontWeight: 600, marginBottom: 8, display: "block", marginLeft: 2 }}>Room Number</label>
+            {/* Recurring days checkboxes */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Recurring Days</label>
+              <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", justifyContent: "space-between", width: "100%" }}>
+                {["Mon", "Tue", "Wed", "Thu", "Fri"].map((day, idx) => (
+                  <label key={day} style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 14, fontWeight: 500, minWidth: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={details.recurringDays.includes(idx)}
+                      onChange={e => {
+                        setDetails(d => ({
+                          ...d,
+                          recurringDays: e.target.checked
+                            ? [...d.recurringDays, idx]
+                            : d.recurringDays.filter(i => i !== idx)
+                        }));
+                      }}
+                      style={{ width: 14, height: 14, accentColor: "#26bedd", margin: 0 }}
+                    />
+                    {day}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Subject</label>
+            <input name="subject" value={details.subject} onChange={handleDetailChange} required placeholder="Enter subject..." style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 12, fontSize: 15, boxSizing: "border-box" }} />
+            <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Room Number</label>
             <input
               name="room"
               value={details.room}
               onChange={handleDetailChange}
               required
               placeholder="Enter room number..."
-              style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 22, fontSize: 16, boxSizing: "border-box" }}
+              style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 12, fontSize: 15, boxSizing: "border-box" }}
             />
-            <div style={{ display: "flex", gap: 12, marginTop: 18 }}>
-              <button type="button" onClick={() => { setModalOpen(false); setEditMode(false); setEditingEventId(null); }} style={{ background: "#95a5a6", color: "white", fontWeight: 700, fontSize: 16, border: "none", borderRadius: 8, padding: "10px 22px", cursor: "pointer" }}>Cancel</button>
-              <button type="submit" style={{ background: "#26bedd", color: "white", fontWeight: 700, fontSize: 16, border: "none", borderRadius: 8, padding: "10px 22px", cursor: "pointer" }}>{editMode ? "Save Changes" : "Save"}</button>
+            <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+              <button type="button" onClick={() => { setModalOpen(false); setEditMode(false); setEditingEventId(null); }} style={{ background: "#95a5a6", color: "white", fontWeight: 700, fontSize: 15, border: "none", borderRadius: 8, padding: "8px 18px", cursor: "pointer" }}>Cancel</button>
+              <button type="submit" style={{ background: "#26bedd", color: "white", fontWeight: 700, fontSize: 15, border: "none", borderRadius: 8, padding: "8px 18px", cursor: "pointer" }}>{editMode ? "Save Changes" : "Save"}</button>
             </div>
           </form>
         </div>
