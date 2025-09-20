@@ -19,6 +19,7 @@ import MySchedule from "./pages/MySchedule";
 import MasterSchedule from "./pages/MasterSchedule";
 import Schedules from "./pages/Schedules";
 import CreateSchedule from "./pages/CreateSchedule";
+import TeacherAvailability from "./pages/TeacherAvailability";
 
 
 function App() {
@@ -110,6 +111,9 @@ function App() {
           <Route path="/schedules" element={<Schedules />} />
           <Route path="/create-schedule" element={<ProtectedRoute><CreateSchedule /></ProtectedRoute>} />
           <Route path="/master-schedule" element={<MasterSchedule />} />
+            path="/availability"
+            element={<TeacherAvailability />}
+            />
         </Routes>
       </Router>
     </AuthProvider>
