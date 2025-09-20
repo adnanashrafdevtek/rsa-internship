@@ -111,8 +111,9 @@ function App() {
           <Route path="/schedules" element={<Schedules />} />
           <Route path="/create-schedule" element={<ProtectedRoute><CreateSchedule /></ProtectedRoute>} />
           <Route path="/master-schedule" element={<MasterSchedule />} />
+          <Route
             path="/availability"
-            element={<TeacherAvailability />}
+            element={<TeacherAvailability />} />
         </Routes>
       </Router>
     </AuthProvider>

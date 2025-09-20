@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Calendar, dateFnsLocalizer, Views } from "react-big-calendar";
-import { format, parse, startOfWeek as dfStartOfWeek, getDay as dfGetDay } from "date-fns";
+import { format, parse, startOfWeek as dfStartOfWeek, getDay as dfGetDay, addDays, setHours, setMinutes, setSeconds } from "date-fns";
 import enUS from "date-fns/locale/en-US";
 import "react-big-calendar/lib/css/react-big-calendar.css";
-import { useAuth } from "../context/AuthContext"; // <-- import auth
+import { useAuth } from "../context/AuthContext";
 
 const localizer = dateFnsLocalizer({
   format,
@@ -16,8 +16,6 @@ const localizer = dateFnsLocalizer({
 export default function TeacherAvailability() {
   const { user } = useAuth();
   const urlUserId = new URLSearchParams(window.location.search).get("user_id");
-
-  // ✅ Use URL user_id if present (onboarding), otherwise fallback to logged-in user
   const userId = urlUserId || user?.id;
 
   const [events, setEvents] = useState([]);
@@ -26,14 +24,28 @@ export default function TeacherAvailability() {
   const [calendarView, setCalendarView] = useState("week");
   const [showModal, setShowModal] = useState(false);
 
+  // Helper to convert day + time to a Date object in the current week
+  const timeStringToDate = (dayOfWeek, timeStr) => {
+    const [hours, minutes, seconds] = timeStr.split(":").map(Number);
+    const start = dfStartOfWeek(new Date(), { weekStartsOn: 1 }); // Monday as week start
+    const date = addDays(start, dayOfWeek - 1); // 1=Monday
+    return setSeconds(setMinutes(setHours(date, hours), minutes), seconds);
+  };
+
   useEffect(() => {
-    if (!userId) return; // wait until we have a valid ID
+    if (!userId) return;
     setLoading(true);
+
     fetch(`http://localhost:3000/api/teacher-availability/${userId}`)
       .then((res) => res.json())
       .then((data) => {
         const parsedEvents = (data || [])
-          .map((e) => ({ ...e, start: new Date(e.start), end: new Date(e.end) }))
+          .map((e) => ({
+            ...e,
+            start: timeStringToDate(e.day_of_week, e.start_time),
+            end: timeStringToDate(e.day_of_week, e.end_time),
+            title: "Available",
+          }))
           .filter((e) => e.start.getDay() !== 0 && e.start.getDay() !== 6);
         setEvents(parsedEvents);
       })
@@ -53,7 +65,7 @@ export default function TeacherAvailability() {
 
   const handleSelectSlot = ({ start, end }) => {
     const day = start.getDay();
-    if (day === 0 || day === 6) return;
+    if (day === 0 || day === 6) return; // skip weekends
     const exists = events.find(
       (e) => e.start.getTime() === start.getTime() && e.end.getTime() === end.getTime()
     );
@@ -65,16 +77,21 @@ export default function TeacherAvailability() {
       setMessage("❌ Error: Teacher not found.");
       return;
     }
+
     try {
+      // Convert each event back to day_of_week + HH:mm:ss
       const formattedEvents = events.map((e) => ({
-        start: format(e.start, "yyyy-MM-dd HH:mm:ss"),
-        end: format(e.end, "yyyy-MM-dd HH:mm:ss"),
+        day_of_week: e.start.getDay(),
+        start_time: format(e.start, "HH:mm:ss"),
+        end_time: format(e.end, "HH:mm:ss"),
       }));
+
       const res = await fetch("http://localhost:3000/api/teacher-availability", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teacher_id: userId, events: formattedEvents }),
+        body: JSON.stringify({ teacher_id: userId, availability: formattedEvents }),
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save availability");
 
@@ -90,35 +107,18 @@ export default function TeacherAvailability() {
 
   return (
     <div style={{ padding: 20 }}>
-      {/* Header and Save button */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 20,
-        }}
-      >
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
         <h2>Set Your Availability</h2>
         <button
           onClick={handleDone}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "green",
-            color: "white",
-            border: "none",
-            borderRadius: 8,
-            cursor: "pointer",
-          }}
+          style={{ padding: "10px 20px", backgroundColor: "green", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}
         >
           Save Availability
         </button>
       </div>
 
-      {/* Message */}
       {message && <p>{message}</p>}
 
-      {/* Calendar */}
       <Calendar
         localizer={localizer}
         events={events}
@@ -132,24 +132,18 @@ export default function TeacherAvailability() {
         defaultView={Views.WEEK}
         views={[Views.WEEK]}
         toolbar={false}
-        style={{ height: 700, margin: 0 }}
+        style={{ height: 700 }}
         step={60}
         timeslots={1}
-        min={new Date(1970, 1, 1, 6, 0, 0)}
-        max={new Date(1970, 1, 1, 19, 0, 0)}
+        min={setHours(new Date(), 6)}
+        max={setHours(new Date(), 19)}
         eventPropGetter={() => ({ style: { backgroundColor: "green", color: "white" } })}
         formats={{
           dateHeaderFormat: (date, culture, localizer) =>
             localizer.format(date, "EEE", culture),
         }}
-        dayPropGetter={(date) => {
-          const day = date.getDay();
-          if (day === 0 || day === 6) return { style: { display: "none" } };
-          return {};
-        }}
       />
 
-      {/* Modal */}
       {showModal && (
         <div
           style={{
