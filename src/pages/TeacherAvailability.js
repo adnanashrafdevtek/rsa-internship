@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Calendar, dateFnsLocalizer, Views } from "react-big-calendar";
-import { format, parse, startOfWeek as dfStartOfWeek, getDay as dfGetDay, addDays, setHours, setMinutes, setSeconds } from "date-fns";
+import {
+  format,
+  parse,
+  startOfWeek as dfStartOfWeek,
+  getDay as dfGetDay,
+  addDays,
+  setHours,
+  setMinutes,
+  setSeconds,
+} from "date-fns";
 import enUS from "date-fns/locale/en-US";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import { useAuth } from "../context/AuthContext";
@@ -24,10 +33,10 @@ export default function TeacherAvailability() {
   const [calendarView, setCalendarView] = useState("week");
   const [showModal, setShowModal] = useState(false);
 
-  // Helper to convert day + time to a Date object in the current week
+  // Helper: convert day + time string → Date object (current week)
   const timeStringToDate = (dayOfWeek, timeStr) => {
     const [hours, minutes, seconds] = timeStr.split(":").map(Number);
-    const start = dfStartOfWeek(new Date(), { weekStartsOn: 1 }); // Monday as week start
+    const start = dfStartOfWeek(new Date(), { weekStartsOn: 1 }); // Monday start
     const date = addDays(start, dayOfWeek - 1); // 1=Monday
     return setSeconds(setMinutes(setHours(date, hours), minutes), seconds);
   };
@@ -39,14 +48,12 @@ export default function TeacherAvailability() {
     fetch(`http://localhost:3000/api/teacher-availability/${userId}`)
       .then((res) => res.json())
       .then((data) => {
-        const parsedEvents = (data || [])
-          .map((e) => ({
-            ...e,
-            start: timeStringToDate(e.day_of_week, e.start_time),
-            end: timeStringToDate(e.day_of_week, e.end_time),
-            title: "Available",
-          }))
-          .filter((e) => e.start.getDay() !== 0 && e.start.getDay() !== 6);
+        const parsedEvents = (data || []).map((e) => ({
+          ...e,
+          start: timeStringToDate(e.day_of_week, e.start_time),
+          end: timeStringToDate(e.day_of_week, e.end_time),
+          title: "Available",
+        }));
         setEvents(parsedEvents);
       })
       .catch(console.error)
@@ -67,51 +74,85 @@ export default function TeacherAvailability() {
     const day = start.getDay();
     if (day === 0 || day === 6) return; // skip weekends
     const exists = events.find(
-      (e) => e.start.getTime() === start.getTime() && e.end.getTime() === end.getTime()
+      (e) =>
+        e.start.getTime() === start.getTime() &&
+        e.end.getTime() === end.getTime()
     );
     if (!exists) setEvents([...events, { start, end, title: "Available" }]);
   };
 
   const handleDone = async () => {
-    if (!userId) {
-      setMessage("❌ Error: Teacher not found.");
+  try {
+    if (!events || events.length === 0) {
+      alert("No availability selected.");
       return;
     }
 
-    try {
-      // Convert each event back to day_of_week + HH:mm:ss
-      const formattedEvents = events.map((e) => ({
-        day_of_week: e.start.getDay(),
-        start_time: format(e.start, "HH:mm:ss"),
-        end_time: format(e.end, "HH:mm:ss"),
-      }));
+    // Ensure events use valid Date objects
+    const formattedEvents = events.map(event => {
+      // If the event already has start/end strings, preserve them
+      if (typeof event.start === "string" && typeof event.end === "string") {
+        return { start: event.start, end: event.end };
+      }
+      if (!(event.start instanceof Date) || !(event.end instanceof Date)) {
+        console.error("❌ Invalid event (not Date):", event);
+        return null;
+      }
+      return {
+        start: event.start.toISOString(), // ISO so backend's new Date(...) works
+        end: event.end.toISOString(),
+      };
+    }).filter(e => e !== null);
 
-      const res = await fetch("http://localhost:3000/api/teacher-availability", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teacher_id: userId, availability: formattedEvents }),
-      });
+    console.log("📌 Sending payload:", { teacher_id: userId, events: formattedEvents });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to save availability");
+    const response = await fetch("http://localhost:3000/api/teacher-availability", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ teacher_id: userId, events: formattedEvents }),
+    });
 
-      setMessage("✅ Availability saved!");
-      setShowModal(true);
-    } catch (err) {
-      console.error(err);
-      setMessage("❌ Error saving availability: " + err.message);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HTTP ${response.status}: ${text}`);
     }
-  };
+
+    const data = await response.json();
+    if (data.success) {
+      // show modal or alert
+      setShowModal(true);
+      console.log("✅ Availability saved:", data);
+    } else {
+      alert("❌ Error saving availability: " + (data.error || "unknown"));
+    }
+  } catch (err) {
+    console.error("❌ handleDone error:", err);
+    alert("An unexpected error occurred while saving.");
+  }
+};
 
   if (loading) return <p>Loading...</p>;
 
   return (
     <div style={{ padding: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 20,
+        }}
+      >
         <h2>Set Your Availability</h2>
         <button
           onClick={handleDone}
-          style={{ padding: "10px 20px", backgroundColor: "green", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}
+          style={{
+            padding: "10px 20px",
+            backgroundColor: "green",
+            color: "white",
+            border: "none",
+            borderRadius: 8,
+            cursor: "pointer",
+          }}
         >
           Save Availability
         </button>
@@ -137,7 +178,9 @@ export default function TeacherAvailability() {
         timeslots={1}
         min={setHours(new Date(), 6)}
         max={setHours(new Date(), 19)}
-        eventPropGetter={() => ({ style: { backgroundColor: "green", color: "white" } })}
+        eventPropGetter={() => ({
+          style: { backgroundColor: "green", color: "white" },
+        })}
         formats={{
           dateHeaderFormat: (date, culture, localizer) =>
             localizer.format(date, "EEE", culture),
@@ -172,7 +215,13 @@ export default function TeacherAvailability() {
           >
             <h3>Availability Saved!</h3>
             <p>Do you want to go to the login page or stay here?</p>
-            <div style={{ marginTop: 20, display: "flex", justifyContent: "space-around" }}>
+            <div
+              style={{
+                marginTop: 20,
+                display: "flex",
+                justifyContent: "space-around",
+              }}
+            >
               <button
                 onClick={() => setShowModal(false)}
                 style={{
