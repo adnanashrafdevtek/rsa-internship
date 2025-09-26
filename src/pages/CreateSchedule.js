@@ -24,7 +24,8 @@ function CreateSchedule() {
     room: "",
     startTime: "",
     endTime: "",
-    recurringDays: [] // Array of selected days (0=Monday, ... 4=Friday)
+    recurringDays: [], // Array of selected days (0=Monday, ... 4=Friday)
+    dayType: "" // A or B day Friday
   });
   const [eventDetailsModal, setEventDetailsModal] = useState({ open: false, event: null });
   const [selectedTeachers, setSelectedTeachers] = useState([]);
@@ -46,11 +47,26 @@ function CreateSchedule() {
   }, []);
 
   // Assign a color to each teacher (repeat if more than 4)
-  const teacherColors = ["#27ae60", "#26bedd", "#f39c12", "#8e44ad"];
-  const getTeacherColor = (teacherId) => {
-    const idx = teachers.findIndex(t => t.id === teacherId);
-    return teacherColors[idx % teacherColors.length];
-  };
+  // Unique colors for teachers (exclude blue used by classes)
+const teacherColors = [
+  "#27ae60", // green
+  "#f39c12", // orange
+  "#8e44ad", // purple
+  "#e67e22", // darker orange
+  "#d35400", // reddish-orange
+  "#16a085", // teal
+  "#2980b9", // dark blue-ish (not bright class blue)
+  "#2c3e50", // dark gray
+  "#c0392b", // red
+  "#7f8c8d"  // gray
+  // add more if you have more teachers
+];
+
+const getTeacherColor = (teacherId) => {
+  const idx = teachers.findIndex(t => t.id === teacherId);
+  if (idx === -1) return "#000000"; // fallback black if teacher not found
+  return teacherColors[idx]; // unique color per teacher
+};
 
   // Only show availabilities for selected teachers
   const selectedAvailabilities = allAvailabilities.filter(av =>
@@ -319,7 +335,7 @@ function CreateSchedule() {
                     style: {
                       backgroundColor: event.color || "#27ae60",
                       color: "white",
-                      opacity: 0.85,
+                      opacity: 0.2,
                       borderRadius: 8,
                       fontWeight: 600,
                       fontSize: 14,
@@ -401,16 +417,17 @@ function CreateSchedule() {
                     >
                       <span style={{ fontSize: 18, marginBottom: 2 }}>📘</span>
                       <span style={{
-                        fontWeight: 700,
-                        fontSize: 15,
+                    fontWeight: 700,
+                      fontSize: 12, // smaller so it fits
                         color: "#222",
-                        textAlign: "center",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        maxWidth: "120px",
-                        padding: "0 2px"
-                      }}>{event.title}</span>
+                      textAlign: "center",
+                    whiteSpace: "normal",   // allow wrapping
+                    wordBreak: "break-word",// break long words if needed
+                    lineHeight: "1.1",
+                      padding: "0 2px"
+                      }}>
+                    {event.title}
+                      </span>
                       {deleteMode && (
                         <span
                           style={{
@@ -617,6 +634,22 @@ function CreateSchedule() {
                 style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 12, fontSize: 15, boxSizing: "border-box" }}
               />
             )}
+                {selectedSlot && moment(selectedSlot.start).day() === 5 && (
+  <div style={{ marginBottom: 12 }}>
+    <label style={{ fontWeight: 600, marginBottom: 4, display: "block" }}>Day Type (Friday)</label>
+    <select
+      name="dayType"
+      value={details.dayType || ""}
+      onChange={handleDetailChange}
+      required
+      style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", fontSize: 15, boxSizing: "border-box" }}
+    >
+      <option value="">Select A or B day</option>
+      <option value="A">A Day</option>
+      <option value="B">B Day</option>
+    </select>
+  </div>
+)}
             {/* Recurring days checkboxes */}
             <div style={{ marginBottom: 12 }}>
               <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Recurring Days</label>
