@@ -65,6 +65,8 @@ const CustomHeader = ({ label, date }) => {
 const DragAndDropCalendar = withDragAndDrop(Calendar);
 
 function CreateSchedule() {
+  // State for conflict modal
+  const [conflictModal, setConflictModal] = useState({ open: false, messages: [], pendingEvent: null });
   const localizer = momentLocalizer(moment);
 
   const [teachers, setTeachers] = useState([]);
@@ -244,6 +246,8 @@ function CreateSchedule() {
 
   // Handle drag start to track which event is being dragged
   const handleEventDragStart = ({ event }) => {
+    // Prevent dragging if in delete mode
+    if (deleteMode) return;
     if (!event.availability) {
       setDraggingEventId(event.id);
     }
@@ -251,6 +255,11 @@ function CreateSchedule() {
 
   // Handle dragging events to new times
   const handleEventDrop = ({ event, start, end }) => {
+    // Prevent moving classes if in delete mode
+    if (deleteMode) {
+      setDraggingEventId(null);
+      return;
+    }
     // Don't allow dragging availability blocks
     if (event.availability) {
       setDraggingEventId(null);
@@ -262,7 +271,7 @@ function CreateSchedule() {
     const endMoment = moment(end);
     const minTime = moment(start).set({ hour: 6, minute: 30, second: 0 });
     const maxTime = moment(start).set({ hour: 16, minute: 0, second: 0 });
-    
+  
     if (startMoment.isBefore(minTime) || endMoment.isAfter(maxTime)) {
       alert('Classes can only be scheduled between 6:30 AM and 4:00 PM.');
       setDraggingEventId(null);
@@ -272,7 +281,7 @@ function CreateSchedule() {
     // Check if it's Friday and handle A/B day logic
     const isFriday = moment(start).day() === 5;
     const wasOriginallyFriday = moment(event.start).day() === 5;
-    
+  
     // If dragging to Friday and the event doesn't have an abDay, or dragging from non-Friday to Friday
     if (isFriday && (!event.abDay || !wasOriginallyFriday)) {
       // Show Friday selection modal for the drag operation - don't clear drag state yet
@@ -302,7 +311,6 @@ function CreateSchedule() {
                   start,
                   end,
                   recurringDays: updatedRecurringDays,
-                  // Clear abDay if dragging away from Friday
                   abDay: isFriday ? ev.abDay : ""
                 }
               : ev
@@ -328,8 +336,6 @@ function CreateSchedule() {
     // Always reset dragging state after drop to restore full color
     setDraggingEventId(null);
   };
-
-  // Handle modal input changes
   const handleDetailChange = (e) => {
     const { name, value } = e.target;
     setDetails(d => ({ ...d, [name]: value }));
@@ -375,33 +381,186 @@ function CreateSchedule() {
   // Save event from modal (add or edit)
   const handleSaveEvent = (e) => {
     e.preventDefault();
-    
+
     // Validate required fields
-    if (!details.teacherId || !details.grade || !details.subject || !details.room || (showCustomGrade && !details.customGrade)) {
+    if (!details.subject || !details.teacherId || !details.grade || !details.room) {
       alert('Please fill in all required fields.');
       return;
     }
-    
-    // Validate Friday A/B day selection
-    if (moment(selectedSlot.start).day() === 5 && !details.abDay) {
-      alert('Please select whether this is an A Day Friday or B Day Friday.');
+
+    const newTeacherId = details.teacherId;
+    const newRoom = details.room;
+    const newGrade = showCustomGrade ? details.customGrade : details.grade;
+    const newSubject = details.subject;
+    const newStart = moment(selectedSlot.start);
+    const newEnd = moment(selectedSlot.end);
+    const newRecurringDays = details.recurringDays || [];
+    const newAbDay = details.abDay || "";
+
+    let conflictMessages = [];
+
+    // Helper function to check if two time ranges overlap
+    const isOverlap = (start1, end1, start2, end2) => {
+      return moment(start1).isBefore(moment(end2)) && moment(start2).isBefore(moment(end1));
+    };
+
+    // Helper: expand event to all its recurring instances
+    const expandEventInstances = (ev) => {
+      if (Array.isArray(ev.recurringDays) && ev.recurringDays.length > 0 && ev.start && ev.end) {
+        const baseStart = moment(ev.start);
+        const baseEnd = moment(ev.end);
+        const duration = baseEnd.diff(baseStart, 'minutes');
+        return ev.recurringDays.map(recurDay => {
+          const momentDay = recurDay + 1;
+          const weekStart = moment().startOf('week');
+          const instanceStart = weekStart.clone().day(momentDay).set({ hour: baseStart.hour(), minute: baseStart.minute(), second: 0 });
+          const instanceEnd = instanceStart.clone().add(duration, 'minutes');
+          return {
+            ...ev,
+            start: instanceStart,
+            end: instanceEnd,
+            _recurringInstance: recurDay
+          };
+        });
+      } else {
+        return [{ ...ev, start: moment(ev.start), end: moment(ev.end) }];
+      }
+    };
+
+    // Gather all events except the one being edited (if in edit mode)
+    const otherEvents = editMode && editingEventId
+      ? events.filter(ev => ev.id !== editingEventId)
+      : events;
+
+    // Expand all event instances for conflict checking
+    let allInstances = [];
+    for (const ev of otherEvents) {
+      allInstances.push(...expandEventInstances(ev));
+    }
+
+    // Expand new event instances for all selected recurring days
+    let newInstances = [];
+    if (newRecurringDays.length > 0) {
+      const baseStart = newStart;
+      const baseEnd = newEnd;
+      const duration = baseEnd.diff(baseStart, 'minutes');
+      for (const recurDay of newRecurringDays) {
+        const momentDay = recurDay + 1;
+        const weekStart = moment().startOf('week');
+        const dayStart = weekStart.clone().day(momentDay);
+        const instanceStart = dayStart.set({ hour: baseStart.hour(), minute: baseStart.minute(), second: 0 });
+        const instanceEnd = instanceStart.clone().add(duration, 'minutes');
+        newInstances.push({
+          start: instanceStart,
+          end: instanceEnd,
+          teacherId: newTeacherId,
+          room: newRoom,
+          grade: newGrade,
+          subject: newSubject,
+          abDay: newAbDay
+        });
+      }
+    } else {
+      newInstances.push({
+        start: newStart,
+        end: newEnd,
+        teacherId: newTeacherId,
+        room: newRoom,
+        grade: newGrade,
+        subject: newSubject,
+        abDay: newAbDay
+      });
+    }
+
+    // Check for conflicts
+    for (const newInst of newInstances) {
+      for (const inst of allInstances) {
+        if (isOverlap(newInst.start, newInst.end, inst.start, inst.end)) {
+          // Same teacher conflict
+          const newTeacherName = (() => {
+            const t = teachers.find(t => t.id == newInst.teacherId);
+            return t ? `${t.first_name} ${t.last_name}` : "";
+          })();
+          
+          if (inst.teacher && inst.teacher === newTeacherName) {
+            conflictMessages.push(`Teacher ${newTeacherName} is already scheduled at ${newInst.start.format('dddd h:mm A')} - ${newInst.end.format('h:mm A')}.`);
+          }
+          
+          // Same room conflict
+          if (inst.room && inst.room === newInst.room) {
+            conflictMessages.push(`Room ${newInst.room} is already booked at ${newInst.start.format('dddd h:mm A')} - ${newInst.end.format('h:mm A')}.`);
+          }
+          
+          // Same grade/subject conflict (duplicate class)
+          if (inst.grade && inst.grade === newInst.grade && inst.subject && inst.subject === newInst.subject && inst.room !== newInst.room) {
+            conflictMessages.push(`Class ${newInst.subject} for grade ${newInst.grade} is already scheduled in another room at ${newInst.start.format('dddd h:mm A')} - ${newInst.end.format('h:mm A')}.`);
+          }
+        }
+      }
+    }
+
+    if (conflictMessages.length > 0) {
+      // For recurring events, flag only the conflicting instances
+      // We'll store a hasConflictDays array: [0,2] means Mon and Wed have conflicts
+      let hasConflictDays = [];
+      if (newRecurringDays.length > 0) {
+        for (let i = 0; i < newInstances.length; i++) {
+          const newInst = newInstances[i];
+          let hasConflict = false;
+          for (const inst of allInstances) {
+            // Only flag if same day (weekday), and time/location/teacher/grade/subject conflict
+            const sameDay = newInst.start.day() === inst.start.day();
+            if (sameDay && (
+              (inst.teacher && inst.teacher === (() => { const t = teachers.find(t => t.id === newTeacherId); return t ? `${t.first_name} ${t.last_name}` : ""; })() && isOverlap(newInst.start, newInst.end, inst.start, inst.end)) ||
+              (inst.room && inst.room === newInst.room && isOverlap(newInst.start, newInst.end, inst.start, inst.end)) ||
+              (inst.grade && inst.grade === newInst.grade && inst.subject && inst.subject === newInst.subject && isOverlap(newInst.start, newInst.end, inst.start, inst.end) && inst.room !== newInst.room)
+            )) {
+              hasConflict = true;
+              break;
+            }
+          }
+          if (hasConflict) {
+            hasConflictDays.push(newInst.start.day());
+          }
+        }
+      } else {
+        // Single event, flag if conflict is on same day
+        let hasConflict = false;
+        for (const inst of allInstances) {
+          const sameDay = newStart.day() === inst.start.day();
+          if (sameDay && (
+            (inst.teacher && inst.teacher === (() => { const t = teachers.find(t => t.id === newTeacherId); return t ? `${t.first_name} ${t.last_name}` : ""; })() && isOverlap(newStart, newEnd, inst.start, inst.end)) ||
+            (inst.room && inst.room === newRoom && isOverlap(newStart, newEnd, inst.start, inst.end)) ||
+            (inst.grade && inst.grade === newGrade && inst.subject && inst.subject === newSubject && isOverlap(newStart, newEnd, inst.start, inst.end) && inst.room !== newRoom)
+          )) {
+            hasConflict = true;
+            break;
+          }
+        }
+        hasConflictDays = hasConflict ? [newStart.day()] : [];
+      }
+      // Prepare the event object for 'Save Anyways'
+      const eventObj = {
+        id: editMode && editingEventId ? editingEventId : Math.random().toString(36).substr(2, 9),
+        title: `${details.subject}`,
+        start: selectedSlot.start,
+        end: selectedSlot.end,
+        teacher: (() => {
+          const t = teachers.find(t => t.id === +details.teacherId);
+          return t ? `${t.first_name} ${t.last_name}` : "";
+        })(),
+        grade: showCustomGrade ? details.customGrade : details.grade,
+        subject: details.subject,
+        room: details.room,
+        recurringDays: details.recurringDays || [],
+        abDay: details.abDay || "",
+        hasConflictDays // array of weekday numbers (1=Mon, ... 5=Fri)
+      };
+      setConflictModal({ open: true, messages: conflictMessages, pendingEvent: eventObj });
       return;
     }
-    
-    // Validate time range
-    const minTime = moment(selectedSlot.start).set({ hour: 6, minute: 30, second: 0 });
-    const maxTime = moment(selectedSlot.start).set({ hour: 16, minute: 0, second: 0 });
-    
-    if (moment(selectedSlot.start).isBefore(minTime) || moment(selectedSlot.end).isAfter(maxTime)) {
-      alert('Classes can only be scheduled between 6:30 AM and 4:00 PM.');
-      return;
-    }
-    
-    if (moment(selectedSlot.end).isSameOrBefore(selectedSlot.start)) {
-      alert('End time must be after start time.');
-      return;
-    }
-    
+
+    // If no conflicts, proceed to add/edit event
     if (editMode && editingEventId) {
       setEvents(evts =>
         evts.map(ev =>
@@ -450,6 +609,76 @@ function CreateSchedule() {
     setEditMode(false);
     setEditingEventId(null);
   };
+  // Conflict modal UI
+  const renderConflictModal = () => (
+    conflictModal.open && (
+      <div style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        background: "rgba(0,0,0,0.3)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 2000
+      }}>
+        <div style={{ background: "#fff", padding: 32, borderRadius: 16, minWidth: 340, boxShadow: "0 8px 32px rgba(231,76,60,0.18)" }}>
+          <h2 style={{ marginBottom: 18, fontWeight: 700, fontSize: 24, color: "#e74c3c" }}>Schedule Conflict</h2>
+          <ul style={{ color: "#c0392b", fontWeight: 600, fontSize: 16, marginBottom: 18 }}>
+            {conflictModal.messages.map((msg, idx) => (
+              <li key={idx} style={{ marginBottom: 8 }}>{msg}</li>
+            ))}
+          </ul>
+          <div style={{ display: "flex", gap: 12 }}>
+            <button
+              type="button"
+              onClick={() => setConflictModal({ open: false, messages: [], pendingEvent: null })}
+              style={{ background: "#e74c3c", color: "white", fontWeight: 700, fontSize: 16, border: "none", borderRadius: 8, padding: "10px 22px", cursor: "pointer" }}
+            >Close</button>
+            {conflictModal.pendingEvent && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (editMode && editingEventId) {
+                    setEvents(evts =>
+                      evts.map(ev =>
+                        ev.id === editingEventId
+                          ? { ...conflictModal.pendingEvent }
+                          : ev
+                      )
+                    );
+                  } else {
+                    setEvents(evts => [
+                      ...evts,
+                      { ...conflictModal.pendingEvent }
+                    ]);
+                  }
+                  setModalOpen(false);
+                  setSelectedSlot(null);
+                  setDetails({ teacherId: "", grade: "", customGrade: "", subject: "", room: "", recurringDays: [], abDay: "" });
+                  setEditMode(false);
+                  setEditingEventId(null);
+                  setConflictModal({ open: false, messages: [], pendingEvent: null });
+                }}
+                style={{
+                  background: "#fff",
+                  color: "#e74c3c",
+                  fontWeight: 700,
+                  fontSize: 16,
+                  border: "2px solid #e74c3c",
+                  borderRadius: 8,
+                  padding: "10px 22px",
+                  cursor: "pointer"
+                }}
+              >Save Anyways</button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  );
 
   // Open edit modal for an event
   const handleEditEvent = (event) => {
@@ -484,7 +713,13 @@ function CreateSchedule() {
 
   // Confirm delete selected events
   const handleConfirmDelete = () => {
-    setEvents(evts => evts.filter(ev => !selectedToDelete.includes(ev.id)));
+    // For recurring events, delete all instances with the same base id
+    setEvents(evts => evts.filter(ev => {
+      // If the event is a recurring instance, get its base id
+      const baseId = ev.id.includes('-recurring-') ? ev.id.split('-recurring-')[0] : ev.id;
+      // If any selectedToDelete matches the base id, delete all instances
+      return !selectedToDelete.includes(baseId) && !selectedToDelete.includes(ev.id);
+    }));
     setDeleteMode(false);
     setSelectedToDelete([]);
   };
@@ -571,6 +806,7 @@ function CreateSchedule() {
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+      {renderConflictModal()}
       <style>{`
         .rbc-header {
           background: transparent !important;
@@ -859,18 +1095,26 @@ function CreateSchedule() {
                 const originalId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
                 const overlappingIds = getOverlappingEventIds();
                 const isOverlapping = overlappingIds.includes(originalId);
-                
-                // Check if this event is being dragged
                 const isDragging = event.isDragging;
-                
+                // Recurring instance: flag only if its day is in hasConflictDays
+                let hasConflict = false;
+                if (event.hasConflictDays && event._recurringInstance !== undefined) {
+                  // _recurringInstance is 0=Mon, ... 4=Fri; moment().day() is 1=Mon, ... 5=Fri
+                  hasConflict = event.hasConflictDays.includes(event._recurringInstance + 1);
+                } else if (event.hasConflictDays) {
+                  // Single event
+                  hasConflict = event.hasConflictDays.length > 0;
+                }
                 return {
                   style: {
                     backgroundColor: isOverlapping ? "#fff5f5" : "#26bedd",
                     color: isOverlapping ? "#e53e3e" : "white",
                     borderRadius: 8,
                     fontWeight: 600,
-                    border: isOverlapping ? "2px solid #fc8181" : "1px solid #26bedd",
-                    boxShadow: isOverlapping ? "0 2px 8px rgba(229, 62, 62, 0.3)" : "0 2px 4px rgba(38, 190, 221, 0.2)",
+                    border: hasConflict ? "2px solid #e74c3c" : (isOverlapping ? "2px solid #fc8181" : "1px solid #26bedd"),
+                    boxShadow: hasConflict
+                      ? "0 2px 8px rgba(231,76,60,0.3)"
+                      : (isOverlapping ? "0 2px 8px rgba(229, 62, 62, 0.3)" : "0 2px 4px rgba(38, 190, 221, 0.2)"),
                     cursor: deleteMode && !event.availability ? "pointer" : (event.availability ? "default" : "move"),
                     transition: "all 0.2s ease",
                     opacity: isDragging ? 0.6 : 1
@@ -880,7 +1124,7 @@ function CreateSchedule() {
               components={{
                 header: CustomHeader,
                 event: ({ event }) => {
-                  const isSelected = selectedToDelete.includes(event.id);
+                  const isSelected = selectedToDelete && selectedToDelete.includes(event.id);
                   if (event.availability) {
                     return (
                       <div style={{
@@ -972,26 +1216,26 @@ function CreateSchedule() {
           </div>
         </div>
         {/* Teacher sidebar */}
-  <div style={{ width: 260, marginLeft: 32, background: "#f8f9fa", borderRadius: 16, padding: 24, boxShadow: "0 2px 8px rgba(0,0,0,0.07)", maxHeight: 700, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-    <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 18 }}>Teacher Availability</h3>
-    {/* Search bar */}
-    <input
-      type="text"
-      placeholder="Search teachers..."
-      value={searchTerm}
-      onChange={e => setSearchTerm(e.target.value)}
-      style={{
-        marginBottom: 12,
-        padding: "8px 12px",
-        borderRadius: 6,
-        border: "1.5px solid #b8e0ef",
-        fontSize: 15,
-        outline: "none",
-        width: "90%"
-      }}
-    />
-    {/* Select/Unselect All button below search bar */}
-    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <div style={{ width: 260, marginLeft: 32, background: "#f8f9fa", borderRadius: 16, padding: 24, boxShadow: "0 2px 8px rgba(0,0,0,0.07)", maxHeight: 700, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 18 }}>Teacher Availability</h3>
+          {/* Search bar */}
+          <input
+            type="text"
+            placeholder="Search teachers..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            style={{
+              marginBottom: 12,
+              padding: "8px 12px",
+              borderRadius: 6,
+              border: "1.5px solid #b8e0ef",
+              fontSize: 15,
+              outline: "none",
+              width: "90%"
+            }}
+          />
+          {/* Select/Unselect All button below search bar */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
       {!showUnselect ? (
         <button
           onClick={() => {
@@ -1011,12 +1255,12 @@ function CreateSchedule() {
           style={{ background: "#95a5a6", color: "white", fontWeight: 600, fontSize: 14, border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", transition: "background 0.2s", width: "100%" }}
           onMouseEnter={e => e.target.style.background = "#7f8c8d"}
           onMouseLeave={e => e.target.style.background = "#95a5a6"}
-        >Unselect All</button>
-      )}
-    </div>
-    {/* Teacher list stretches to fill sidebar, even if few teachers */}
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 300 }}>
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
+          >Unselect All</button>
+            )}
+          </div>
+          {/* Teacher list stretches to fill sidebar, even if few teachers */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 300 }}>
+            <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
         {teachers
           .filter(t =>
             searchTerm.trim() === "" ||
@@ -1059,10 +1303,10 @@ function CreateSchedule() {
               </div>
             );
           })}
-      </div>
-    </div>
-    {/* Info/help text always at bottom, not scrolling, more space above */}
-    <div style={{ 
+            </div>
+          </div>
+          {/* Info/help text always at bottom, not scrolling, more space above */}
+          <div style={{ 
       fontWeight: 500, 
       fontSize: 16, 
       color: "#444", 
@@ -1078,11 +1322,9 @@ function CreateSchedule() {
         <li>Click on a class to view its details and edit.</li>
         <li>Use <b>Select to Delete</b> to remove classes from the schedule.</li>
         <li>Overlapping classes will be <span style={{color:"#e74c3c",fontWeight:600}}>highlighted</span> for review.</li>
-      </ul>
-    </div>
-  </div>
-      </div>
-      {/* Event details modal with edit option */}
+            </ul>
+          </div>
+        </div>
       {eventDetailsModal.open && eventDetailsModal.event ? (
         <div style={{
           position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
@@ -1224,8 +1466,8 @@ function CreateSchedule() {
           </form>
         </div>
       )}
+      </div>
     </div>
   );
 }
-
 export default CreateSchedule;
