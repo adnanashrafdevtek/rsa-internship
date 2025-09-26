@@ -3,6 +3,8 @@ import Sidebar from "./Sidebar";
 import { Calendar, momentLocalizer } from "react-big-calendar";
 import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
+import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 
 // Add grades array at the top (it was missing)
 const grades = ["K", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "Not here?"];
@@ -59,6 +61,9 @@ const CustomHeader = ({ label, date }) => {
   );
 };
 
+// Create drag and drop enabled calendar
+const DragAndDropCalendar = withDragAndDrop(Calendar);
+
 function CreateSchedule() {
   const localizer = momentLocalizer(moment);
 
@@ -89,6 +94,8 @@ function CreateSchedule() {
   const [searchTerm, setSearchTerm] = useState("");
   // Add Friday modal state
   const [fridayModal, setFridayModal] = useState({ open: false, slotInfo: null });
+  // Add dragging state to track which event is being dragged
+  const [draggingEventId, setDraggingEventId] = useState(null);
 
   // Fetch teachers and availabilities on mount
   useEffect(() => {
@@ -132,6 +139,11 @@ function CreateSchedule() {
 
   // When user selects a slot on the calendar, allow adding events even if overlapping with a teacher availability block
   const handleSelectSlot = ({ start, end, abDay }) => {
+    // Don't allow slot selection if we're currently dragging an event
+    if (draggingEventId) {
+      return;
+    }
+    
     // Validate time range (6:30 AM - 4:00 PM)
     const startMoment = moment(start);
     const endMoment = moment(end);
@@ -152,22 +164,169 @@ function CreateSchedule() {
       return;
     }
     
-    // Removed restriction: allow adding events over availability slots
+    // Pre-select recurring day for the day being added
+    const dayIdx = moment(start).day() - 1; // 0=Monday, ... 4=Friday
+    const recurringDays = (dayIdx >= 0 && dayIdx <= 4) ? [dayIdx] : [];
     setSelectedSlot({ start, end });
     setDetails(d => ({ 
       ...d, 
       startTime: moment(start).format("h:mm A"), 
       endTime: moment(end).format("h:mm A"),
-      abDay: abDay || (isFriday ? "" : "")
+      abDay: abDay || (isFriday ? "" : ""),
+      recurringDays
     }));
     setModalOpen(true);
+  };
+
+  // Handle drag end to clear dragging state and restore event opacity
+  const handleDragEnd = () => {
+    setDraggingEventId(null);
   };
   
   // Handle Friday A/B day selection
   const handleFridaySelection = (abDay) => {
-    const { start, end } = fridayModal.slotInfo;
+    const { start, end, dragEvent } = fridayModal.slotInfo;
     setFridayModal({ open: false, slotInfo: null });
-    handleSelectSlot({ start, end, abDay });
+    
+    // If this is a drag operation, update the existing event
+    if (dragEvent) {
+      // Check if this is a recurring event instance being dragged
+      if (dragEvent.id.includes('-recurring-')) {
+        const [originalEventId, , dayIndex] = dragEvent.id.split('-recurring-');
+        const newDayOfWeek = moment(start).day(); // 5 for Friday
+        const newDayIndex = newDayOfWeek - 1; // 4 for Friday
+        
+        // Find the original event
+        const originalEvent = events.find(ev => ev.id === originalEventId);
+        if (originalEvent) {
+          // Remove the old day from recurring days and add Friday
+          const updatedRecurringDays = originalEvent.recurringDays
+            .filter(d => d !== parseInt(dayIndex))
+            .concat([newDayIndex]);
+          
+          // Update the original event
+          setEvents(evts =>
+            evts.map(ev =>
+              ev.id === originalEventId
+                ? {
+                    ...ev,
+                    start,
+                    end,
+                    recurringDays: updatedRecurringDays,
+                    abDay
+                  }
+                : ev
+            )
+          );
+        }
+      } else {
+        // Regular event
+        setEvents(evts =>
+          evts.map(ev =>
+            ev.id === dragEvent.id
+              ? {
+                  ...ev,
+                  start,
+                  end,
+                  abDay
+                }
+              : ev
+          )
+        );
+      }
+        // Clear dragging state after Friday selection
+        setDraggingEventId(null);
+    } else {
+      // Regular slot selection for new event
+      handleSelectSlot({ start, end, abDay });
+    }
+  };
+
+  // Handle drag start to track which event is being dragged
+  const handleEventDragStart = ({ event }) => {
+    if (!event.availability) {
+      setDraggingEventId(event.id);
+    }
+  };
+
+  // Handle dragging events to new times
+  const handleEventDrop = ({ event, start, end }) => {
+    // Don't allow dragging availability blocks
+    if (event.availability) {
+      setDraggingEventId(null);
+      return;
+    }
+
+    // Validate time range (6:30 AM - 4:00 PM)
+    const startMoment = moment(start);
+    const endMoment = moment(end);
+    const minTime = moment(start).set({ hour: 6, minute: 30, second: 0 });
+    const maxTime = moment(start).set({ hour: 16, minute: 0, second: 0 });
+    
+    if (startMoment.isBefore(minTime) || endMoment.isAfter(maxTime)) {
+      alert('Classes can only be scheduled between 6:30 AM and 4:00 PM.');
+      setDraggingEventId(null);
+      return;
+    }
+
+    // Check if it's Friday and handle A/B day logic
+    const isFriday = moment(start).day() === 5;
+    const wasOriginallyFriday = moment(event.start).day() === 5;
+    
+    // If dragging to Friday and the event doesn't have an abDay, or dragging from non-Friday to Friday
+    if (isFriday && (!event.abDay || !wasOriginallyFriday)) {
+      // Show Friday selection modal for the drag operation - don't clear drag state yet
+      setFridayModal({ 
+        open: true, 
+        slotInfo: { start, end, dragEvent: event } 
+      });
+      return;
+    }
+
+    // Check if this is a recurring event instance being dragged
+    if (event.id.includes('-recurring-')) {
+      const [originalEventId, , dayIndex] = event.id.split('-recurring-');
+      const newDayOfWeek = moment(start).day(); // 1=Monday, 5=Friday
+      const newDayIndex = newDayOfWeek - 1; // Convert to 0=Monday, 4=Friday
+
+      // Find the original event
+      const originalEvent = events.find(ev => ev.id === originalEventId);
+      if (originalEvent) {
+        // Move the event to the new day only (replace recurringDays)
+        let updatedRecurringDays = (newDayIndex >= 0 && newDayIndex <= 4) ? [newDayIndex] : [];
+        setEvents(evts =>
+          evts.map(ev =>
+            ev.id === originalEventId
+              ? {
+                  ...ev,
+                  start,
+                  end,
+                  recurringDays: updatedRecurringDays,
+                  // Clear abDay if dragging away from Friday
+                  abDay: isFriday ? ev.abDay : ""
+                }
+              : ev
+          )
+        );
+      }
+    } else {
+      // Regular non-recurring event or original recurring event
+      setEvents(evts =>
+        evts.map(ev =>
+          ev.id === event.id
+            ? {
+                ...ev,
+                start,
+                end,
+                // Clear abDay if dragging away from Friday
+                abDay: isFriday ? ev.abDay : ""
+              }
+            : ev
+        )
+      );
+    }
+    // Always reset dragging state after drop to restore full color
+    setDraggingEventId(null);
   };
 
   // Handle modal input changes
@@ -333,15 +492,31 @@ function CreateSchedule() {
   // Overlap detection (returns array of event ids that overlap for same teacher or same room)
   const getOverlappingEventIds = () => {
     const ids = new Set();
-    for (let i = 0; i < events.length; i++) {
-      for (let j = i + 1; j < events.length; j++) {
-        const a = events[i], b = events[j];
+    const expandedEvents = getCalendarEvents();
+    
+    for (let i = 0; i < expandedEvents.length; i++) {
+      for (let j = i + 1; j < expandedEvents.length; j++) {
+        const a = expandedEvents[i], b = expandedEvents[j];
+        
+        // Skip if either is an availability block
+        if (a.availability || b.availability) continue;
+        
         // Only overlap if same teacher or same room
         const sameTeacher = a.teacher && b.teacher && a.teacher === b.teacher;
         const sameRoom = a.room && b.room && a.room === b.room;
-        if ((sameTeacher || sameRoom) && a.start < b.end && b.start < a.end) {
-          ids.add(a.id);
-          ids.add(b.id);
+        
+        // Check if they overlap in time
+        const aStart = moment(a.start);
+        const aEnd = moment(a.end);
+        const bStart = moment(b.start);
+        const bEnd = moment(b.end);
+        
+        if ((sameTeacher || sameRoom) && aStart.isBefore(bEnd) && bStart.isBefore(aEnd)) {
+          // Get the original event IDs for highlighting
+          const aId = a.id.includes('-recurring-') ? a.id.split('-recurring-')[0] : a.id;
+          const bId = b.id.includes('-recurring-') ? b.id.split('-recurring-')[0] : b.id;
+          ids.add(aId);
+          ids.add(bId);
         }
       }
     }
@@ -353,22 +528,42 @@ function CreateSchedule() {
     const expanded = [];
     for (const ev of events) {
       if (Array.isArray(ev.recurringDays) && ev.recurringDays.length > 0 && ev.start && ev.end) {
-        // Find the week of the original event
+        // For recurring events, create instances on each selected day
         const baseStart = moment(ev.start);
         const baseEnd = moment(ev.end);
-        // The day of week for the original event (0=Sunday, 1=Monday, ...)
-        const origDay = baseStart.day();
+        const duration = baseEnd.diff(baseStart, 'minutes');
+        
         for (const recurDay of ev.recurringDays) {
           // Map 0=Monday, ... 4=Friday to moment's 1=Monday, ... 5=Friday
           const momentDay = recurDay + 1;
-          // Calculate the diff from original event's day to recurring day
-          const diff = momentDay - origDay;
-          const newStart = baseStart.clone().add(diff, 'days');
-          const newEnd = baseEnd.clone().add(diff, 'days');
-          expanded.push({ ...ev, start: newStart.toDate(), end: newEnd.toDate(), _recurringInstance: recurDay });
+          
+          // Create new event for this day of the week
+          const weekStart = moment().startOf('week');
+          const dayStart = weekStart.clone().day(momentDay);
+          const newStart = dayStart.set({
+            hour: baseStart.hour(),
+            minute: baseStart.minute(),
+            second: 0
+          });
+          const newEnd = newStart.clone().add(duration, 'minutes');
+          
+          const instanceId = `${ev.id}-recurring-${recurDay}`;
+          
+          expanded.push({ 
+            ...ev, 
+            start: newStart.toDate(), 
+            end: newEnd.toDate(), 
+            _recurringInstance: recurDay,
+            id: instanceId,
+            isDragging: draggingEventId === instanceId
+          });
         }
       } else {
-        expanded.push(ev);
+        // Non-recurring event - show as is with drag state
+        expanded.push({
+          ...ev,
+          isDragging: draggingEventId === ev.id
+        });
       }
     }
     return expanded;
@@ -408,6 +603,37 @@ function CreateSchedule() {
         .rbc-day-bg.rbc-today {
           background-color: transparent !important;
         }
+        .rbc-event-availability {
+          cursor: default !important;
+        }
+        .rbc-event:not(.rbc-event-availability) {
+          cursor: move !important;
+        }
+        .rbc-drag-preview {
+          opacity: 0.9 !important;
+          background-color: #26bedd !important;
+          border: 2px solid #1abc9c !important;
+          box-shadow: 0 4px 12px rgba(26, 188, 156, 0.4) !important;
+          border-radius: 8px !important;
+          z-index: 1000 !important;
+          pointer-events: none !important;
+        }
+        .rbc-addons-dnd-dragging {
+          opacity: 0.6 !important;
+        }
+        .rbc-addons-dnd-drag-source {
+          opacity: 0.6 !important;
+        }
+        .rbc-addons-dnd-over {
+          background-color: rgba(26, 188, 156, 0.1) !important;
+        }
+        .rbc-event {
+          cursor: move !important;
+        }
+        .rbc-event.rbc-event-availability {
+          cursor: default !important;
+          pointer-events: none !important;
+        }
       `}</style>
       <Sidebar />
       
@@ -433,9 +659,14 @@ function CreateSchedule() {
             maxWidth: '400px',
             textAlign: 'center'
           }}>
-            <h3 style={{ marginBottom: '16px', color: '#333' }}>Friday Class Selection</h3>
+            <h3 style={{ marginBottom: '16px', color: '#333' }}>
+              {fridayModal.slotInfo?.dragEvent ? 'Moving Class to Friday' : 'Friday Class Selection'}
+            </h3>
             <p style={{ marginBottom: '24px', color: '#666' }}>
-              Is this an A day Friday or B day Friday?
+              {fridayModal.slotInfo?.dragEvent 
+                ? 'You\'re moving a class to Friday. Is this an A day Friday or B day Friday?'
+                : 'Is this an A day Friday or B day Friday?'
+              }
             </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button
@@ -562,7 +793,7 @@ function CreateSchedule() {
             )}
           </div>
           <div style={{ background: "#ffffff", borderRadius: 8, padding: 0, maxWidth: 900, minWidth: 0, width: "100%", boxShadow: "0 2px 12px rgba(0,0,0,0.08)", border: "1px solid #e9ecef" }}>
-            <Calendar
+            <DragAndDropCalendar
               localizer={localizer}
               events={[
                 ...getCalendarEvents(),
@@ -582,7 +813,13 @@ function CreateSchedule() {
                 overflow: "hidden"
               }}
               selectable
+              resizable
               onSelectSlot={handleSelectSlot}
+              onEventDrop={handleEventDrop}
+              onEventResize={handleEventDrop}
+              dragFromOutsideItem={null}
+              onDragStart={handleEventDragStart}
+              onDragEnd={handleDragEnd}
               views={{ work_week: true }}
               defaultView="work_week"
               toolbar={false}
@@ -611,21 +848,32 @@ function CreateSchedule() {
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
                       width: "100%",
-                      height: "100%"
-                    }
+                      height: "100%",
+                      pointerEvents: "none" // Disable dragging for availability blocks
+                    },
+                    className: 'rbc-event-availability' // Add class to identify availability blocks
                   };
                 }
-                const isOverlapping = getOverlappingEventIds().includes(event.id);
+                
+                // Check for overlaps using original event ID
+                const originalId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
+                const overlappingIds = getOverlappingEventIds();
+                const isOverlapping = overlappingIds.includes(originalId);
+                
+                // Check if this event is being dragged
+                const isDragging = event.isDragging;
+                
                 return {
                   style: {
-                    backgroundColor: isOverlapping ? "#ffeaea" : "#26bedd",
-                    color: isOverlapping ? "#c0392b" : "white",
+                    backgroundColor: isOverlapping ? "#fff5f5" : "#26bedd",
+                    color: isOverlapping ? "#e53e3e" : "white",
                     borderRadius: 8,
                     fontWeight: 600,
-                    border: isOverlapping ? "2px solid #e74c3c" : "none",
-                    boxShadow: isOverlapping ? "0 0 8px #e74c3c" : "0 0 4px #26bedd",
-                    cursor: deleteMode && !event.availability ? "pointer" : "default",
-                    transition: "box-shadow 0.2s, background 0.2s"
+                    border: isOverlapping ? "2px solid #fc8181" : "1px solid #26bedd",
+                    boxShadow: isOverlapping ? "0 2px 8px rgba(229, 62, 62, 0.3)" : "0 2px 4px rgba(38, 190, 221, 0.2)",
+                    cursor: deleteMode && !event.availability ? "pointer" : (event.availability ? "default" : "move"),
+                    transition: "all 0.2s ease",
+                    opacity: isDragging ? 0.6 : 1
                   }
                 };
               }}
