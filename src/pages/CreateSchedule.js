@@ -7,6 +7,58 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 // Add grades array at the top (it was missing)
 const grades = ["K", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "Not here?"];
 
+// Helper function to determine if a date is an A day or B day
+const getABDay = (date) => {
+  const dayOfYear = moment(date).dayOfYear();
+  return dayOfYear % 2 === 0 ? 'B' : 'A';
+};
+
+// Custom header component to show A/B day indicators
+const CustomHeader = ({ label, date }) => {
+  const abDay = getABDay(date);
+  const dayName = moment(date).format('dddd');
+  const isFriday = moment(date).day() === 5;
+  
+  return (
+    <div style={{ 
+      textAlign: 'center', 
+      padding: '12px 8px 8px 8px',
+      height: '60px',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      position: 'relative',
+      zIndex: 1
+    }}>
+      <div style={{ 
+        fontSize: '16px', 
+        fontWeight: 'bold', 
+        marginBottom: '8px',
+        color: '#2c3e50',
+        textShadow: '0 1px 2px rgba(255,255,255,0.8)'
+      }}>
+        {dayName}
+      </div>
+      <div style={{
+        fontSize: '11px',
+        padding: '4px 10px',
+        backgroundColor: isFriday ? '#9b59b6' : (abDay === 'A' ? '#3498db' : '#e74c3c'),
+        color: 'white',
+        borderRadius: '12px',
+        fontWeight: 'bold',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+        border: '1px solid rgba(255,255,255,0.2)',
+        minWidth: '60px',
+        textAlign: 'center'
+      }}>
+        {isFriday ? 'A/B Day' : `${abDay} Day`}
+      </div>
+    </div>
+  );
+};
+
 function CreateSchedule() {
   const localizer = momentLocalizer(moment);
 
@@ -24,7 +76,8 @@ function CreateSchedule() {
     room: "",
     startTime: "",
     endTime: "",
-    recurringDays: [] // Array of selected days (0=Monday, ... 4=Friday)
+    recurringDays: [], // Array of selected days (0=Monday, ... 4=Friday)
+    abDay: "" // For Friday classes
   });
   const [eventDetailsModal, setEventDetailsModal] = useState({ open: false, event: null });
   const [selectedTeachers, setSelectedTeachers] = useState([]);
@@ -34,6 +87,8 @@ function CreateSchedule() {
   const [editingEventId, setEditingEventId] = useState(null);
   // Add searchTerm state for the search bar
   const [searchTerm, setSearchTerm] = useState("");
+  // Add Friday modal state
+  const [fridayModal, setFridayModal] = useState({ open: false, slotInfo: null });
 
   // Fetch teachers and availabilities on mount
   useEffect(() => {
@@ -76,11 +131,43 @@ function CreateSchedule() {
   });
 
   // When user selects a slot on the calendar, allow adding events even if overlapping with a teacher availability block
-  const handleSelectSlot = ({ start, end }) => {
+  const handleSelectSlot = ({ start, end, abDay }) => {
+    // Validate time range (6:30 AM - 4:00 PM)
+    const startMoment = moment(start);
+    const endMoment = moment(end);
+    const minTime = moment(start).set({ hour: 6, minute: 30, second: 0 });
+    const maxTime = moment(start).set({ hour: 16, minute: 0, second: 0 });
+    
+    if (startMoment.isBefore(minTime) || endMoment.isAfter(maxTime)) {
+      alert('Classes can only be scheduled between 6:30 AM and 4:00 PM.');
+      return;
+    }
+    
+    // Check if it's Friday and no abDay is specified (direct calendar click)
+    const isFriday = moment(start).day() === 5;
+    
+    if (isFriday && !abDay) {
+      // Show Friday selection modal
+      setFridayModal({ open: true, slotInfo: { start, end } });
+      return;
+    }
+    
     // Removed restriction: allow adding events over availability slots
     setSelectedSlot({ start, end });
-    setDetails(d => ({ ...d, startTime: moment(start).format("h:mm A"), endTime: moment(end).format("h:mm A") }));
+    setDetails(d => ({ 
+      ...d, 
+      startTime: moment(start).format("h:mm A"), 
+      endTime: moment(end).format("h:mm A"),
+      abDay: abDay || (isFriday ? "" : "")
+    }));
     setModalOpen(true);
+  };
+  
+  // Handle Friday A/B day selection
+  const handleFridaySelection = (abDay) => {
+    const { start, end } = fridayModal.slotInfo;
+    setFridayModal({ open: false, slotInfo: null });
+    handleSelectSlot({ start, end, abDay });
   };
 
   // Handle modal input changes
@@ -92,10 +179,70 @@ function CreateSchedule() {
   // Helper to determine if custom grade input should show
   const showCustomGrade = details.grade === "Not here?";
 
+  // Handle time change
+  const handleTimeChange = (field, value) => {
+    const [time, period] = value.split(' ');
+    const [hours, minutes] = time.split(':');
+    let hour24 = parseInt(hours);
+    if (period === 'PM' && hour24 !== 12) hour24 += 12;
+    if (period === 'AM' && hour24 === 12) hour24 = 0;
+    
+    const newDate = moment(selectedSlot.start).set({ hour: hour24, minute: parseInt(minutes), second: 0 }).toDate();
+    
+    if (field === 'startTime') {
+      const duration = moment(selectedSlot.end).diff(moment(selectedSlot.start), 'minutes');
+      const newEnd = moment(newDate).add(duration, 'minutes').toDate();
+      setSelectedSlot({ start: newDate, end: newEnd });
+    } else {
+      setSelectedSlot({ ...selectedSlot, end: newDate });
+    }
+    
+    setDetails(d => ({ ...d, [field]: value }));
+  };
+  
+  // Generate time options for dropdown (6:30 AM - 4:00 PM in 5-minute intervals)
+  const generateTimeOptions = () => {
+    const times = [];
+    const start = moment().set({ hour: 6, minute: 30, second: 0 });
+    const end = moment().set({ hour: 16, minute: 0, second: 0 });
+    
+    while (start.isSameOrBefore(end)) {
+      times.push(start.format('h:mm A'));
+      start.add(5, 'minutes');
+    }
+    return times;
+  };
+
   // Save event from modal (add or edit)
   const handleSaveEvent = (e) => {
     e.preventDefault();
-    if (!details.teacherId || !details.grade || !details.subject || !details.room || (showCustomGrade && !details.customGrade)) return;
+    
+    // Validate required fields
+    if (!details.teacherId || !details.grade || !details.subject || !details.room || (showCustomGrade && !details.customGrade)) {
+      alert('Please fill in all required fields.');
+      return;
+    }
+    
+    // Validate Friday A/B day selection
+    if (moment(selectedSlot.start).day() === 5 && !details.abDay) {
+      alert('Please select whether this is an A Day Friday or B Day Friday.');
+      return;
+    }
+    
+    // Validate time range
+    const minTime = moment(selectedSlot.start).set({ hour: 6, minute: 30, second: 0 });
+    const maxTime = moment(selectedSlot.start).set({ hour: 16, minute: 0, second: 0 });
+    
+    if (moment(selectedSlot.start).isBefore(minTime) || moment(selectedSlot.end).isAfter(maxTime)) {
+      alert('Classes can only be scheduled between 6:30 AM and 4:00 PM.');
+      return;
+    }
+    
+    if (moment(selectedSlot.end).isSameOrBefore(selectedSlot.start)) {
+      alert('End time must be after start time.');
+      return;
+    }
+    
     if (editMode && editingEventId) {
       setEvents(evts =>
         evts.map(ev =>
@@ -112,7 +259,8 @@ function CreateSchedule() {
                 grade: showCustomGrade ? details.customGrade : details.grade,
                 subject: details.subject,
                 room: details.room,
-                recurringDays: details.recurringDays || []
+                recurringDays: details.recurringDays || [],
+                abDay: details.abDay || ""
               }
             : ev
         )
@@ -132,13 +280,14 @@ function CreateSchedule() {
           grade: showCustomGrade ? details.customGrade : details.grade,
           subject: details.subject,
           room: details.room,
-          recurringDays: details.recurringDays || []
+          recurringDays: details.recurringDays || [],
+          abDay: details.abDay || ""
         }
       ]);
     }
     setModalOpen(false);
     setSelectedSlot(null);
-    setDetails({ teacherId: "", grade: "", customGrade: "", subject: "", room: "", recurringDays: [] });
+    setDetails({ teacherId: "", grade: "", customGrade: "", subject: "", room: "", recurringDays: [], abDay: "" });
     setEditMode(false);
     setEditingEventId(null);
   };
@@ -160,7 +309,9 @@ function CreateSchedule() {
       subject: event.subject,
       room: event.room,
       startTime: moment(event.start).format("h:mm A"),
-      endTime: moment(event.end).format("h:mm A")
+      endTime: moment(event.end).format("h:mm A"),
+      recurringDays: event.recurringDays || [],
+      abDay: event.abDay || ""
     });
     setModalOpen(true);
     setEventDetailsModal({ open: false, event: null });
@@ -225,7 +376,123 @@ function CreateSchedule() {
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+      <style>{`
+        .rbc-header {
+          background: transparent !important;
+          border: none !important;
+          padding: 0 !important;
+          overflow: visible !important;
+          height: 60px !important;
+        }
+        .rbc-time-view .rbc-header {
+          border-bottom: none !important;
+        }
+        .rbc-time-view .rbc-header > * {
+          position: relative !important;
+          z-index: 1 !important;
+        }
+        .rbc-time-view {
+          border: none !important;
+          border-radius: 8px !important;
+          overflow: hidden !important;
+        }
+        .rbc-time-content {
+          border-top: 1px solid #e9ecef !important;
+        }
+        .rbc-today {
+          background-color: transparent !important;
+        }
+        .rbc-time-column .rbc-today {
+          background-color: transparent !important;
+        }
+        .rbc-day-bg.rbc-today {
+          background-color: transparent !important;
+        }
+      `}</style>
       <Sidebar />
+      
+      {/* Friday A/B Day Selection Modal */}
+      {fridayModal.open && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '24px',
+            borderRadius: '12px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+            maxWidth: '400px',
+            textAlign: 'center'
+          }}>
+            <h3 style={{ marginBottom: '16px', color: '#333' }}>Friday Class Selection</h3>
+            <p style={{ marginBottom: '24px', color: '#666' }}>
+              Is this an A day Friday or B day Friday?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={() => handleFridaySelection('A')}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#3498db',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={e => e.target.style.backgroundColor = '#2980b9'}
+                onMouseLeave={e => e.target.style.backgroundColor = '#3498db'}
+              >
+                A Day Friday
+              </button>
+              <button
+                onClick={() => handleFridaySelection('B')}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#e74c3c',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={e => e.target.style.backgroundColor = '#c0392b'}
+                onMouseLeave={e => e.target.style.backgroundColor = '#e74c3c'}
+              >
+                B Day Friday
+              </button>
+            </div>
+            <button
+              onClick={() => setFridayModal({ open: false, slotInfo: null })}
+              style={{
+                marginTop: '16px',
+                padding: '8px 16px',
+                backgroundColor: 'transparent',
+                color: '#666',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       <div style={{ flex: 1, backgroundColor: "white", padding: "40px", marginLeft: 320, overflowY: "auto", display: "flex" }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 32, gap: 16 }}>
@@ -294,7 +561,7 @@ function CreateSchedule() {
               </div>
             )}
           </div>
-          <div style={{ background: "#f8f9fa", borderRadius: 16, padding: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.07)", maxWidth: 900, minWidth: 0, width: "100%" }}>
+          <div style={{ background: "#ffffff", borderRadius: 8, padding: 0, maxWidth: 900, minWidth: 0, width: "100%", boxShadow: "0 2px 12px rgba(0,0,0,0.08)", border: "1px solid #e9ecef" }}>
             <Calendar
               localizer={localizer}
               events={[
@@ -303,16 +570,28 @@ function CreateSchedule() {
               ]}
               startAccessor="start"
               endAccessor="end"
-              style={{ height: 700, width: "100%", minWidth: 0, maxWidth: 700, margin: "0 auto", position: "relative" }}
+              style={{ 
+                height: 700, 
+                width: "100%", 
+                minWidth: 0, 
+                maxWidth: 700, 
+                margin: "0 auto", 
+                position: "relative",
+                backgroundColor: "#ffffff",
+                borderRadius: "8px",
+                overflow: "hidden"
+              }}
               selectable
               onSelectSlot={handleSelectSlot}
               views={{ work_week: true }}
               defaultView="work_week"
               toolbar={false}
               popup={false}
-              min={moment().startOf('day').set({ hour: 7, minute: 0 }).toDate()}
+              min={moment().startOf('day').set({ hour: 6, minute: 30 }).toDate()}
               max={moment().startOf('day').set({ hour: 16, minute: 0 }).toDate()}
               daysOfWeek={[1,2,3,4,5]}
+              step={5}
+              timeslots={6}
               eventPropGetter={event => {
                 if (event.availability) {
                   return {
@@ -351,6 +630,7 @@ function CreateSchedule() {
                 };
               }}
               components={{
+                header: CustomHeader,
                 event: ({ event }) => {
                   const isSelected = selectedToDelete.includes(event.id);
                   if (event.availability) {
@@ -538,7 +818,7 @@ function CreateSchedule() {
       fontWeight: 500, 
       fontSize: 16, 
       color: "#444", 
-      marginTop: 135, 
+      marginTop: 105, 
       background: "#eaf6fb", 
       borderRadius: 8, 
       padding: "12px 18px",
@@ -589,9 +869,35 @@ function CreateSchedule() {
         }}>
           <form onSubmit={handleSaveEvent} style={{ background: "#fff", padding: "24px 16px 24px 16px", borderRadius: 16, minWidth: 300, maxWidth: 340, boxShadow: "0 8px 32px rgba(38,190,221,0.18)", width: 340, boxSizing: "border-box" }}>
             <h2 style={{ marginBottom: 10, fontWeight: 700, fontSize: 22 }}>{editMode ? "Edit Schedule Details" : "Add Schedule Details"}</h2>
-            <div style={{ marginBottom: 10, fontWeight: 600, fontSize: 15, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span>Start Time: {details.startTime || (selectedSlot && moment(selectedSlot.start).format("h:mm A"))}</span>
-              <span>End Time: {details.endTime || (selectedSlot && moment(selectedSlot.end).format("h:mm A"))}</span>
+            
+            {/* Time Selection */}
+            <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Start Time</label>
+                <select 
+                  value={details.startTime || (selectedSlot && moment(selectedSlot.start).format("h:mm A"))}
+                  onChange={e => handleTimeChange('startTime', e.target.value)}
+                  required 
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", fontSize: 15, boxSizing: "border-box" }}
+                >
+                  {generateTimeOptions().map(time => (
+                    <option key={time} value={time}>{time}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>End Time</label>
+                <select 
+                  value={details.endTime || (selectedSlot && moment(selectedSlot.end).format("h:mm A"))}
+                  onChange={e => handleTimeChange('endTime', e.target.value)}
+                  required 
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", fontSize: 15, boxSizing: "border-box" }}
+                >
+                  {generateTimeOptions().map(time => (
+                    <option key={time} value={time}>{time}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Teacher</label>
             <select name="teacherId" value={details.teacherId} onChange={handleDetailChange} required style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 12, fontSize: 15, boxSizing: "border-box" }}>
@@ -616,6 +922,17 @@ function CreateSchedule() {
                 placeholder="Enter custom grade..."
                 style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 12, fontSize: 15, boxSizing: "border-box" }}
               />
+            )}
+            {/* Show A/B day field for Friday classes */}
+            {selectedSlot && moment(selectedSlot.start).day() === 5 && (
+              <>
+                <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Friday Type</label>
+                <select name="abDay" value={details.abDay} onChange={handleDetailChange} required style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 12, fontSize: 15, boxSizing: "border-box" }}>
+                  <option value="">Select Friday type...</option>
+                  <option value="A">A Day Friday</option>
+                  <option value="B">B Day Friday</option>
+                </select>
+              </>
             )}
             {/* Recurring days checkboxes */}
             <div style={{ marginBottom: 12 }}>
