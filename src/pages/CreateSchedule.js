@@ -190,6 +190,7 @@ const getTeacherColor = (teacherId) => {
       startTime: moment(start).format("h:mm A"), 
       endTime: moment(end).format("h:mm A"),
       abDay: abDay || (isFriday ? "" : ""),
+      dayType: abDay || (isFriday ? "" : ""), // Also set dayType for the form
       recurringDays
     }));
     setModalOpen(true);
@@ -216,12 +217,10 @@ const getTeacherColor = (teacherId) => {
         // Find the original event
         const originalEvent = events.find(ev => ev.id === originalEventId);
         if (originalEvent) {
-          // Remove the old day from recurring days and add Friday
-          const updatedRecurringDays = originalEvent.recurringDays
-            .filter(d => d !== parseInt(dayIndex))
-            .concat([newDayIndex]);
+          // Replace recurring days with only Friday (no duplication)
+          const updatedRecurringDays = [newDayIndex];
           
-          // Update the original event
+          // Update the original event with new time, day, and abDay
           setEvents(evts =>
             evts.map(ev =>
               ev.id === originalEventId
@@ -237,7 +236,8 @@ const getTeacherColor = (teacherId) => {
           );
         }
       } else {
-        // Regular event
+        // Regular event - update it to Friday with the new time and abDay
+        const newDayIndex = 4; // Friday = 4 (0=Monday, 4=Friday)
         setEvents(evts =>
           evts.map(ev =>
             ev.id === dragEvent.id
@@ -245,17 +245,29 @@ const getTeacherColor = (teacherId) => {
                   ...ev,
                   start,
                   end,
+                  recurringDays: [newDayIndex], // Set to Friday only
                   abDay
                 }
               : ev
           )
         );
       }
-        // Clear dragging state after Friday selection
-        setDraggingEventId(null);
+      // Clear dragging state after Friday selection
+      setDraggingEventId(null);
     } else {
       // Regular slot selection for new event
-      handleSelectSlot({ start, end, abDay });
+      const dayIdx = moment(start).day() - 1; // 0=Monday, ... 4=Friday
+      const recurringDays = (dayIdx >= 0 && dayIdx <= 4) ? [dayIdx] : [];
+      setSelectedSlot({ start, end });
+      setDetails(d => ({ 
+        ...d, 
+        startTime: moment(start).format("h:mm A"), 
+        endTime: moment(end).format("h:mm A"),
+        abDay: abDay,
+        dayType: abDay, // Also set dayType for the form
+        recurringDays
+      }));
+      setModalOpen(true);
     }
   };
 
@@ -316,7 +328,7 @@ const getTeacherColor = (teacherId) => {
       // Find the original event
       const originalEvent = events.find(ev => ev.id === originalEventId);
       if (originalEvent) {
-        // Move the event to the new day only (replace recurringDays)
+        // Replace recurringDays with only the new day (no duplication)
         let updatedRecurringDays = (newDayIndex >= 0 && newDayIndex <= 4) ? [newDayIndex] : [];
         setEvents(evts =>
           evts.map(ev =>
@@ -334,6 +346,7 @@ const getTeacherColor = (teacherId) => {
       }
     } else {
       // Regular non-recurring event or original recurring event
+      const newDayIndex = moment(start).day() - 1; // Convert to 0=Monday, 4=Friday
       setEvents(evts =>
         evts.map(ev =>
           ev.id === event.id
@@ -341,6 +354,8 @@ const getTeacherColor = (teacherId) => {
                 ...ev,
                 start,
                 end,
+                // Replace recurring days with only the new day (no duplication)
+                recurringDays: (newDayIndex >= 0 && newDayIndex <= 4) ? [newDayIndex] : [],
                 // Clear abDay if dragging away from Friday
                 abDay: isFriday ? ev.abDay : ""
               }
@@ -620,7 +635,7 @@ const getTeacherColor = (teacherId) => {
     }
     setModalOpen(false);
     setSelectedSlot(null);
-    setDetails({ teacherId: "", grade: "", customGrade: "", subject: "", room: "", recurringDays: [], abDay: "" });
+    setDetails({ teacherId: "", grade: "", customGrade: "", subject: "", room: "", startTime: "", endTime: "", recurringDays: [], abDay: "", dayType: "" });
     setEditMode(false);
     setEditingEventId(null);
   };
@@ -672,7 +687,7 @@ const getTeacherColor = (teacherId) => {
                   }
                   setModalOpen(false);
                   setSelectedSlot(null);
-                  setDetails({ teacherId: "", grade: "", customGrade: "", subject: "", room: "", recurringDays: [], abDay: "" });
+                  setDetails({ teacherId: "", grade: "", customGrade: "", subject: "", room: "", startTime: "", endTime: "", recurringDays: [], abDay: "", dayType: "" });
                   setEditMode(false);
                   setEditingEventId(null);
                   setConflictModal({ open: false, messages: [], pendingEvent: null });
@@ -714,7 +729,8 @@ const getTeacherColor = (teacherId) => {
       startTime: moment(event.start).format("h:mm A"),
       endTime: moment(event.end).format("h:mm A"),
       recurringDays: event.recurringDays || [],
-      abDay: event.abDay || ""
+      abDay: event.abDay || "",
+      dayType: event.abDay || "" // Also set dayType for the form
     });
     setModalOpen(true);
     setEventDetailsModal({ open: false, event: null });
@@ -1443,8 +1459,8 @@ const getTeacherColor = (teacherId) => {
       Friday Type
     </label>
     <select
-      name="dayType"
-      value={details.dayType || ""}
+      name="abDay"
+      value={details.abDay || ""}
       onChange={handleDetailChange}
       required
       style={{
@@ -1500,7 +1516,7 @@ const getTeacherColor = (teacherId) => {
               style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 12, fontSize: 15, boxSizing: "border-box" }}
             />
             <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-              <button type="button" onClick={() => { setModalOpen(false); setEditMode(false); setEditingEventId(null); }} style={{ background: "#95a5a6", color: "white", fontWeight: 700, fontSize: 15, border: "none", borderRadius: 8, padding: "8px 18px", cursor: "pointer" }}>Cancel</button>
+              <button type="button" onClick={() => { setModalOpen(false); setEditMode(false); setEditingEventId(null); setDetails({ teacherId: "", grade: "", customGrade: "", subject: "", room: "", startTime: "", endTime: "", recurringDays: [], abDay: "", dayType: "" }); }} style={{ background: "#95a5a6", color: "white", fontWeight: 700, fontSize: 15, border: "none", borderRadius: 8, padding: "8px 18px", cursor: "pointer" }}>Cancel</button>
               <button type="submit" style={{ background: "#26bedd", color: "white", fontWeight: 700, fontSize: 15, border: "none", borderRadius: 8, padding: "8px 18px", cursor: "pointer" }}>{editMode ? "Save Changes" : "Save"}</button>
             </div>
           </form>
