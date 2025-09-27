@@ -98,6 +98,8 @@ function CreateSchedule() {
   const [fridayModal, setFridayModal] = useState({ open: false, slotInfo: null });
   // Add dragging state to track which event is being dragged
   const [draggingEventId, setDraggingEventId] = useState(null);
+  // Add teacher dropdown state
+  const [teacherDropdownOpen, setTeacherDropdownOpen] = useState(false);
 
   // Fetch teachers and availabilities on mount
   useEffect(() => {
@@ -1836,12 +1838,144 @@ const getTeacherColor = (teacherId) => {
               </div>
             </div>
             <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Teacher</label>
-            <select name="teacherId" value={details.teacherId} onChange={handleDetailChange} required style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: 12, fontSize: 15, boxSizing: "border-box" }}>
-              <option value="">Select a teacher...</option>
-              {teachers.map(t => (
-                <option key={t.id} value={t.id}>{t.first_name} {t.last_name}</option>
-              ))}
-            </select>
+            <div style={{ position: "relative", marginBottom: 12 }}>
+              {/* Custom dropdown button */}
+              <div 
+                onClick={() => setTeacherDropdownOpen(!teacherDropdownOpen)}
+                style={{ 
+                  width: "100%", 
+                  padding: "8px 12px", 
+                  paddingLeft: details.teacherId ? "32px" : "12px",
+                  borderRadius: 8, 
+                  border: "2px solid #e1e8ed", 
+                  fontSize: 15, 
+                  boxSizing: "border-box",
+                  cursor: "pointer",
+                  backgroundColor: "white",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  minHeight: "40px"
+                }}
+              >
+                <span style={{ color: details.teacherId ? "#000" : "#999" }}>
+                  {details.teacherId 
+                    ? (() => {
+                        const teacher = teachers.find(t => t.id.toString() === details.teacherId);
+                        return teacher ? `${teacher.first_name} ${teacher.last_name}` : "Select a teacher...";
+                      })()
+                    : "Select a teacher..."
+                  }
+                </span>
+                <span style={{ fontSize: "12px", color: "#666" }}>
+                  {teacherDropdownOpen ? "▲" : "▼"}
+                </span>
+              </div>
+              
+              {/* Color indicator for selected teacher */}
+              {details.teacherId && (
+                <div 
+                  style={{
+                    position: "absolute",
+                    left: "8px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: "16px",
+                    height: "16px",
+                    borderRadius: "4px",
+                    backgroundColor: getTeacherColor(parseInt(details.teacherId)),
+                    border: "1px solid #ccc",
+                    pointerEvents: "none",
+                    zIndex: 1
+                  }}
+                />
+              )}
+              
+              {/* Dropdown options */}
+              {teacherDropdownOpen && (
+                <div style={{ 
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  maxHeight: "200px", 
+                  overflowY: "auto",
+                  border: "2px solid #e1e8ed", 
+                  borderRadius: 8,
+                  backgroundColor: "white",
+                  zIndex: 1000,
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                }}>
+                  <div 
+                    onClick={() => {
+                      setDetails(d => ({ ...d, teacherId: "" }));
+                      setTeacherDropdownOpen(false);
+                    }}
+                    style={{
+                      padding: "8px 12px",
+                      cursor: "pointer",
+                      borderBottom: "1px solid #f0f0f0",
+                      backgroundColor: !details.teacherId ? "#f8f9fa" : "white",
+                      fontSize: 15
+                    }}
+                    onMouseEnter={e => {
+                      if (details.teacherId) {
+                        e.target.style.backgroundColor = "#f5f5f5";
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (details.teacherId) {
+                        e.target.style.backgroundColor = "white";
+                      }
+                    }}
+                  >
+                    Select a teacher...
+                  </div>
+                  {teachers.map(t => (
+                    <div 
+                      key={t.id}
+                      onClick={() => {
+                        setDetails(d => ({ ...d, teacherId: t.id.toString() }));
+                        setTeacherDropdownOpen(false);
+                      }}
+                      style={{
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        borderBottom: "1px solid #f0f0f0",
+                        backgroundColor: details.teacherId === t.id.toString() ? "#e3f2fd" : "white",
+                        fontSize: 15,
+                        transition: "background-color 0.2s"
+                      }}
+                      onMouseEnter={e => {
+                        if (details.teacherId !== t.id.toString()) {
+                          e.target.style.backgroundColor = "#f5f5f5";
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (details.teacherId !== t.id.toString()) {
+                          e.target.style.backgroundColor = "white";
+                        }
+                      }}
+                    >
+                      <div 
+                        style={{
+                          width: "16px",
+                          height: "16px",
+                          borderRadius: "4px",
+                          backgroundColor: getTeacherColor(t.id),
+                          border: "1px solid #ccc",
+                          flexShrink: 0
+                        }}
+                      />
+                      <span>{t.first_name} {t.last_name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Grade</label>
             <select name="grade" value={details.grade} onChange={handleDetailChange} required style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", marginBottom: showCustomGrade ? 6 : 12, fontSize: 15, boxSizing: "border-box" }}>
               <option value="">Select grade...</option>
