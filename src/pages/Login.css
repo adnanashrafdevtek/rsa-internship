@@ -1,0 +1,75 @@
+/* Login.css */
+.login-container {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: Arial, sans-serif;
+  background-color: #000000; /* only login page background */
+  margin: 0;
+}
+
+.login-box {
+  background-color: #1e1e2f;
+  padding: 40px;
+  border-radius: 10px;
+  text-align: center;
+  border: 2px solid #8c82ff;
+  width: 350px;
+}
+
+.login-icon img {
+  width: 60px;
+  margin-bottom: 20px;
+}
+
+.login-box h2 {
+  color: #fff;
+  margin-bottom: 10px;
+}
+
+.login-box p {
+  color: #aaa;
+  margin-bottom: 20px;
+}
+
+.login-box input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 15px;
+  border: none;
+  border-radius: 5px;
+  background-color: #2a2a3c;
+  color: #fff;
+}
+
+.login-box input::placeholder {
+  color: #777;
+}
+
+.login-box button {
+  width: 100%;
+  padding: 12px;
+  background-color: #7b3fff;
+  border: none;
+  border-radius: 5px;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.login-box button:hover {
+  background-color: #6a33e0;
+}
+
+.login-box .forgot-password {
+  margin-top: 15px;
+  color: #aaa;
+  cursor: pointer;
+}
+
+.login-box .error-message {
+  color: red;
+  font-weight: bold;
+  margin-bottom: 15px;
+}

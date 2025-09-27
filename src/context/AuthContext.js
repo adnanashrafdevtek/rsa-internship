@@ -3,22 +3,21 @@ import React, { createContext, useContext, useState } from "react";
 
 const AuthContext = createContext();
 
-const dummyUsers = [
-  { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0 },
-  { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1 },
-  { email: "student@example.com", password: "student123", role: "student", first_name: "Student", last_name: "User", id: 2 },
-    { email: "HARUN.person@example.com", password: "uuuuuuu", role: "student", first_name: "HARUN", last_name: "person", id: 5 },
-];
-
 export const AuthProvider = ({ children }) => {
+  const [users, setUsers] = useState([
+    { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0, active: true },
+    { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1, active: true },
+    { email: "student@example.com", password: "student123", role: "student", first_name: "Student", last_name: "User", id: 2, active: true },
+    { email: "HARUN.person@example.com", password: "uuuuuuu", role: "student", first_name: "HARUN", last_name: "person", id: 5, active: true },
+  ]);
+
   const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem("user");
     return storedUser ? JSON.parse(storedUser) : null;
   });
 
   const login = async (email, password) => {
-    // First try dummy users
-    const foundUser = dummyUsers.find(
+    const foundUser = users.find(
       (u) => u.email === email && u.password === password
     );
     if (foundUser) {
@@ -27,7 +26,6 @@ export const AuthProvider = ({ children }) => {
       return true;
     }
 
-    // If not found, try backend login
     try {
       const response = await fetch("http://localhost:3000/login", {
         method: "POST",
@@ -58,8 +56,33 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("user");
   };
 
+  const changeUserPassword = (username, newPassword) => {
+    setUsers((prevUsers) =>
+      prevUsers.map((u) =>
+        u.email === username ? { ...u, password: newPassword } : u
+      )
+    );
+  };
+
+  const toggleUserActiveStatus = (username) => {
+    setUsers((prevUsers) =>
+      prevUsers.map((u) =>
+        u.email === username ? { ...u, active: !u.active } : u
+      )
+    );
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        users,
+        login,
+        logout,
+        changeUserPassword,
+        toggleUserActiveStatus,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
