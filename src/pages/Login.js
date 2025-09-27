@@ -3,20 +3,20 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 function Login() {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState(""); // now using email
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const success = login(username, password);
+    const success = await login(email, password); // pass email instead of username
     if (success) {
       navigate("/home");
     } else {
-      setError("Invalid credentials");
+      setError("Invalid credentials. Please try again.");
     }
   };
 
@@ -30,11 +30,12 @@ function Login() {
       {error && <p style={{ color: "red" }}>{error}</p>}
       <form onSubmit={handleSubmit}>
         <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           style={{ display: "block", marginBottom: "10px", width: "100%" }}
+          required
         />
         <input
           type="password"
@@ -42,6 +43,7 @@ function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           style={{ display: "block", marginBottom: "10px", width: "100%" }}
+          required
         />
         <button type="submit">Login</button>
         <button

@@ -12,7 +12,8 @@ export default function Sidebar() {
     navigate("/");
   };
 
-  const capitalizeFirst = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
+  const capitalizeFirst = (str) =>
+    str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
 
   if (!user) return null;
 
@@ -37,23 +38,20 @@ export default function Sidebar() {
       </h2>
 
       <p style={{ marginBottom: "20px", fontSize: "16px", color: "#ecf0f1" }}>
-        Logged in as: <strong>{capitalizeFirst(user.username)}</strong>
+        Logged in as: <strong>{capitalizeFirst(user.firstName)}</strong>
       </p>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <Link to="/home" style={linkStyle}>Home</Link>
         <Link to="/class" style={linkStyle}>Classes</Link>
 
-        {/* Schedule section */}
         {isAdmin ? (
           <div
             style={{ position: "relative" }}
             onMouseEnter={() => setHoveringSchedule(true)}
             onMouseLeave={() => setHoveringSchedule(false)}
           >
-            <div style={{ ...linkStyle, cursor: "pointer" }}>
-              Schedule ▾
-            </div>
+            <div style={{ ...linkStyle, cursor: "pointer" }}>Schedule ▾</div>
             {hoveringSchedule && (
               <div
                 style={{
@@ -75,13 +73,15 @@ export default function Sidebar() {
           <Link to="/schedule" style={linkStyle}>Schedule</Link>
         )}
 
-        {/* Admin & Teacher shared access */}
-        {(isAdmin || isTeacher) && (
-          <Link to="/rosters" style={linkStyle}>Class Rosters</Link>
-        )}
 
-        {/* Admin-only link */}
-        {isAdmin && <Link to="/student" style={linkStyle}>Users</Link>}
+        {isAdmin && (
+          <>
+            <Link to="/student" style={linkStyle}>Users</Link>
+            <Link to="/add-user" style={{ ...linkStyle, backgroundColor: "#16a085" }}>
+              ➕ Add User
+            </Link>
+          </>
+        )}
       </nav>
 
       <div style={{ flexGrow: 1 }}></div>
@@ -98,7 +98,8 @@ const linkStyle = {
   textDecoration: "none",
   padding: "10px",
   borderRadius: "4px",
-  backgroundColor: "#34495e"
+  backgroundColor: "#34495e",
+  cursor: "pointer"
 };
 
 const submenuLinkStyle = {
