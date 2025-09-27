@@ -17,6 +17,13 @@ import './App.css';
 import MySchedule from "./pages/MySchedule";
 
 
+import MySchedule from "./pages/MySchedule";
+import MasterSchedule from "./pages/MasterSchedule";
+import Schedules from "./pages/Schedules";
+import CreateSchedule from "./pages/CreateSchedule";
+import TeacherAvailability from "./pages/TeacherAvailability";
+
+
 function App() {
   return (
     <AuthProvider>
@@ -56,7 +63,7 @@ function App() {
             }
           />
           <Route
-            path="/teacher/schedules"
+            path="/teacher-list"
             element={
               <ProtectedRoute>
                 <TeacherList />
@@ -64,8 +71,12 @@ function App() {
             }
           />
           <Route
-            path="/student/schedules"
-            element={<StudentList />}
+            path="/student-list"
+            element={
+              <ProtectedRoute>
+                <StudentList />
+              </ProtectedRoute>
+            }
           />
           <Route
   path="/student/schedule"
@@ -97,14 +108,6 @@ function App() {
             }
           />
           <Route
-            path="/rosters"
-            element={
-              <ProtectedRoute>
-                <ClassRosters />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/add-user"
             element={
               <ProtectedRoute>
@@ -116,6 +119,18 @@ function App() {
             path="/activation-form"
             element={<ActivationForm />}
           />
+          <Route
+            path="/my-schedule"
+            element={
+              <ProtectedRoute>
+                <MySchedule />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/schedules" element={<Schedules />} />
+          <Route path="/create-schedule" element={<ProtectedRoute><CreateSchedule /></ProtectedRoute>} />
+          <Route path="/master-schedule" element={<MasterSchedule />} />
+          <Route path="/availability" element={<TeacherAvailability />} />
         </Routes>
       </Router>
     </AuthProvider>

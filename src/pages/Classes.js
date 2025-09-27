@@ -1,124 +1,168 @@
 import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { useAuth } from "../context/AuthContext";
 
 export default function Classes() {
   const { user, users } = useAuth();
+  const navigate = useNavigate();
 
-  const isStudent = user?.role === "student";
-  const isTeacher = user?.role === "teacher";
-  const isAdmin = user?.role === "admin";
+  // Role helpers
+  const getRole = (u) => (u && u.role ? u.role.trim().toLowerCase() : "");
+  const isStudent = getRole(user) === "student";
+  const isTeacher = getRole(user) === "teacher";
+  const isAdmin = getRole(user) === "admin";
 
-  const [classes, setClasses] = useState([
-    {
-      id: 1,
-      name: "Math 101",
-      grade_level: "10",
-      teacher_id: 1,
-      start_time: "2025-09-27T08:00",
-      end_time: "2025-09-27T09:30",
-      recurring_days: ["Mon", "Wed", "Fri"],
-      students: [2, 5],
-    },
-    {
-      id: 2,
-      name: "Science 101",
-      grade_level: "10",
-      teacher_id: 1,
-      start_time: "2025-09-27T10:00",
-      end_time: "2025-09-27T11:30",
-      recurring_days: ["Tue", "Thu"],
-      students: [2],
-    },
-  ]);
-
+  const [classes, setClasses] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [allStudents, setAllStudents] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newClass, setNewClass] = useState({
+  const [addForm, setAddForm] = useState({
     name: "",
     grade_level: "",
     teacher_id: "",
+    start_date: "",
     start_time: "",
+    end_date: "",
     end_time: "",
     recurring_days: [],
-    students: [],
   });
+  const [loading, setLoading] = useState(true);
 
-  const allTeachers = users.filter((u) => u.role === "teacher" && u.active);
-  const allStudents = users.filter((u) => u.role === "student" && u.active);
+  const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-  const toggleRecurringDay = (day) => {
-    setNewClass((prev) => ({
-      ...prev,
-      recurring_days: prev.recurring_days.includes(day)
+  // Fetchers
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+
+    const fetchClasses = async () => {
+      try {
+        let url = "http://localhost:3000/api/classes";
+        const role = getRole(user);
+        if (role === "student") url = `http://localhost:3000/api/students/${user.id}/classes`;
+        else if (role === "teacher") url = `http://localhost:3000/api/teachers/${user.id}/classes`;
+        const res = await fetch(url);
+        const data = await res.json();
+        setClasses(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchTeachers = async () => {
+      try {
+        const res = await fetch("http://localhost:3000/api/teachers");
+        setTeachers(await res.json());
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const fetchStudents = async () => {
+      try {
+        const res = await fetch("http://localhost:3000/api/students");
+        setAllStudents(await res.json());
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchClasses();
+    fetchTeachers();
+    fetchStudents();
+  }, [user]);
+
+  // Handlers
+  const handleAddChange = (e) => {
+    const { name, value } = e.target;
+    setAddForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const toggleAddRecurringDay = (day) => {
+    setAddForm((prev) => {
+      const days = prev.recurring_days.includes(day)
         ? prev.recurring_days.filter((d) => d !== day)
-        : [...prev.recurring_days, day],
-    }));
+        : [...prev.recurring_days, day];
+      return { ...prev, recurring_days: days };
+    });
   };
 
-  const addClass = () => {
-    const id = Math.max(...classes.map((c) => c.id), 0) + 1;
-    setClasses((prev) => [...prev, { ...newClass, id }]);
-    setNewClass({
-      name: "",
-      grade_level: "",
-      teacher_id: "",
-      start_time: "",
-      end_time: "",
-      recurring_days: [],
-      students: [],
-    });
-    setShowAddForm(false);
+  const combineLocalDatetime = (date, time) => {
+    if (!date || !time) return null;
+    return `${date} ${time}:00`;
   };
+
+  const addClass = async () => {
+    try {
+      const start_time = combineLocalDatetime(addForm.start_date, addForm.start_time);
+      const end_time = combineLocalDatetime(addForm.end_date, addForm.end_time);
+      const res = await fetch("http://localhost:3000/api/classes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...addForm, start_time, end_time, recurring_days: addForm.recurring_days.join(",") }),
+      });
+      if (!res.ok) throw new Error("Failed to add class");
+      setAddForm({
+        name: "",
+        grade_level: "",
+        teacher_id: "",
+        start_date: "",
+        start_time: "",
+        end_date: "",
+        end_time: "",
+        recurring_days: [],
+      });
+      setShowAddForm(false);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const allTeachers = teachers.filter((t) => t.active);
+  const allStudentsActive = allStudents.filter((s) => s.active);
+
+  if (!user)
+    return (
+      <div style={{ display: "flex" }}>
+        <Sidebar />
+        <div style={{ flex: 1, padding: 40, marginLeft: 300 }}>Loading...</div>
+      </div>
+    );
+
+  if (isStudent)
+    return (
+      <div style={{ display: "flex" }}>
+        <Sidebar />
+        <div style={{ flex: 1, padding: 32, marginLeft: 300 }}>
+          <h1>My Classes</h1>
+          {loading ? (
+            <p>Loading...</p>
+          ) : (
+            <ul>
+              {classes.map((c) => (
+                <li key={c.id}>
+                  <Link to={`/rosters/${c.id}`}>{c.name}</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
 
   return (
     <div style={{ display: "flex" }}>
       <Sidebar />
       <div style={{ flex: 1, padding: 40, marginLeft: 300 }}>
-        <h1 style={{ marginBottom: 20 }}>Classes</h1>
-
-        {isAdmin && (
-          <button
-            onClick={() => setShowAddForm((prev) => !prev)}
-            style={{ marginBottom: 20, padding: "6px 12px", cursor: "pointer" }}
-          >
-            {showAddForm ? "Cancel" : "Add Class"}
-          </button>
-        )}
-
+        <h1>Classes</h1>
+        <button onClick={() => setShowAddForm((prev) => !prev)}>{showAddForm ? "Cancel" : "Add Class"}</button>
         {showAddForm && (
-          <div
-            style={{
-              marginBottom: 20,
-              padding: 20,
-              border: "1px solid #ccc",
-              borderRadius: 6,
-            }}
-          >
-            <input
-              type="text"
-              placeholder="Class Name"
-              value={newClass.name}
-              onChange={(e) =>
-                setNewClass({ ...newClass, name: e.target.value })
-              }
-              style={{ display: "block", marginBottom: 10, padding: 6, width: "100%" }}
-            />
-            <input
-              type="text"
-              placeholder="Grade Level"
-              value={newClass.grade_level}
-              onChange={(e) =>
-                setNewClass({ ...newClass, grade_level: e.target.value })
-              }
-              style={{ display: "block", marginBottom: 10, padding: 6, width: "100%" }}
-            />
-            <select
-              value={newClass.teacher_id}
-              onChange={(e) =>
-                setNewClass({ ...newClass, teacher_id: Number(e.target.value) })
-              }
-              style={{ display: "block", marginBottom: 10, padding: 6, width: "100%" }}
-            >
+          <div style={{ marginTop: 20 }}>
+            <input name="name" value={addForm.name} onChange={handleAddChange} placeholder="Name" />
+            <select name="teacher_id" value={addForm.teacher_id} onChange={handleAddChange}>
               <option value="">Select Teacher</option>
               {allTeachers.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -126,77 +170,35 @@ export default function Classes() {
                 </option>
               ))}
             </select>
-            <label>
-              Start Time:
-              <input
-                type="datetime-local"
-                value={newClass.start_time}
-                onChange={(e) =>
-                  setNewClass({ ...newClass, start_time: e.target.value })
-                }
-                style={{ display: "block", marginBottom: 10, padding: 6 }}
-              />
-            </label>
-            <label>
-              End Time:
-              <input
-                type="datetime-local"
-                value={newClass.end_time}
-                onChange={(e) =>
-                  setNewClass({ ...newClass, end_time: e.target.value })
-                }
-                style={{ display: "block", marginBottom: 10, padding: 6 }}
-              />
-            </label>
-            <div>
-              Recurring Days:
-              {["Mon", "Tue", "Wed", "Thu", "Fri"].map((day) => (
-                <label key={day} style={{ marginLeft: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={newClass.recurring_days.includes(day)}
-                    onChange={() => toggleRecurringDay(day)}
-                  />{" "}
-                  {day}
-                </label>
-              ))}
-            </div>
-            <button
-              onClick={addClass}
-              style={{ marginTop: 10, padding: "6px 12px", cursor: "pointer" }}
-            >
-              Save Class
-            </button>
+            <button onClick={addClass}>Save</button>
           </div>
         )}
-
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <table>
           <thead>
             <tr>
-              <th style={{ padding: 8, textAlign: "left" }}>Class</th>
-              <th style={{ padding: 8, textAlign: "left" }}>Teacher</th>
-              <th style={{ padding: 8, textAlign: "left" }}>Grade</th>
-              <th style={{ padding: 8, textAlign: "left" }}>Recurring</th>
-              <th style={{ padding: 8, textAlign: "left" }}>Students</th>
+              <th>Name</th>
+              <th>Teacher</th>
+              <th>Grade</th>
+              <th>Recurring</th>
+              <th>Students</th>
             </tr>
           </thead>
           <tbody>
             {classes.map((c) => {
-              const teacher = users.find((u) => u.id === c.teacher_id);
-              const studentNames = allStudents
-                .filter((s) => c.students.includes(s.id))
+              const teacher = allTeachers.find((t) => t.id === c.teacher_id);
+              const studentIds = Array.isArray(c.students) ? c.students : [];
+              const studentNames = allStudentsActive
+                .filter((s) => studentIds.includes(s.id))
                 .map((s) => `${s.first_name} ${s.last_name}`)
                 .join(", ");
-
+              const recurring = Array.isArray(c.recurring_days) ? c.recurring_days.join(", ") : "";
               return (
-                <tr key={c.id} style={{ borderBottom: "1px solid #ccc" }}>
-                  <td style={{ padding: 8 }}>{c.name}</td>
-                  <td style={{ padding: 8 }}>
-                    {teacher ? `${teacher.first_name} ${teacher.last_name}` : "N/A"}
-                  </td>
-                  <td style={{ padding: 8 }}>{c.grade_level}</td>
-                  <td style={{ padding: 8 }}>{c.recurring_days.join(", ")}</td>
-                  <td style={{ padding: 8 }}>{studentNames}</td>
+                <tr key={c.id}>
+                  <td>{c.name}</td>
+                  <td>{teacher ? `${teacher.first_name} ${teacher.last_name}` : "N/A"}</td>
+                  <td>{c.grade_level}</td>
+                  <td>{recurring}</td>
+                  <td>{studentNames}</td>
                 </tr>
               );
             })}

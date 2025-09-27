@@ -21,36 +21,42 @@ export default function AddUserPage() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setMessage("");
-    setIsLoading(true);
+  e.preventDefault();
+  setMessage("");
+  setIsLoading(true);
 
-    try {
-      const res = await fetch("http://localhost:3000/api/user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
+  try {
+    // make role lowercase before sending
+    const payload = {
+      ...formData,
+      role: formData.role.toLowerCase(),
+    };
 
-      const data = await res.json();
+    const res = await fetch("http://localhost:3000/api/user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to add user");
-      }
+    const data = await res.json();
 
-      if (data.emailSent) {
-        setMessage(`✅ User ${data.firstName} added! Activation email sent.`);
-      } else {
-        setMessage(`⚠️ User ${data.firstName} added, but email failed to send.`);
-      }
-
-      setTimeout(() => navigate("/student"), 2000); // redirect after success
-    } catch (err) {
-      setMessage(`❌ ${err.message}`);
-    } finally {
-      setIsLoading(false);
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to add user");
     }
-  };
+
+    if (data.emailSent) {
+      setMessage(`✅ User ${data.firstName} added! Activation email sent.`);
+    } else {
+      setMessage(`⚠️ User ${data.firstName} added, but email failed to send.`);
+    }
+
+    setTimeout(() => navigate("/student"), 2000); // redirect after success
+  } catch (err) {
+    setMessage(`❌ ${err.message}`);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div style={{ padding: "20px" }}>

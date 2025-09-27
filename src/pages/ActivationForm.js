@@ -48,10 +48,14 @@ export default function ActivationForm() {
         throw new Error(data.error || "Activation failed");
       }
 
-      setMessage("✅ Your account has been activated! Redirecting to login...");
+      setMessage("✅ Your account has been activated! Redirecting...");
 
       setTimeout(() => {
-        window.location.href = "http://localhost:3001"; // redirect to login page
+        if (data.role === "teacher") {
+          window.location.href = `http://localhost:3001/availability?user_id=${data.user_id}`;
+        } else {
+          window.location.href = "http://localhost:3001"; // login page
+        }
       }, 2000);
 
     } catch (err) {
