@@ -181,12 +181,34 @@ const getTeacherColor = (teacherId) => {
       return;
     }
     
+    // Check for overlapping teacher availabilities and auto-select teacher if only one matches
+    const overlappingAvailabilities = selectedAvailabilities.filter(av => {
+      const avStart = moment(av.start);
+      const avEnd = moment(av.end);
+      const slotStart = moment(start);
+      const slotEnd = moment(end);
+      
+      // Check if the slot overlaps with this availability and is on the same day
+      return (
+        avStart.format('YYYY-MM-DD') === slotStart.format('YYYY-MM-DD') &&
+        slotStart.isBefore(avEnd) && 
+        avStart.isBefore(slotEnd)
+      );
+    });
+    
+    // Auto-select teacher if exactly one availability matches
+    let preSelectedTeacherId = "";
+    if (overlappingAvailabilities.length === 1) {
+      preSelectedTeacherId = overlappingAvailabilities[0].teacher_id.toString();
+    }
+    
     // Pre-select recurring day for the day being added
     const dayIdx = moment(start).day() - 1; // 0=Monday, ... 4=Friday
     const recurringDays = (dayIdx >= 0 && dayIdx <= 4) ? [dayIdx] : [];
     setSelectedSlot({ start, end });
     setDetails(d => ({ 
       ...d, 
+      teacherId: preSelectedTeacherId, // Auto-select teacher if found
       startTime: moment(start).format("h:mm A"), 
       endTime: moment(end).format("h:mm A"),
       abDay: abDay || (isFriday ? "" : ""),
@@ -352,9 +374,32 @@ const getTeacherColor = (teacherId) => {
       // Regular slot selection for new event
       const dayIdx = moment(start).day() - 1; // 0=Monday, ... 4=Friday
       const recurringDays = (dayIdx >= 0 && dayIdx <= 4) ? [dayIdx] : [];
+      
+      // Check for overlapping teacher availabilities and auto-select teacher if only one matches (Friday logic)
+      const overlappingAvailabilities = selectedAvailabilities.filter(av => {
+        const avStart = moment(av.start);
+        const avEnd = moment(av.end);
+        const slotStart = moment(start);
+        const slotEnd = moment(end);
+        
+        // Check if the slot overlaps with this availability and is on the same day
+        return (
+          avStart.format('YYYY-MM-DD') === slotStart.format('YYYY-MM-DD') &&
+          slotStart.isBefore(avEnd) && 
+          avStart.isBefore(slotEnd)
+        );
+      });
+      
+      // Auto-select teacher if exactly one availability matches
+      let preSelectedTeacherId = "";
+      if (overlappingAvailabilities.length === 1) {
+        preSelectedTeacherId = overlappingAvailabilities[0].teacher_id.toString();
+      }
+      
       setSelectedSlot({ start, end });
       setDetails(d => ({ 
         ...d, 
+        teacherId: preSelectedTeacherId, // Auto-select teacher if found
         startTime: moment(start).format("h:mm A"), 
         endTime: moment(end).format("h:mm A"),
         abDay: abDay,
