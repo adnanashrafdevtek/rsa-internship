@@ -206,6 +206,88 @@ const getTeacherColor = (teacherId) => {
     const { start, end, dragEvent } = fridayModal.slotInfo;
     setFridayModal({ open: false, slotInfo: null });
     
+    // Helper function to validate conflicts (same as in handleEventDrop)
+    const validateNewPosition = (eventToCheck, newStart, newEnd, newRecurringDays) => {
+      const teacherId = (() => {
+        const teacher = teachers.find(t => `${t.first_name} ${t.last_name}` === eventToCheck.teacher);
+        return teacher ? teacher.id : null;
+      })();
+      
+      if (!teacherId) return false;
+      
+      const teacherName = eventToCheck.teacher;
+      const newMomentStart = moment(newStart);
+      const newMomentEnd = moment(newEnd);
+      
+      const isOverlap = (start1, end1, start2, end2) => {
+        return moment(start1).isBefore(moment(end2)) && moment(start2).isBefore(moment(end1));
+      };
+      
+      let newInstances = [];
+      if (newRecurringDays && newRecurringDays.length > 0) {
+        const duration = newMomentEnd.diff(newMomentStart, 'minutes');
+        for (const recurDay of newRecurringDays) {
+          const momentDay = recurDay + 1;
+          const weekStart = moment().startOf('week');
+          const dayStart = weekStart.clone().day(momentDay);
+          const instanceStart = dayStart.set({ hour: newMomentStart.hour(), minute: newMomentStart.minute(), second: 0 });
+          const instanceEnd = instanceStart.clone().add(duration, 'minutes');
+          newInstances.push({ start: instanceStart, end: instanceEnd, dayOfWeek: momentDay });
+        }
+      } else {
+        newInstances.push({ start: newMomentStart, end: newMomentEnd, dayOfWeek: newMomentStart.day() });
+      }
+      
+      for (const newInst of newInstances) {
+        const teacherAvailabilities = allAvailabilities.filter(av => av.teacher_id === teacherId);
+        if (teacherAvailabilities.length > 0) {
+          const newInstDayOfWeek = newInst.dayOfWeek === 0 ? 7 : newInst.dayOfWeek;
+          const availableOnDay = teacherAvailabilities.some(av => {
+            if (av.day_of_week !== newInstDayOfWeek) return false;
+            const [avStartHour, avStartMin] = av.start_time.split(':').map(Number);
+            const [avEndHour, avEndMin] = av.end_time.split(':').map(Number);
+            const avStart = moment(newInst.start).clone().set({ hour: avStartHour, minute: avStartMin, second: 0 });
+            const avEnd = moment(newInst.start).clone().set({ hour: avEndHour, minute: avEndMin, second: 0 });
+            return newInst.start.isSameOrAfter(avStart) && newInst.end.isSameOrBefore(avEnd);
+          });
+          if (!availableOnDay) return true;
+        }
+        
+        const otherEvents = events.filter(ev => ev.id !== eventToCheck.id);
+        for (const otherEvent of otherEvents) {
+          let otherInstances = [];
+          if (Array.isArray(otherEvent.recurringDays) && otherEvent.recurringDays.length > 0) {
+            const baseStart = moment(otherEvent.start);
+            const baseEnd = moment(otherEvent.end);
+            const duration = baseEnd.diff(baseStart, 'minutes');
+            for (const recurDay of otherEvent.recurringDays) {
+              const momentDay = recurDay + 1;
+              const weekStart = moment().startOf('week');
+              const dayStart = weekStart.clone().day(momentDay);
+              const instanceStart = dayStart.set({ hour: baseStart.hour(), minute: baseStart.minute(), second: 0 });
+              const instanceEnd = instanceStart.clone().add(duration, 'minutes');
+              otherInstances.push({ ...otherEvent, start: instanceStart, end: instanceEnd });
+            }
+          } else {
+            otherInstances.push({ ...otherEvent, start: moment(otherEvent.start), end: moment(otherEvent.end) });
+          }
+          
+          for (const otherInst of otherInstances) {
+            if (isOverlap(newInst.start, newInst.end, otherInst.start, otherInst.end) && newInst.start.day() === otherInst.start.day()) {
+              if ((otherInst.teacher && otherInst.teacher === teacherName) ||
+                  (otherInst.room && otherInst.room === eventToCheck.room) ||
+                  (otherInst.grade && otherInst.grade === eventToCheck.grade && 
+                   otherInst.subject && otherInst.subject === eventToCheck.subject && 
+                   otherInst.room !== eventToCheck.room)) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
+    };
+    
     // If this is a drag operation, update the existing event
     if (dragEvent) {
       // Check if this is a recurring event instance being dragged
@@ -220,6 +302,9 @@ const getTeacherColor = (teacherId) => {
           // Replace recurring days with only Friday (no duplication)
           const updatedRecurringDays = [newDayIndex];
           
+          // Check for conflicts in the new position
+          const hasConflicts = validateNewPosition(originalEvent, start, end, updatedRecurringDays);
+          
           // Update the original event with new time, day, and abDay
           setEvents(evts =>
             evts.map(ev =>
@@ -229,7 +314,9 @@ const getTeacherColor = (teacherId) => {
                     start,
                     end,
                     recurringDays: updatedRecurringDays,
-                    abDay
+                    abDay,
+                    hasOverlaps: hasConflicts,
+                    hasConflictDays: hasConflicts ? [moment(start).day()] : []
                   }
                 : ev
             )
@@ -238,6 +325,11 @@ const getTeacherColor = (teacherId) => {
       } else {
         // Regular event - update it to Friday with the new time and abDay
         const newDayIndex = 4; // Friday = 4 (0=Monday, 4=Friday)
+        const newRecurringDays = [newDayIndex];
+        
+        // Check for conflicts in the new position
+        const hasConflicts = validateNewPosition(dragEvent, start, end, newRecurringDays);
+        
         setEvents(evts =>
           evts.map(ev =>
             ev.id === dragEvent.id
@@ -245,8 +337,10 @@ const getTeacherColor = (teacherId) => {
                   ...ev,
                   start,
                   end,
-                  recurringDays: [newDayIndex], // Set to Friday only
-                  abDay
+                  recurringDays: newRecurringDays, // Set to Friday only
+                  abDay,
+                  hasOverlaps: hasConflicts,
+                  hasConflictDays: hasConflicts ? [moment(start).day()] : []
                 }
               : ev
           )
@@ -319,6 +413,105 @@ const getTeacherColor = (teacherId) => {
       return;
     }
 
+    // Helper function to validate conflicts for the new position
+    const validateNewPosition = (eventToCheck, newStart, newEnd, newRecurringDays) => {
+      const teacherId = (() => {
+        const teacher = teachers.find(t => `${t.first_name} ${t.last_name}` === eventToCheck.teacher);
+        return teacher ? teacher.id : null;
+      })();
+      
+      if (!teacherId) return false; // No conflicts if teacher not found
+      
+      const teacherName = eventToCheck.teacher;
+      const newMomentStart = moment(newStart);
+      const newMomentEnd = moment(newEnd);
+      
+      // Helper function to check if two time ranges overlap
+      const isOverlap = (start1, end1, start2, end2) => {
+        return moment(start1).isBefore(moment(end2)) && moment(start2).isBefore(moment(end1));
+      };
+      
+      // Create instances for the new position
+      let newInstances = [];
+      if (newRecurringDays && newRecurringDays.length > 0) {
+        const duration = newMomentEnd.diff(newMomentStart, 'minutes');
+        for (const recurDay of newRecurringDays) {
+          const momentDay = recurDay + 1;
+          const weekStart = moment().startOf('week');
+          const dayStart = weekStart.clone().day(momentDay);
+          const instanceStart = dayStart.set({ hour: newMomentStart.hour(), minute: newMomentStart.minute(), second: 0 });
+          const instanceEnd = instanceStart.clone().add(duration, 'minutes');
+          newInstances.push({
+            start: instanceStart,
+            end: instanceEnd,
+            dayOfWeek: momentDay
+          });
+        }
+      } else {
+        newInstances.push({
+          start: newMomentStart,
+          end: newMomentEnd,
+          dayOfWeek: newMomentStart.day()
+        });
+      }
+      
+      // Check each new instance for conflicts
+      for (const newInst of newInstances) {
+        // 1. Check teacher availability conflicts
+        const teacherAvailabilities = allAvailabilities.filter(av => av.teacher_id === teacherId);
+        if (teacherAvailabilities.length > 0) {
+          const newInstDayOfWeek = newInst.dayOfWeek === 0 ? 7 : newInst.dayOfWeek;
+          const availableOnDay = teacherAvailabilities.some(av => {
+            if (av.day_of_week !== newInstDayOfWeek) return false;
+            const [avStartHour, avStartMin] = av.start_time.split(':').map(Number);
+            const [avEndHour, avEndMin] = av.end_time.split(':').map(Number);
+            const avStart = moment(newInst.start).clone().set({ hour: avStartHour, minute: avStartMin, second: 0 });
+            const avEnd = moment(newInst.start).clone().set({ hour: avEndHour, minute: avEndMin, second: 0 });
+            return newInst.start.isSameOrAfter(avStart) && newInst.end.isSameOrBefore(avEnd);
+          });
+          if (!availableOnDay) return true; // Has conflict
+        }
+        
+        // 2. Check for overlaps with other existing classes (excluding the event being moved)
+        const otherEvents = events.filter(ev => ev.id !== eventToCheck.id);
+        for (const otherEvent of otherEvents) {
+          // Expand other event instances
+          let otherInstances = [];
+          if (Array.isArray(otherEvent.recurringDays) && otherEvent.recurringDays.length > 0) {
+            const baseStart = moment(otherEvent.start);
+            const baseEnd = moment(otherEvent.end);
+            const duration = baseEnd.diff(baseStart, 'minutes');
+            for (const recurDay of otherEvent.recurringDays) {
+              const momentDay = recurDay + 1;
+              const weekStart = moment().startOf('week');
+              const dayStart = weekStart.clone().day(momentDay);
+              const instanceStart = dayStart.set({ hour: baseStart.hour(), minute: baseStart.minute(), second: 0 });
+              const instanceEnd = instanceStart.clone().add(duration, 'minutes');
+              otherInstances.push({ ...otherEvent, start: instanceStart, end: instanceEnd });
+            }
+          } else {
+            otherInstances.push({ ...otherEvent, start: moment(otherEvent.start), end: moment(otherEvent.end) });
+          }
+          
+          // Check for conflicts with other instances
+          for (const otherInst of otherInstances) {
+            if (isOverlap(newInst.start, newInst.end, otherInst.start, otherInst.end) && newInst.start.day() === otherInst.start.day()) {
+              // Teacher conflict
+              if (otherInst.teacher && otherInst.teacher === teacherName) return true;
+              // Room conflict
+              if (otherInst.room && otherInst.room === eventToCheck.room) return true;
+              // Class duplication conflict
+              if (otherInst.grade && otherInst.grade === eventToCheck.grade && 
+                  otherInst.subject && otherInst.subject === eventToCheck.subject && 
+                  otherInst.room !== eventToCheck.room) return true;
+            }
+          }
+        }
+      }
+      
+      return false; // No conflicts found
+    };
+
     // Check if this is a recurring event instance being dragged
     if (event.id.includes('-recurring-')) {
       const [originalEventId, , dayIndex] = event.id.split('-recurring-');
@@ -330,6 +523,10 @@ const getTeacherColor = (teacherId) => {
       if (originalEvent) {
         // Replace recurringDays with only the new day (no duplication)
         let updatedRecurringDays = (newDayIndex >= 0 && newDayIndex <= 4) ? [newDayIndex] : [];
+        
+        // Check for conflicts in the new position
+        const hasConflicts = validateNewPosition(originalEvent, start, end, updatedRecurringDays);
+        
         setEvents(evts =>
           evts.map(ev =>
             ev.id === originalEventId
@@ -338,7 +535,9 @@ const getTeacherColor = (teacherId) => {
                   start,
                   end,
                   recurringDays: updatedRecurringDays,
-                  abDay: isFriday ? ev.abDay : ""
+                  abDay: isFriday ? ev.abDay : "",
+                  hasOverlaps: hasConflicts, // Update conflict status
+                  hasConflictDays: hasConflicts ? [moment(start).day()] : []
                 }
               : ev
           )
@@ -347,6 +546,11 @@ const getTeacherColor = (teacherId) => {
     } else {
       // Regular non-recurring event or original recurring event
       const newDayIndex = moment(start).day() - 1; // Convert to 0=Monday, 4=Friday
+      const newRecurringDays = (newDayIndex >= 0 && newDayIndex <= 4) ? [newDayIndex] : [];
+      
+      // Check for conflicts in the new position
+      const hasConflicts = validateNewPosition(event, start, end, newRecurringDays);
+      
       setEvents(evts =>
         evts.map(ev =>
           ev.id === event.id
@@ -355,9 +559,11 @@ const getTeacherColor = (teacherId) => {
                 start,
                 end,
                 // Replace recurring days with only the new day (no duplication)
-                recurringDays: (newDayIndex >= 0 && newDayIndex <= 4) ? [newDayIndex] : [],
+                recurringDays: newRecurringDays,
                 // Clear abDay if dragging away from Friday
-                abDay: isFriday ? ev.abDay : ""
+                abDay: isFriday ? ev.abDay : "",
+                hasOverlaps: hasConflicts, // Update conflict status
+                hasConflictDays: hasConflicts ? [moment(start).day()] : []
               }
             : ev
         )
@@ -418,7 +624,7 @@ const getTeacherColor = (teacherId) => {
       return;
     }
 
-    const newTeacherId = details.teacherId;
+    const newTeacherId = parseInt(details.teacherId);
     const newRoom = details.room;
     const newGrade = showCustomGrade ? details.customGrade : details.grade;
     const newSubject = details.subject;
@@ -427,7 +633,14 @@ const getTeacherColor = (teacherId) => {
     const newRecurringDays = details.recurringDays || [];
     const newAbDay = details.abDay || "";
 
+    // Get teacher name for conflict messages
+    const newTeacherName = (() => {
+      const t = teachers.find(t => t.id === newTeacherId);
+      return t ? `${t.first_name} ${t.last_name}` : "";
+    })();
+
     let conflictMessages = [];
+    let availabilityConflicts = [];
 
     // Helper function to check if two time ranges overlap
     const isOverlap = (start1, end1, start2, end2) => {
@@ -457,18 +670,7 @@ const getTeacherColor = (teacherId) => {
       }
     };
 
-    // Gather all events except the one being edited (if in edit mode)
-    const otherEvents = editMode && editingEventId
-      ? events.filter(ev => ev.id !== editingEventId)
-      : events;
-
-    // Expand all event instances for conflict checking
-    let allInstances = [];
-    for (const ev of otherEvents) {
-      allInstances.push(...expandEventInstances(ev));
-    }
-
-    // Expand new event instances for all selected recurring days
+    // Create new event instances for validation
     let newInstances = [];
     if (newRecurringDays.length > 0) {
       const baseStart = newStart;
@@ -487,7 +689,8 @@ const getTeacherColor = (teacherId) => {
           room: newRoom,
           grade: newGrade,
           subject: newSubject,
-          abDay: newAbDay
+          abDay: newAbDay,
+          dayOfWeek: momentDay
         });
       }
     } else {
@@ -498,141 +701,212 @@ const getTeacherColor = (teacherId) => {
         room: newRoom,
         grade: newGrade,
         subject: newSubject,
-        abDay: newAbDay
+        abDay: newAbDay,
+        dayOfWeek: newStart.day()
       });
     }
 
-    // Check for conflicts
+    // Gather all events except the one being edited (if in edit mode)
+    const otherEvents = editMode && editingEventId
+      ? events.filter(ev => ev.id !== editingEventId)
+      : events;
+
+    // Expand all existing event instances for conflict checking
+    let allInstances = [];
+    for (const ev of otherEvents) {
+      allInstances.push(...expandEventInstances(ev));
+    }
+
+    // Helper function to get detailed conflict information
+    const getConflictDetails = (newInst, inst) => {
+      const overlapStart = moment.max(moment(newInst.start), moment(inst.start));
+      const overlapEnd = moment.min(moment(newInst.end), moment(inst.end));
+      const overlapMinutes = overlapEnd.diff(overlapStart, 'minutes');
+      
+      return {
+        overlapMinutes,
+        overlapTimeRange: `${overlapStart.format('h:mm A')} - ${overlapEnd.format('h:mm A')}`
+      };
+    };
+
+    // Check each new instance for conflicts
     for (const newInst of newInstances) {
+      // 1. Check teacher availability conflicts
+      const teacherAvailabilities = allAvailabilities.filter(av => av.teacher_id === newTeacherId);
+      let hasAvailabilityConflict = false;
+      
+      if (teacherAvailabilities.length > 0) {
+        // Convert day index to moment day (0=Sunday in availability, 1=Monday in moment)
+        const newInstDayOfWeek = newInst.dayOfWeek === 0 ? 7 : newInst.dayOfWeek; // Convert Sunday from 0 to 7
+        const availableOnDay = teacherAvailabilities.some(av => {
+          const avDayOfWeek = av.day_of_week;
+          if (avDayOfWeek !== newInstDayOfWeek) return false;
+          
+          const [avStartHour, avStartMin] = av.start_time.split(':').map(Number);
+          const [avEndHour, avEndMin] = av.end_time.split(':').map(Number);
+          
+          const avStart = moment(newInst.start).clone().set({ hour: avStartHour, minute: avStartMin, second: 0 });
+          const avEnd = moment(newInst.start).clone().set({ hour: avEndHour, minute: avEndMin, second: 0 });
+          
+          // Check if new class time is within availability window
+          return newInst.start.isSameOrAfter(avStart) && newInst.end.isSameOrBefore(avEnd);
+        });
+        
+        if (!availableOnDay) {
+          hasAvailabilityConflict = true;
+          availabilityConflicts.push(`📅 Availability Conflict: ${newTeacherName} is not available on ${newInst.start.format('dddd')} from ${newInst.start.format('h:mm A')} to ${newInst.end.format('h:mm A')}.`);
+        }
+      }
+
+      // 2. Check for overlaps with existing classes
       for (const inst of allInstances) {
-        if (isOverlap(newInst.start, newInst.end, inst.start, inst.end)) {
-          // Same teacher conflict
-          const newTeacherName = (() => {
-            const t = teachers.find(t => t.id == newInst.teacherId);
-            return t ? `${t.first_name} ${t.last_name}` : "";
-          })();
+        if (isOverlap(newInst.start, newInst.end, inst.start, inst.end) && newInst.start.day() === inst.start.day()) {
+          const conflictDetails = getConflictDetails(newInst, inst);
           
+          // Teacher double-booking conflict
           if (inst.teacher && inst.teacher === newTeacherName) {
-            conflictMessages.push(`Teacher ${newTeacherName} is already scheduled at ${newInst.start.format('dddd h:mm A')} - ${newInst.end.format('h:mm A')}.`);
+            conflictMessages.push(`👨‍🏫 Teacher Conflict: ${newTeacherName} is already teaching another class on ${newInst.start.format('dddd')} (${conflictDetails.overlapMinutes} min overlap: ${conflictDetails.overlapTimeRange}).`);
           }
           
-          // Same room conflict
+          // Room conflict - flag even minimal overlaps
           if (inst.room && inst.room === newInst.room) {
-            conflictMessages.push(`Room ${newInst.room} is already booked at ${newInst.start.format('dddd h:mm A')} - ${newInst.end.format('h:mm A')}.`);
+            const existingClass = inst.subject ? `${inst.subject} (${inst.grade})` : 'Another class';
+            conflictMessages.push(`🏫 Room Conflict: Room ${newInst.room} is already booked for ${existingClass} on ${newInst.start.format('dddd')} (${conflictDetails.overlapMinutes} min overlap: ${conflictDetails.overlapTimeRange}).`);
           }
           
-          // Same grade/subject conflict (duplicate class)
+          // Class duplication conflict (same grade/subject in different rooms)
           if (inst.grade && inst.grade === newInst.grade && inst.subject && inst.subject === newInst.subject && inst.room !== newInst.room) {
-            conflictMessages.push(`Class ${newInst.subject} for grade ${newInst.grade} is already scheduled in another room at ${newInst.start.format('dddd h:mm A')} - ${newInst.end.format('h:mm A')}.`);
+            conflictMessages.push(`📚 Class Duplication: ${newInst.subject} for grade ${newInst.grade} is already scheduled in room ${inst.room} on ${newInst.start.format('dddd')} (${conflictDetails.overlapMinutes} min overlap: ${conflictDetails.overlapTimeRange}).`);
           }
         }
       }
     }
 
-    if (conflictMessages.length > 0) {
-      // For recurring events, flag only the conflicting instances
-      // We'll store a hasConflictDays array: [0,2] means Mon and Wed have conflicts
+    // Combine all conflict messages
+    const allConflicts = [...availabilityConflicts, ...conflictMessages];
+
+    // If there are conflicts, show the conflict modal
+    if (allConflicts.length > 0) {
+      // Mark which days have conflicts for visual indication
       let hasConflictDays = [];
       if (newRecurringDays.length > 0) {
         for (let i = 0; i < newInstances.length; i++) {
           const newInst = newInstances[i];
           let hasConflict = false;
+          
+          // Check availability conflicts
+          const teacherAvailabilities = allAvailabilities.filter(av => av.teacher_id === newTeacherId);
+          if (teacherAvailabilities.length > 0) {
+            const newInstDayOfWeek = newInst.dayOfWeek === 0 ? 7 : newInst.dayOfWeek;
+            const availableOnDay = teacherAvailabilities.some(av => {
+              if (av.day_of_week !== newInstDayOfWeek) return false;
+              const [avStartHour, avStartMin] = av.start_time.split(':').map(Number);
+              const [avEndHour, avEndMin] = av.end_time.split(':').map(Number);
+              const avStart = moment(newInst.start).clone().set({ hour: avStartHour, minute: avStartMin, second: 0 });
+              const avEnd = moment(newInst.start).clone().set({ hour: avEndHour, minute: avEndMin, second: 0 });
+              return newInst.start.isSameOrAfter(avStart) && newInst.end.isSameOrBefore(avEnd);
+            });
+            if (!availableOnDay) hasConflict = true;
+          }
+          
+          // Check overlap conflicts
           for (const inst of allInstances) {
-            // Only flag if same day (weekday), and time/location/teacher/grade/subject conflict
             const sameDay = newInst.start.day() === inst.start.day();
-            if (sameDay && (
-              (inst.teacher && inst.teacher === (() => { const t = teachers.find(t => t.id === newTeacherId); return t ? `${t.first_name} ${t.last_name}` : ""; })() && isOverlap(newInst.start, newInst.end, inst.start, inst.end)) ||
-              (inst.room && inst.room === newInst.room && isOverlap(newInst.start, newInst.end, inst.start, inst.end)) ||
-              (inst.grade && inst.grade === newInst.grade && inst.subject && inst.subject === newInst.subject && isOverlap(newInst.start, newInst.end, inst.start, inst.end) && inst.room !== newInst.room)
-            )) {
-              hasConflict = true;
-              break;
+            if (sameDay && isOverlap(newInst.start, newInst.end, inst.start, inst.end)) {
+              if ((inst.teacher && inst.teacher === newTeacherName) ||
+                  (inst.room && inst.room === newInst.room) ||
+                  (inst.grade && inst.grade === newInst.grade && inst.subject && inst.subject === newInst.subject && inst.room !== newInst.room)) {
+                hasConflict = true;
+                break;
+              }
             }
           }
+          
           if (hasConflict) {
             hasConflictDays.push(newInst.start.day());
           }
         }
       } else {
-        // Single event, flag if conflict is on same day
+        // Single event conflict checking
         let hasConflict = false;
-        for (const inst of allInstances) {
-          const sameDay = newStart.day() === inst.start.day();
-          if (sameDay && (
-            (inst.teacher && inst.teacher === (() => { const t = teachers.find(t => t.id === newTeacherId); return t ? `${t.first_name} ${t.last_name}` : ""; })() && isOverlap(newStart, newEnd, inst.start, inst.end)) ||
-            (inst.room && inst.room === newRoom && isOverlap(newStart, newEnd, inst.start, inst.end)) ||
-            (inst.grade && inst.grade === newGrade && inst.subject && inst.subject === newSubject && isOverlap(newStart, newEnd, inst.start, inst.end) && inst.room !== newRoom)
-          )) {
-            hasConflict = true;
-            break;
+        
+        // Check availability
+        const teacherAvailabilities = allAvailabilities.filter(av => av.teacher_id === newTeacherId);
+        if (teacherAvailabilities.length > 0) {
+          const newInstDayOfWeek = newStart.day() === 0 ? 7 : newStart.day();
+          const availableOnDay = teacherAvailabilities.some(av => {
+            if (av.day_of_week !== newInstDayOfWeek) return false;
+            const [avStartHour, avStartMin] = av.start_time.split(':').map(Number);
+            const [avEndHour, avEndMin] = av.end_time.split(':').map(Number);
+            const avStart = moment(newStart).clone().set({ hour: avStartHour, minute: avStartMin, second: 0 });
+            const avEnd = moment(newStart).clone().set({ hour: avEndHour, minute: avEndMin, second: 0 });
+            return newStart.isSameOrAfter(avStart) && newEnd.isSameOrBefore(avEnd);
+          });
+          if (!availableOnDay) hasConflict = true;
+        }
+        
+        // Check overlaps
+        if (!hasConflict) {
+          for (const inst of allInstances) {
+            const sameDay = newStart.day() === inst.start.day();
+            if (sameDay && isOverlap(newStart, newEnd, inst.start, inst.end)) {
+              if ((inst.teacher && inst.teacher === newTeacherName) ||
+                  (inst.room && inst.room === newRoom) ||
+                  (inst.grade && inst.grade === newGrade && inst.subject && inst.subject === newSubject && inst.room !== newRoom)) {
+                hasConflict = true;
+                break;
+              }
+            }
           }
         }
+        
         hasConflictDays = hasConflict ? [newStart.day()] : [];
       }
-      // Prepare the event object for 'Save Anyways'
+      
+      // Prepare the event object for 'Add Anyway'
       const eventObj = {
         id: editMode && editingEventId ? editingEventId : Math.random().toString(36).substr(2, 9),
         title: `${details.subject}`,
         start: selectedSlot.start,
         end: selectedSlot.end,
-        teacher: (() => {
-          const t = teachers.find(t => t.id === +details.teacherId);
-          return t ? `${t.first_name} ${t.last_name}` : "";
-        })(),
+        teacher: newTeacherName,
         grade: showCustomGrade ? details.customGrade : details.grade,
         subject: details.subject,
         room: details.room,
         recurringDays: details.recurringDays || [],
         abDay: details.abDay || "",
-        hasConflictDays // array of weekday numbers (1=Mon, ... 5=Fri)
+        hasConflictDays, // array of weekday numbers (1=Mon, ... 5=Fri)
+        hasOverlaps: true // flag for red outline
       };
-      setConflictModal({ open: true, messages: conflictMessages, pendingEvent: eventObj });
+      
+      setConflictModal({ open: true, messages: allConflicts, pendingEvent: eventObj });
       return;
     }
 
-    // If no conflicts, proceed to add/edit event
+    // No conflicts - proceed with normal event creation/editing
+    const eventToSave = {
+      id: editMode && editingEventId ? editingEventId : Math.random().toString(36).substr(2, 9),
+      title: `${details.subject}`,
+      start: selectedSlot.start,
+      end: selectedSlot.end,
+      teacher: newTeacherName,
+      grade: showCustomGrade ? details.customGrade : details.grade,
+      subject: details.subject,
+      room: details.room,
+      recurringDays: details.recurringDays || [],
+      abDay: details.abDay || "",
+      hasOverlaps: false
+    };
+
     if (editMode && editingEventId) {
       setEvents(evts =>
-        evts.map(ev =>
-          ev.id === editingEventId
-            ? {
-                ...ev,
-                title: `${details.subject}`,
-                start: selectedSlot.start,
-                end: selectedSlot.end,
-                teacher: (() => {
-                  const t = teachers.find(t => t.id === +details.teacherId);
-                  return t ? `${t.first_name} ${t.last_name}` : "";
-                })(),
-                grade: showCustomGrade ? details.customGrade : details.grade,
-                subject: details.subject,
-                room: details.room,
-                recurringDays: details.recurringDays || [],
-                abDay: details.abDay || ""
-              }
-            : ev
-        )
+        evts.map(ev => ev.id === editingEventId ? eventToSave : ev)
       );
     } else {
-      setEvents(evts => [
-        ...evts,
-        {
-          id: Math.random().toString(36).substr(2, 9),
-          title: `${details.subject}`,
-          start: selectedSlot.start,
-          end: selectedSlot.end,
-          teacher: (() => {
-            const t = teachers.find(t => t.id === +details.teacherId);
-            return t ? `${t.first_name} ${t.last_name}` : "";
-          })(),
-          grade: showCustomGrade ? details.customGrade : details.grade,
-          subject: details.subject,
-          room: details.room,
-          recurringDays: details.recurringDays || [],
-          abDay: details.abDay || ""
-        }
-      ]);
+      setEvents(evts => [...evts, eventToSave]);
     }
+    
+    // Reset form
     setModalOpen(false);
     setSelectedSlot(null);
     setDetails({ teacherId: "", grade: "", customGrade: "", subject: "", room: "", startTime: "", endTime: "", recurringDays: [], abDay: "", dayType: "" });
@@ -648,25 +922,85 @@ const getTeacherColor = (teacherId) => {
         left: 0,
         width: "100vw",
         height: "100vh",
-        background: "rgba(0,0,0,0.3)",
+        background: "rgba(0,0,0,0.5)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         zIndex: 2000
       }}>
-        <div style={{ background: "#fff", padding: 32, borderRadius: 16, minWidth: 340, boxShadow: "0 8px 32px rgba(231,76,60,0.18)" }}>
-          <h2 style={{ marginBottom: 18, fontWeight: 700, fontSize: 24, color: "#e74c3c" }}>Schedule Conflict</h2>
-          <ul style={{ color: "#c0392b", fontWeight: 600, fontSize: 16, marginBottom: 18 }}>
-            {conflictModal.messages.map((msg, idx) => (
-              <li key={idx} style={{ marginBottom: 8 }}>{msg}</li>
-            ))}
-          </ul>
-          <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ 
+          background: "#fff", 
+          padding: 32, 
+          borderRadius: 16, 
+          minWidth: 400, 
+          maxWidth: 600,
+          maxHeight: "80vh",
+          overflowY: "auto",
+          boxShadow: "0 8px 32px rgba(231,76,60,0.18)" 
+        }}>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
+            <span style={{ fontSize: 28, marginRight: 12 }}>⚠️</span>
+            <h2 style={{ margin: 0, fontWeight: 700, fontSize: 24, color: "#e74c3c" }}>Schedule Conflicts Detected</h2>
+          </div>
+          
+          <div style={{ 
+            background: "#fff5f5", 
+            border: "1px solid #fed7d7", 
+            borderRadius: 8, 
+            padding: 16, 
+            marginBottom: 20 
+          }}>
+            <p style={{ margin: "0 0 12px 0", color: "#c53030", fontWeight: 600 }}>
+              The following conflicts were found with your class schedule:
+            </p>
+            <ul style={{ 
+              margin: 0, 
+              paddingLeft: 20, 
+              color: "#c53030", 
+              fontWeight: 500, 
+              fontSize: 14,
+              lineHeight: "1.5" 
+            }}>
+              {conflictModal.messages.map((msg, idx) => (
+                <li key={idx} style={{ marginBottom: 8 }}>{msg}</li>
+              ))}
+            </ul>
+          </div>
+          
+          <div style={{ 
+            background: "#f7fafc", 
+            border: "1px solid #e2e8f0", 
+            borderRadius: 8, 
+            padding: 16, 
+            marginBottom: 20 
+          }}>
+            <p style={{ margin: 0, color: "#4a5568", fontSize: 14 }}>
+              <strong>What can you do?</strong><br/>
+              • <strong>Fix Conflicts:</strong> Close this dialog and adjust the time, teacher, room, or day to resolve conflicts.<br/>
+              • <strong>Add Anyway:</strong> Create the class despite conflicts. It will be highlighted with a red outline for review.
+            </p>
+          </div>
+          
+          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
             <button
               type="button"
               onClick={() => setConflictModal({ open: false, messages: [], pendingEvent: null })}
-              style={{ background: "#e74c3c", color: "white", fontWeight: 700, fontSize: 16, border: "none", borderRadius: 8, padding: "10px 22px", cursor: "pointer" }}
-            >Close</button>
+              style={{ 
+                background: "#718096", 
+                color: "white", 
+                fontWeight: 600, 
+                fontSize: 14, 
+                border: "none", 
+                borderRadius: 8, 
+                padding: "10px 20px", 
+                cursor: "pointer",
+                transition: "background 0.2s"
+              }}
+              onMouseEnter={e => e.target.style.background = "#4a5568"}
+              onMouseLeave={e => e.target.style.background = "#718096"}
+            >
+              Cancel & Fix Conflicts
+            </button>
             {conflictModal.pendingEvent && (
               <button
                 type="button"
@@ -693,16 +1027,21 @@ const getTeacherColor = (teacherId) => {
                   setConflictModal({ open: false, messages: [], pendingEvent: null });
                 }}
                 style={{
-                  background: "#fff",
-                  color: "#e74c3c",
-                  fontWeight: 700,
-                  fontSize: 16,
-                  border: "2px solid #e74c3c",
+                  background: "#e53e3e",
+                  color: "white",
+                  fontWeight: 600,
+                  fontSize: 14,
+                  border: "none",
                   borderRadius: 8,
-                  padding: "10px 22px",
-                  cursor: "pointer"
+                  padding: "10px 20px",
+                  cursor: "pointer",
+                  transition: "background 0.2s"
                 }}
-              >Save Anyways</button>
+                onMouseEnter={e => e.target.style.background = "#c53030"}
+                onMouseLeave={e => e.target.style.background = "#e53e3e"}
+              >
+                ⚠️ Add Anyway
+              </button>
             )}
           </div>
         </div>
@@ -744,12 +1083,10 @@ const getTeacherColor = (teacherId) => {
 
   // Confirm delete selected events
   const handleConfirmDelete = () => {
-    // For recurring events, delete all instances with the same base id
+    // Delete events whose base IDs are in selectedToDelete
     setEvents(evts => evts.filter(ev => {
-      // If the event is a recurring instance, get its base id
       const baseId = ev.id.includes('-recurring-') ? ev.id.split('-recurring-')[0] : ev.id;
-      // If any selectedToDelete matches the base id, delete all instances
-      return !selectedToDelete.includes(baseId) && !selectedToDelete.includes(ev.id);
+      return !selectedToDelete.includes(baseId);
     }));
     setDeleteMode(false);
     setSelectedToDelete([]);
@@ -767,22 +1104,32 @@ const getTeacherColor = (teacherId) => {
         // Skip if either is an availability block
         if (a.availability || b.availability) continue;
         
-        // Only overlap if same teacher or same room
-        const sameTeacher = a.teacher && b.teacher && a.teacher === b.teacher;
-        const sameRoom = a.room && b.room && a.room === b.room;
-        
-        // Check if they overlap in time
+        // Check if they are on the same day
         const aStart = moment(a.start);
         const aEnd = moment(a.end);
         const bStart = moment(b.start);
         const bEnd = moment(b.end);
+        const sameDay = aStart.format('YYYY-MM-DD') === bStart.format('YYYY-MM-DD');
         
-        if ((sameTeacher || sameRoom) && aStart.isBefore(bEnd) && bStart.isBefore(aEnd)) {
-          // Get the original event IDs for highlighting
-          const aId = a.id.includes('-recurring-') ? a.id.split('-recurring-')[0] : a.id;
-          const bId = b.id.includes('-recurring-') ? b.id.split('-recurring-')[0] : b.id;
-          ids.add(aId);
-          ids.add(bId);
+        if (!sameDay) continue;
+        
+        // Check for any time overlap (even 1 minute)
+        const hasTimeOverlap = aStart.isBefore(bEnd) && bStart.isBefore(aEnd);
+        
+        if (hasTimeOverlap) {
+          // Flag for same teacher conflicts
+          const sameTeacher = a.teacher && b.teacher && a.teacher === b.teacher;
+          
+          // Flag for same room conflicts (this is the main addition)
+          const sameRoom = a.room && b.room && a.room === b.room;
+          
+          if (sameTeacher || sameRoom) {
+            // Get the original event IDs for highlighting
+            const aId = a.id.includes('-recurring-') ? a.id.split('-recurring-')[0] : a.id;
+            const bId = b.id.includes('-recurring-') ? b.id.split('-recurring-')[0] : b.id;
+            ids.add(aId);
+            ids.add(bId);
+          }
         }
       }
     }
@@ -1055,7 +1402,7 @@ const getTeacherColor = (teacherId) => {
             )}
             {getOverlappingEventIds().length > 0 && (
               <div style={{ background: "#fffbe6", border: "2px solid #e74c3c", borderRadius: 10, padding: "10px 18px", color: "#c0392b", fontWeight: 600, fontSize: 16, marginBottom: 8 }}>
-                <span style={{ fontWeight: 700, color: "#e74c3c" }}>⚠️ Some events overlap. Please review highlighted events in the calendar.</span>
+                <span style={{ fontWeight: 700, color: "#e74c3c" }}>⚠️ Room or teacher conflicts detected. Please review highlighted events in the calendar.</span>
               </div>
             )}
           </div>
@@ -1127,6 +1474,8 @@ const getTeacherColor = (teacherId) => {
                 const overlappingIds = getOverlappingEventIds();
                 const isOverlapping = overlappingIds.includes(originalId);
                 const isDragging = event.isDragging;
+                const hasOverlaps = event.hasOverlaps;
+                
                 // Recurring instance: flag only if its day is in hasConflictDays
                 let hasConflict = false;
                 if (event.hasConflictDays && event._recurringInstance !== undefined) {
@@ -1136,16 +1485,33 @@ const getTeacherColor = (teacherId) => {
                   // Single event
                   hasConflict = event.hasConflictDays.length > 0;
                 }
+                
+                // Determine styling based on conflict state
+                let backgroundColor = "#26bedd";
+                let borderColor = "#26bedd";
+                let borderWidth = "1px";
+                let boxShadow = "0 2px 4px rgba(38, 190, 221, 0.2)";
+                
+                if (hasOverlaps || hasConflict) {
+                  backgroundColor = "#26bedd";
+                  borderColor = "#e53e3e";
+                  borderWidth = "2px";
+                  boxShadow = "0 2px 8px rgba(229, 62, 62, 0.4)";
+                } else if (isOverlapping) {
+                  backgroundColor = "#fff5f5";
+                  borderColor = "#fc8181";
+                  borderWidth = "2px";
+                  boxShadow = "0 2px 8px rgba(229, 62, 62, 0.3)";
+                }
+                
                 return {
                   style: {
-                    backgroundColor: isOverlapping ? "#fff5f5" : "#26bedd",
-                    color: isOverlapping ? "#e53e3e" : "white",
+                    backgroundColor,
+                    color: (isOverlapping && !hasOverlaps && !hasConflict) ? "#e53e3e" : "white",
                     borderRadius: 8,
                     fontWeight: 600,
-                    border: hasConflict ? "2px solid #e74c3c" : (isOverlapping ? "2px solid #fc8181" : "1px solid #26bedd"),
-                    boxShadow: hasConflict
-                      ? "0 2px 8px rgba(231,76,60,0.3)"
-                      : (isOverlapping ? "0 2px 8px rgba(229, 62, 62, 0.3)" : "0 2px 4px rgba(38, 190, 221, 0.2)"),
+                    border: `${borderWidth} solid ${borderColor}`,
+                    boxShadow,
                     cursor: deleteMode && !event.availability ? "pointer" : (event.availability ? "default" : "move"),
                     transition: "all 0.2s ease",
                     opacity: isDragging ? 0.6 : 1
@@ -1155,7 +1521,8 @@ const getTeacherColor = (teacherId) => {
               components={{
                 header: CustomHeader,
                 event: ({ event }) => {
-                  const isSelected = selectedToDelete && selectedToDelete.includes(event.id);
+                  const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
+                  const isSelected = selectedToDelete && selectedToDelete.includes(baseId);
                   if (event.availability) {
                     return (
                       <div style={{
@@ -1192,10 +1559,12 @@ const getTeacherColor = (teacherId) => {
                       }}
                       onClick={() => {
                         if (deleteMode) {
+                          // For recurring events, use the base ID
+                          const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
                           setSelectedToDelete(sel =>
-                            sel.includes(event.id)
-                              ? sel.filter(id => id !== event.id)
-                              : [...sel, event.id]
+                            sel.includes(baseId)
+                              ? sel.filter(id => id !== baseId)
+                              : [...sel, baseId]
                           );
                         } else {
                           setEventDetailsModal({ open: true, event });
