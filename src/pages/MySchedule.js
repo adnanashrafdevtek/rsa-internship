@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Calendar, momentLocalizer, Views } from "react-big-calendar";
 import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
@@ -95,6 +95,11 @@ const HoverButton = ({ style, children, onClick, type, disabled }) => {
 
 export default function MySchedule() {
   const { user, logout } = useAuth();
+  
+  // Tab state
+  const [activeTab, setActiveTab] = useState("my-schedule");
+  
+  // My Schedule states
   const [scheduleEvents, setScheduleEvents] = useState([]);
   const [showCheckboxes, setShowCheckboxes] = useState(false);
   const [selectedEvents, setSelectedEvents] = useState(new Set());
@@ -114,22 +119,96 @@ export default function MySchedule() {
   const [deleting, setDeleting] = useState(false);
   const [selectedEventDetails, setSelectedEventDetails] = useState(null);
   const [showEventModal, setShowEventModal] = useState(false);
-
-  const calendarRef = useRef(null);
+  
+  // Master Schedule states
+  const [masterEvents, setMasterEvents] = useState([]);
+  
+  // Teacher Schedule states
+  const [teachers, setTeachers] = useState([]);
+  const [selectedTeacher, setSelectedTeacher] = useState(null);
+  const [teacherEvents, setTeacherEvents] = useState([]);
+  
+  // Student Schedule states
+  const [students, setStudents] = useState([]);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [studentEvents, setStudentEvents] = useState([]);
+  
+  // Create Schedule states
+  const [createEvents, setCreateEvents] = useState([]);
+  
+  // Loading states
+  const [loading, setLoading] = useState(false);
 
   const getRole = u => (u && u.role ? u.role.trim().toLowerCase() : "");
   const isStudent = getRole(user) === "student";
   const isTeacher = getRole(user) === "teacher";
+  const isAdmin = getRole(user) === "admin";
 
   const handleLogout = () => {
     logout();
   };
 
-  // Fetch classes (student or teacher) + personal events
+  // Tab configuration based on user role
+  const getTabs = () => {
+    const baseTabs = [
+      { 
+        id: "my-schedule", 
+        label: "My Schedule", 
+        icon: "📅",
+        count: scheduleEvents.length
+      }
+    ];
+
+    if (isAdmin) {
+      return [
+        ...baseTabs,
+        { 
+          id: "master-schedule", 
+          label: "Master Schedule", 
+          icon: "🗂️",
+          count: masterEvents.length
+        },
+        { 
+          id: "teacher-schedules", 
+          label: "Teacher Schedules", 
+          icon: "👨‍🏫",
+          count: teachers.length
+        },
+        { 
+          id: "student-schedules", 
+          label: "Student Schedules", 
+          icon: "🧑‍🎓",
+          count: students.length
+        },
+        { 
+          id: "create-schedule", 
+          label: "Create Schedule", 
+          icon: "➕",
+          count: null
+        }
+      ];
+    } else if (isTeacher) {
+      return [
+        ...baseTabs,
+        { 
+          id: "student-schedules", 
+          label: "Student Schedules", 
+          icon: "🧑‍🎓",
+          count: students.length
+        }
+      ];
+    }
+
+    return baseTabs;
+  };
+
+  const tabs = getTabs();
+
+  // Fetch data based on active tab
   useEffect(() => {
     if (!user) return;
 
-    const fetchEvents = async () => {
+    const fetchMyScheduleEvents = async () => {
       try {
         let classes = [];
         if (isStudent) {
@@ -165,8 +244,86 @@ export default function MySchedule() {
       }
     };
 
-    fetchEvents();
-  }, [user]);
+    const fetchMasterSchedule = async () => {
+      try {
+        // Fetch all classes and events for master schedule
+        const classRes = await fetch("http://localhost:3000/api/classes");
+        const allClasses = classRes.ok ? await classRes.json() : [];
+        
+        let allEvents = [];
+        allClasses.forEach(cls => {
+          allEvents = allEvents.concat(generateRecurringEvents(cls));
+        });
+
+        setMasterEvents(allEvents);
+      } catch (err) {
+        console.error(err);
+        setMasterEvents([]);
+      }
+    };
+
+    const fetchTeachers = async () => {
+      try {
+        const res = await fetch("http://localhost:3000/api/teachers");
+        const teachersData = res.ok ? await res.json() : [];
+        setTeachers(teachersData);
+      } catch (err) {
+        console.error(err);
+        setTeachers([]);
+      }
+    };
+
+    const fetchStudents = async () => {
+      try {
+        const res = await fetch("http://localhost:3000/api/students");
+        const studentsData = res.ok ? await res.json() : [];
+        setStudents(studentsData);
+      } catch (err) {
+        console.error(err);
+        setStudents([]);
+      }
+    };
+
+    // Fetch data based on active tab
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        if (activeTab === "my-schedule") {
+          await fetchMyScheduleEvents();
+        } else if (activeTab === "master-schedule") {
+          await fetchMasterSchedule();
+        } else if (activeTab === "teacher-schedules") {
+          await fetchTeachers();
+        } else if (activeTab === "student-schedules") {
+          await fetchStudents();
+        } else if (activeTab === "create-schedule") {
+          await fetchTeachers();
+          // Fetch existing schedule events for create tab
+          const fetchCreateEvents = async () => {
+            try {
+              const res = await fetch("http://localhost:3000/api/classes");
+              const classes = res.ok ? await res.json() : [];
+              
+              let events = [];
+              classes.forEach(cls => {
+                events = events.concat(generateRecurringEvents(cls));
+              });
+              
+              setCreateEvents(events);
+            } catch (err) {
+              console.error(err);
+              setCreateEvents([]);
+            }
+          };
+          await fetchCreateEvents();
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user, activeTab, isStudent, isTeacher]);
 
   // Check for overlapping events
   const checkEventOverlaps = (events) => {
@@ -328,6 +485,54 @@ export default function MySchedule() {
     setShowEventModal(true);
   };
 
+  // Fetch teacher-specific events
+  const fetchTeacherEvents = async (teacherId) => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/teachers/${teacherId}/classes`);
+      const classes = res.ok ? await res.json() : [];
+      
+      let events = [];
+      classes.forEach(cls => {
+        events = events.concat(generateRecurringEvents(cls));
+      });
+      
+      setTeacherEvents(events);
+    } catch (err) {
+      console.error(err);
+      setTeacherEvents([]);
+    }
+  };
+
+  // Fetch student-specific events
+  const fetchStudentEvents = async (studentId) => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/students/${studentId}/classes`);
+      const classes = res.ok ? await res.json() : [];
+      
+      let events = [];
+      classes.forEach(cls => {
+        events = events.concat(generateRecurringEvents(cls));
+      });
+      
+      setStudentEvents(events);
+    } catch (err) {
+      console.error(err);
+      setStudentEvents([]);
+    }
+  };
+
+  // Handle teacher selection
+  const handleTeacherSelect = (teacher) => {
+    setSelectedTeacher(teacher);
+    fetchTeacherEvents(teacher.id);
+  };
+
+  // Handle student selection
+  const handleStudentSelect = (student) => {
+    setSelectedStudent(student);
+    fetchStudentEvents(student.id);
+  };
+
   const eventStyleGetter = (event) => {
     let backgroundColor;
     
@@ -358,226 +563,651 @@ export default function MySchedule() {
     };
   };
 
+  // Loading Component
+  const LoadingSpinner = () => (
+    <div style={{
+      backgroundColor: "white",
+      borderRadius: "12px",
+      padding: "60px",
+      boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
+      textAlign: "center"
+    }}>
+      <div style={{
+        width: "40px",
+        height: "40px",
+        border: "4px solid #f3f3f3",
+        borderTop: "4px solid #3498db",
+        borderRadius: "50%",
+        animation: "spin 1s linear infinite",
+        margin: "0 auto 16px auto"
+      }}></div>
+      <p style={{ color: "#7f8c8d", margin: 0 }}>Loading...</p>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+
+  // Render content based on active tab
+  const renderTabContent = () => {
+    if (loading) {
+      return <LoadingSpinner />;
+    }
+
+    switch (activeTab) {
+      case "my-schedule":
+        return renderMySchedule();
+      case "master-schedule":
+        return renderMasterSchedule();
+      case "teacher-schedules":
+        return renderTeacherSchedules();
+      case "student-schedules":
+        return renderStudentSchedules();
+      case "create-schedule":
+        return renderCreateSchedule();
+      default:
+        return renderMySchedule();
+    }
+  };
+
+  // My Schedule Tab Content
+  const renderMySchedule = () => (
+    <>
+      <div style={{ 
+        backgroundColor: "white", 
+        borderRadius: "8px", 
+        padding: "12px 16px", 
+        boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+        marginBottom: "12px"
+      }}>
+        <div style={{ 
+          display: "flex", 
+          alignItems: "center", 
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "12px"
+        }}>
+          <div>
+            <h1 style={{ 
+              fontSize: 20, 
+              fontWeight: "bold", 
+              margin: 0, 
+              color: "#2c3e50",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }}>
+              📅 My Personal Schedule
+            </h1>
+          </div>
+
+          <div style={{ 
+            display: "flex", 
+            gap: 8, 
+            flexWrap: "wrap" 
+          }}>
+            <HoverButton
+              style={{ 
+                backgroundColor: "#27ae60", 
+                color: "white",
+                border: "2px solid transparent"
+              }}
+              onClick={() => setShowAddEventModal(true)}
+            >
+              ➕ Add Event
+            </HoverButton>
+
+            <HoverButton
+              style={{ 
+                backgroundColor: showCheckboxes ? "#95a5a6" : "#e74c3c", 
+                color: "white",
+                border: "2px solid transparent"
+              }}
+              onClick={() => {
+                setShowCheckboxes(prev => !prev);
+                setSelectedEvents(new Set());
+              }}
+            >
+              {showCheckboxes ? "✖️ Cancel" : "🗑️ Delete Events"}
+            </HoverButton>
+
+            {showCheckboxes && selectedEvents.size > 0 && (
+              <HoverButton
+                style={{ 
+                  backgroundColor: "#c0392b", 
+                  color: "white",
+                  border: "2px solid transparent"
+                }}
+                onClick={handleDeleteSelected}
+                disabled={deleting}
+              >
+                {deleting ? "⏳ Deleting..." : `🗑️ Delete Selected (${selectedEvents.size})`}
+              </HoverButton>
+            )}
+          </div>
+        </div>
+      </div>
+      {renderCalendar(scheduleEvents, "my-schedule")}
+    </>
+  );
+
+  // Master Schedule Tab Content
+  const renderMasterSchedule = () => (
+    <>
+      <div style={{ 
+        backgroundColor: "white", 
+        borderRadius: "8px", 
+        padding: "12px 16px", 
+        boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+        marginBottom: "12px"
+      }}>
+        <h1 style={{ 
+          fontSize: 20, 
+          fontWeight: "bold", 
+          margin: 0, 
+          color: "#2c3e50",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px"
+        }}>
+          🗂️ Master Schedule - All Classes
+        </h1>
+        <p style={{ margin: "8px 0 0 0", color: "#7f8c8d", fontSize: "14px" }}>
+          View all scheduled classes across the entire school
+        </p>
+      </div>
+      {masterEvents.length > 0 ? (
+        renderCalendar(masterEvents, "master-schedule")
+      ) : (
+        <div style={{
+          backgroundColor: "white",
+          borderRadius: "12px",
+          padding: "40px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          textAlign: "center",
+          color: "#7f8c8d"
+        }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>📚</div>
+          <h3 style={{ margin: "0 0 8px 0", color: "#2c3e50" }}>No Classes Scheduled</h3>
+          <p style={{ margin: 0 }}>There are currently no classes in the master schedule</p>
+        </div>
+      )}
+    </>
+  );
+
+  // Teacher Schedules Tab Content
+  const renderTeacherSchedules = () => (
+    <>
+      <div style={{ 
+        backgroundColor: "white", 
+        borderRadius: "8px", 
+        padding: "12px 16px", 
+        boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+        marginBottom: "12px"
+      }}>
+        <h1 style={{ 
+          fontSize: 20, 
+          fontWeight: "bold", 
+          margin: 0, 
+          color: "#2c3e50",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px"
+        }}>
+          👨‍🏫 Teacher Schedules
+        </h1>
+      </div>
+      
+      <div style={{ display: "flex", gap: "16px", height: "calc(100vh - 200px)" }}>
+        {/* Teacher List */}
+        <div style={{
+          width: "300px",
+          backgroundColor: "white",
+          borderRadius: "12px",
+          padding: "16px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          overflowY: "auto"
+        }}>
+          <h3 style={{ margin: "0 0 16px 0", color: "#2c3e50" }}>Select Teacher</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {teachers.map(teacher => (
+              <button
+                key={teacher.id}
+                onClick={() => handleTeacherSelect(teacher)}
+                style={{
+                  padding: "12px",
+                  border: "2px solid #e1e8ed",
+                  borderRadius: "8px",
+                  backgroundColor: selectedTeacher?.id === teacher.id ? "#3498db" : "white",
+                  color: selectedTeacher?.id === teacher.id ? "white" : "#2c3e50",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  transition: "all 0.2s ease"
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedTeacher?.id !== teacher.id) {
+                    e.target.style.backgroundColor = "#f8f9fa";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedTeacher?.id !== teacher.id) {
+                    e.target.style.backgroundColor = "white";
+                  }
+                }}
+              >
+                <div style={{ fontWeight: "600" }}>
+                  {teacher.first_name} {teacher.last_name}
+                </div>
+                <div style={{ fontSize: "12px", opacity: 0.8 }}>
+                  ID: {teacher.id}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        {/* Calendar */}
+        <div style={{ flex: 1 }}>
+          {selectedTeacher ? (
+            <>
+              <div style={{
+                backgroundColor: "white",
+                borderRadius: "8px",
+                padding: "12px 16px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                marginBottom: "12px"
+              }}>
+                <h3 style={{ margin: 0, color: "#2c3e50" }}>
+                  Schedule for {selectedTeacher.first_name} {selectedTeacher.last_name}
+                </h3>
+              </div>
+              {renderCalendar(teacherEvents, "teacher-schedule")}
+            </>
+          ) : (
+            <div style={{
+              backgroundColor: "white",
+              borderRadius: "12px",
+              padding: "40px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+              textAlign: "center",
+              color: "#7f8c8d"
+            }}>
+              <div style={{ fontSize: "48px", marginBottom: "16px" }}>👨‍🏫</div>
+              <h3 style={{ margin: "0 0 8px 0", color: "#2c3e50" }}>Select a Teacher</h3>
+              <p style={{ margin: 0 }}>Choose a teacher from the list to view their schedule</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  // Student Schedules Tab Content
+  const renderStudentSchedules = () => (
+    <>
+      <div style={{ 
+        backgroundColor: "white", 
+        borderRadius: "8px", 
+        padding: "12px 16px", 
+        boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+        marginBottom: "12px"
+      }}>
+        <h1 style={{ 
+          fontSize: 20, 
+          fontWeight: "bold", 
+          margin: 0, 
+          color: "#2c3e50",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px"
+        }}>
+          🧑‍🎓 Student Schedules
+        </h1>
+      </div>
+      
+      <div style={{ display: "flex", gap: "16px", height: "calc(100vh - 200px)" }}>
+        {/* Student List */}
+        <div style={{
+          width: "300px",
+          backgroundColor: "white",
+          borderRadius: "12px",
+          padding: "16px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          overflowY: "auto"
+        }}>
+          <h3 style={{ margin: "0 0 16px 0", color: "#2c3e50" }}>Select Student</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {students.map(student => (
+              <button
+                key={student.id}
+                onClick={() => handleStudentSelect(student)}
+                style={{
+                  padding: "12px",
+                  border: "2px solid #e1e8ed",
+                  borderRadius: "8px",
+                  backgroundColor: selectedStudent?.id === student.id ? "#3498db" : "white",
+                  color: selectedStudent?.id === student.id ? "white" : "#2c3e50",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  transition: "all 0.2s ease"
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedStudent?.id !== student.id) {
+                    e.target.style.backgroundColor = "#f8f9fa";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedStudent?.id !== student.id) {
+                    e.target.style.backgroundColor = "white";
+                  }
+                }}
+              >
+                <div style={{ fontWeight: "600" }}>
+                  {student.first_name} {student.last_name}
+                </div>
+                <div style={{ fontSize: "12px", opacity: 0.8 }}>
+                  ID: {student.id}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        {/* Calendar */}
+        <div style={{ flex: 1 }}>
+          {selectedStudent ? (
+            <>
+              <div style={{
+                backgroundColor: "white",
+                borderRadius: "8px",
+                padding: "12px 16px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                marginBottom: "12px"
+              }}>
+                <h3 style={{ margin: 0, color: "#2c3e50" }}>
+                  Schedule for {selectedStudent.first_name} {selectedStudent.last_name}
+                </h3>
+              </div>
+              {renderCalendar(studentEvents, "student-schedule")}
+            </>
+          ) : (
+            <div style={{
+              backgroundColor: "white",
+              borderRadius: "12px",
+              padding: "40px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+              textAlign: "center",
+              color: "#7f8c8d"
+            }}>
+              <div style={{ fontSize: "48px", marginBottom: "16px" }}>🧑‍🎓</div>
+              <h3 style={{ margin: "0 0 8px 0", color: "#2c3e50" }}>Select a Student</h3>
+              <p style={{ margin: 0 }}>Choose a student from the list to view their schedule</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  // Create Schedule Tab Content (simplified version)
+  const renderCreateSchedule = () => (
+    <>
+      <div style={{ 
+        backgroundColor: "white", 
+        borderRadius: "8px", 
+        padding: "12px 16px", 
+        boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+        marginBottom: "12px"
+      }}>
+        <h1 style={{ 
+          fontSize: 20, 
+          fontWeight: "bold", 
+          margin: 0, 
+          color: "#2c3e50",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px"
+        }}>
+          ➕ Create Schedule
+        </h1>
+        <p style={{ margin: "8px 0 0 0", color: "#7f8c8d", fontSize: "14px" }}>
+          Drag on the calendar to create new class schedules
+        </p>
+      </div>
+      {renderCalendar(createEvents, "create-schedule")}
+    </>
+  );
+
+  // Unified Calendar Component
+  const renderCalendar = (events, calendarType) => (
+    <div style={{
+      backgroundColor: "white",
+      borderRadius: "12px",
+      padding: "24px",
+      boxShadow: "0 4px 16px rgba(0,0,0,0.05)"
+    }}>
+      {calendarType === "my-schedule" && (
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "16px",
+          flexWrap: "wrap",
+          gap: "12px"
+        }}>
+          <div style={{
+            display: "flex",
+            gap: "16px",
+            fontSize: "12px",
+            fontWeight: "500",
+            flexWrap: "wrap"
+          }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <div style={{ width: "12px", height: "12px", backgroundColor: "#3498db", borderRadius: "2px" }}></div>
+              Classes
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <div style={{ width: "12px", height: "12px", backgroundColor: "#27ae60", borderRadius: "2px" }}></div>
+              Events
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <div style={{ width: "12px", height: "12px", backgroundColor: "#9b59b6", borderRadius: "2px" }}></div>
+              Personal
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <div style={{ width: "12px", height: "12px", backgroundColor: "#e74c3c", borderRadius: "2px" }}></div>
+              Meetings
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <div style={{ width: "12px", height: "12px", backgroundColor: "#f39c12", borderRadius: "2px" }}></div>
+              Appointments
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <div style={{ width: "12px", height: "12px", backgroundColor: "#95a5a6", borderRadius: "2px" }}></div>
+              Reminders
+            </span>
+          </div>
+          
+          {/* Overlap detection indicator for my schedule */}
+          {events.length > 0 && (() => {
+            const overlaps = checkEventOverlaps(events);
+            return overlaps.length > 0 ? (
+              <div style={{
+                backgroundColor: "#e74c3c",
+                color: "white",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                fontSize: "11px",
+                fontWeight: "500",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px"
+              }}>
+                ⚠️ {overlaps.length} Overlap{overlaps.length > 1 ? 's' : ''} Detected
+              </div>
+            ) : (
+              <div style={{
+                backgroundColor: "#27ae60",
+                color: "white",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                fontSize: "11px",
+                fontWeight: "500",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px"
+              }}>
+                ✅ No Overlaps
+              </div>
+            );
+          })()}
+        </div>
+      )}
+      
+      <Calendar
+        localizer={localizer}
+        events={events}
+        startAccessor="start"
+        endAccessor="end"
+        style={{ height: 600 }}
+        views={["month", "week", "day"]}
+        view={view}
+        onView={setView}
+        date={date}
+        onNavigate={setDate}
+        eventPropGetter={eventStyleGetter}
+        selectable={calendarType === "create-schedule"}
+        onSelectEvent={calendarType === "my-schedule" && !showCheckboxes ? handleEventClick : null}
+        components={{
+          event: ({ event }) => (
+            <div 
+              style={{ 
+                padding: "4px 6px", 
+                borderRadius: "4px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "13px",
+                fontWeight: 500,
+                cursor: "pointer",
+                color: "white"
+              }}
+              onClick={(e) => {
+                if (calendarType === "my-schedule" && !showCheckboxes) {
+                  e.stopPropagation();
+                  handleEventClick(event);
+                }
+              }}
+            >
+              {calendarType === "my-schedule" && showCheckboxes && !event.isClass && (
+                <input
+                  type="checkbox"
+                  checked={selectedEvents.has(event.id)}
+                  onChange={() => toggleSelectEvent(event.id)}
+                  style={{ 
+                    marginRight: 4,
+                    cursor: "pointer"
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              )}
+              <span>{event.title}</span>
+              {event.isClass && <span style={{ fontSize: "10px", opacity: 0.8 }}>📚</span>}
+              {!event.isClass && event.eventType === "personal" && <span style={{ fontSize: "10px", opacity: 0.8 }}>💜</span>}
+              {!event.isClass && event.eventType === "meeting" && <span style={{ fontSize: "10px", opacity: 0.8 }}>🔴</span>}
+              {!event.isClass && event.eventType === "appointment" && <span style={{ fontSize: "10px", opacity: 0.8 }}>🟠</span>}
+              {!event.isClass && event.eventType === "reminder" && <span style={{ fontSize: "10px", opacity: 0.8 }}>⚫</span>}
+              {!event.isClass && !["personal", "meeting", "appointment", "reminder"].includes(event.eventType) && <span style={{ fontSize: "10px", opacity: 0.8 }}>📅</span>}
+            </div>
+          ),
+        }}
+      />
+    </div>
+  );
+
+  // Tab Navigation Component
+  const TabNavigation = () => (
+    <div style={{
+      backgroundColor: "white",
+      borderRadius: "12px",
+      padding: "8px",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+      marginBottom: "16px",
+      display: "flex",
+      gap: "4px",
+      flexWrap: "wrap"
+    }}>
+      {tabs.map(tab => (
+        <button
+          key={tab.id}
+          onClick={() => setActiveTab(tab.id)}
+          style={{
+            padding: "12px 20px",
+            border: "none",
+            borderRadius: "8px",
+            backgroundColor: activeTab === tab.id ? "#3498db" : "transparent",
+            color: activeTab === tab.id ? "white" : "#2c3e50",
+            fontWeight: activeTab === tab.id ? "600" : "500",
+            fontSize: "14px",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            minWidth: "140px",
+            justifyContent: "center",
+            position: "relative"
+          }}
+          onMouseEnter={(e) => {
+            if (activeTab !== tab.id) {
+              e.target.style.backgroundColor = "#f8f9fa";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeTab !== tab.id) {
+              e.target.style.backgroundColor = "transparent";
+            }
+          }}
+        >
+          <span>{tab.icon}</span>
+          <span>{tab.label}</span>
+          {tab.count !== null && tab.count > 0 && (
+            <span style={{
+              backgroundColor: activeTab === tab.id ? "rgba(255,255,255,0.2)" : "#e74c3c",
+              color: activeTab === tab.id ? "white" : "white",
+              fontSize: "11px",
+              fontWeight: "600",
+              padding: "2px 6px",
+              borderRadius: "10px",
+              minWidth: "16px",
+              height: "16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}>
+              {tab.count}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       <Sidebar onLogout={handleLogout} />
       <div style={{ flex: 1, backgroundColor: "#f8f9fa", padding: 16, marginLeft: 300 }}>
-        <div style={{ 
-          backgroundColor: "white", 
-          borderRadius: "8px", 
-          padding: "12px 16px", 
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          marginBottom: "12px"
-        }}>
-          <div style={{ 
-            display: "flex", 
-            alignItems: "center", 
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: "12px"
-          }}>
-            <div>
-              <h1 style={{ 
-                fontSize: 20, 
-                fontWeight: "bold", 
-                margin: 0, 
-                color: "#2c3e50",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px"
-              }}>
-                📅 My Schedule
-              </h1>
-            </div>
+        <TabNavigation />
+        {renderTabContent()}
 
-            <div style={{ 
-              display: "flex", 
-              gap: 8, 
-              flexWrap: "wrap" 
-            }}>
-              <HoverButton
-                style={{ 
-                  backgroundColor: "#27ae60", 
-                  color: "white",
-                  border: "2px solid transparent"
-                }}
-                onClick={() => setShowAddEventModal(true)}
-              >
-                ➕ Add Event
-              </HoverButton>
 
-              <HoverButton
-                style={{ 
-                  backgroundColor: showCheckboxes ? "#95a5a6" : "#e74c3c", 
-                  color: "white",
-                  border: "2px solid transparent"
-                }}
-                onClick={() => {
-                  setShowCheckboxes(prev => !prev);
-                  setSelectedEvents(new Set());
-                }}
-              >
-                {showCheckboxes ? "✖️ Cancel" : "🗑️ Delete Events"}
-              </HoverButton>
-
-              {showCheckboxes && selectedEvents.size > 0 && (
-                <HoverButton
-                  style={{ 
-                    backgroundColor: "#c0392b", 
-                    color: "white",
-                    border: "2px solid transparent"
-                  }}
-                  onClick={handleDeleteSelected}
-                  disabled={deleting}
-                >
-                  {deleting ? "⏳ Deleting..." : `🗑️ Delete Selected (${selectedEvents.size})`}
-                </HoverButton>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div style={{
-          backgroundColor: "white",
-          borderRadius: "12px",
-          padding: "24px",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.05)"
-        }}>
-          <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "16px",
-            flexWrap: "wrap",
-            gap: "12px"
-          }}>
-            <div style={{
-              display: "flex",
-              gap: "16px",
-              fontSize: "12px",
-              fontWeight: "500",
-              flexWrap: "wrap"
-            }}>
-              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <div style={{ width: "12px", height: "12px", backgroundColor: "#3498db", borderRadius: "2px" }}></div>
-                 Classes
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <div style={{ width: "12px", height: "12px", backgroundColor: "#27ae60", borderRadius: "2px" }}></div>
-                 Events
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <div style={{ width: "12px", height: "12px", backgroundColor: "#9b59b6", borderRadius: "2px" }}></div>
-                Personal
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <div style={{ width: "12px", height: "12px", backgroundColor: "#e74c3c", borderRadius: "2px" }}></div>
-                 Meetings
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <div style={{ width: "12px", height: "12px", backgroundColor: "#f39c12", borderRadius: "2px" }}></div>
-                Appointments
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <div style={{ width: "12px", height: "12px", backgroundColor: "#95a5a6", borderRadius: "2px" }}></div>
-                Reminders
-              </span>
-            </div>
-            
-            {/* Overlap detection indicator */}
-            {scheduleEvents.length > 0 && (() => {
-              const overlaps = checkEventOverlaps(scheduleEvents);
-              return overlaps.length > 0 ? (
-                <div style={{
-                  backgroundColor: "#e74c3c",
-                  color: "white",
-                  padding: "4px 8px",
-                  borderRadius: "4px",
-                  fontSize: "11px",
-                  fontWeight: "500",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px"
-                }}>
-                  ⚠️ {overlaps.length} Overlap{overlaps.length > 1 ? 's' : ''} Detected
-                </div>
-              ) : (
-                <div style={{
-                  backgroundColor: "#27ae60",
-                  color: "white",
-                  padding: "4px 8px",
-                  borderRadius: "4px",
-                  fontSize: "11px",
-                  fontWeight: "500",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px"
-                }}>
-                  ✅ No Overlaps
-                </div>
-              );
-            })()}
-          </div>
-          <Calendar
-            localizer={localizer}
-            events={scheduleEvents}
-            startAccessor="start"
-            endAccessor="end"
-            style={{ height: 600 }}
-            views={["month", "week", "day"]}
-            view={view}
-            onView={setView}
-            date={date}
-            onNavigate={setDate}
-            eventPropGetter={eventStyleGetter}
-            selectable={false}
-            onSelectEvent={!showCheckboxes ? handleEventClick : null}
-            components={{
-              event: ({ event }) => (
-                <div 
-                  style={{ 
-                    padding: "4px 6px", 
-                    borderRadius: "4px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    color: "white"
-                  }}
-                  onClick={(e) => {
-                    // Only open event details if NOT in delete mode
-                    if (!showCheckboxes) {
-                      e.stopPropagation();
-                      handleEventClick(event);
-                    }
-                  }}
-                >
-                  {showCheckboxes && !event.isClass && (
-                    <input
-                      type="checkbox"
-                      checked={selectedEvents.has(event.id)}
-                      onChange={() => toggleSelectEvent(event.id)}
-                      style={{ 
-                        marginRight: 4,
-                        cursor: "pointer"
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  )}
-                  <span>{event.title}</span>
-                  {event.isClass && <span style={{ fontSize: "10px", opacity: 0.8 }}>📚</span>}
-                  {!event.isClass && event.eventType === "personal" && <span style={{ fontSize: "10px", opacity: 0.8 }}>💜</span>}
-                  {!event.isClass && event.eventType === "meeting" && <span style={{ fontSize: "10px", opacity: 0.8 }}>🔴</span>}
-                  {!event.isClass && event.eventType === "appointment" && <span style={{ fontSize: "10px", opacity: 0.8 }}>🟠</span>}
-                  {!event.isClass && event.eventType === "reminder" && <span style={{ fontSize: "10px", opacity: 0.8 }}>⚫</span>}
-                  {!event.isClass && !["personal", "meeting", "appointment", "reminder"].includes(event.eventType) && <span style={{ fontSize: "10px", opacity: 0.8 }}>📅</span>}
-                </div>
-              ),
-            }}
-          />
-        </div>
 
         {showAddEventModal && (
           <div style={{
