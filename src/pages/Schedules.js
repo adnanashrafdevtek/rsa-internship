@@ -180,6 +180,26 @@ export default function Schedules() {
     abDay: "",
     dayType: ""
   });
+  const [dragStartPosition, setDragStartPosition] = useState(null);
+  const [dragTimeout, setDragTimeout] = useState(null);
+
+  // Cleanup function to remove any potential duplicate events
+  const cleanupDuplicateExceptions = () => {
+    setCreateEvents(prev => {
+      const seen = new Set();
+      return prev.filter(event => {
+        // Create a unique key for each event based on its core properties
+        const key = `${event.subject}-${event.teacherId}-${event.grade}-${event.room}-${moment(event.start).format('dddd-HH:mm')}`;
+        
+        if (seen.has(key)) {
+          return false; // Remove duplicate
+        }
+        
+        seen.add(key);
+        return true;
+      });
+    });
+  };
 
   const getRole = u => (u && u.role ? u.role.trim().toLowerCase() : "");
   const isStudent = getRole(user) === "student";
@@ -336,6 +356,12 @@ export default function Schedules() {
 
     fetchData();
   }, [user, activeTab, isStudent, isTeacher]);
+
+  // Cleanup duplicates periodically
+  useEffect(() => {
+    const interval = setInterval(cleanupDuplicateExceptions, 5000); // Every 5 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   // Role check - admin only for full access (after all hooks)
   if (!user || user.role !== "admin") {
@@ -1005,9 +1031,53 @@ export default function Schedules() {
     return teacherColors[idx % teacherColors.length];
   };
 
+  // Helper function to check if an event is within teacher availability
+  const isEventInTeacherAvailability = (event) => {
+    if (!event.teacherId) return true; // No teacher assigned, no conflict
+    
+    const eventStart = moment(event.start);
+    const eventEnd = moment(event.end);
+    const eventDay = eventStart.day(); // 0=Sunday, 1=Monday, etc.
+    
+    // Find teacher's availability for this day
+    const teacherAvailabilities = allAvailabilities.filter(av => 
+      av.teacher_id === event.teacherId
+    );
+    
+    for (const availability of teacherAvailabilities) {
+      let availabilityDay;
+      
+      // Handle different day formats
+      if (typeof availability.day_of_week === 'number') {
+        availabilityDay = availability.day_of_week;
+      } else {
+        const dayMap = { 'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6 };
+        availabilityDay = dayMap[availability.day_of_week] || 0;
+      }
+      
+      // Check if event is on the same day as availability
+      if (eventDay === availabilityDay) {
+        const availStart = moment(availability.start_time, 'HH:mm:ss');
+        const availEnd = moment(availability.end_time, 'HH:mm:ss');
+        
+        // Set the date to match the event day for proper comparison
+        availStart.year(eventStart.year()).month(eventStart.month()).date(eventStart.date());
+        availEnd.year(eventEnd.year()).month(eventEnd.month()).date(eventEnd.date());
+        
+        // Check if event is within availability window
+        if (eventStart.isSameOrAfter(availStart) && eventEnd.isSameOrBefore(availEnd)) {
+          return true;
+        }
+      }
+    }
+    
+    return false; // No matching availability found
+  };
+
   // Helper: expand recurring events for calendar
   const getCalendarEvents = () => {
     const expanded = [];
+    
     for (const ev of createEvents) {
       if (Array.isArray(ev.recurringDays) && ev.recurringDays.length > 0 && ev.start && ev.end) {
         // For recurring events, create instances on each selected day
@@ -1027,14 +1097,14 @@ export default function Schedules() {
           
           expanded.push({
             ...ev,
-            id: `${ev.id}-recurring-${recurDay}`,
+            id: `${ev.id}-${recurDay}`,
             start: instanceStart.toDate(),
             end: instanceEnd.toDate(),
             title: ev.subject
           });
         }
       } else {
-        // Non-recurring event
+        // Non-recurring event or events with explicit start/end dates
         expanded.push({
           ...ev,
           title: ev.subject
@@ -1106,8 +1176,16 @@ export default function Schedules() {
     const isFriday = moment(start).day() === 5;
     
     if (isFriday) {
-      // For Friday, show A/B day selection modal
-      setFridayModal({ open: true, slotInfo: { start, end } });
+      // For Friday, always show A/B day selection modal first
+      setFridayModal({ 
+        open: true, 
+        slotInfo: { 
+          start, 
+          end, 
+          dragEvent: false,
+          isNewClass: true 
+        } 
+      });
       return;
     }
     
@@ -1145,8 +1223,8 @@ export default function Schedules() {
       teacherId: preSelectedTeacherId,
       startTime: moment(start).format("h:mm A"), 
       endTime: moment(end).format("h:mm A"),
-      abDay: abDay || (isFriday ? "" : ""),
-      dayType: abDay || (isFriday ? "" : ""),
+      abDay: abDay || "",
+      dayType: abDay || "",
       recurringDays
     }));
     setModalOpen(true);
@@ -1154,33 +1232,75 @@ export default function Schedules() {
 
   // Handle Friday A/B day selection
   const handleFridaySelection = (abDay) => {
-    const { start, end, dragEvent, originalEvent } = fridayModal.slotInfo;
+    const { start, end, dragEvent, originalEvent, draggedEventId, isNewClass } = fridayModal.slotInfo;
     setFridayModal({ open: false, slotInfo: null });
     
-    if (dragEvent && originalEvent) {
-      // This is a drag operation to Friday
-      const updatedEvent = {
-        ...originalEvent,
-        start: start,
-        end: end,
-        recurringDays: [4], // Friday is index 4
-        abDay: abDay
-      };
+    if (isNewClass) {
+      // Handle new class creation on Friday
+      const overlappingAvailabilities = allAvailabilities.filter(av => {
+        const slotStart = moment(start);
+        const slotEnd = moment(end);
+        const dayOfWeek = 5; // Friday
+        
+        if (av.day_of_week !== dayOfWeek) return false;
+        
+        const [avStartHour, avStartMin] = av.start_time.split(':').map(Number);
+        const [avEndHour, avEndMin] = av.end_time.split(':').map(Number);
+        const avStart = slotStart.clone().set({ hour: avStartHour, minute: avStartMin, second: 0 });
+        const avEnd = slotStart.clone().set({ hour: avEndHour, minute: avEndMin, second: 0 });
+        
+        return slotStart.isSameOrAfter(avStart) && slotEnd.isSameOrBefore(avEnd);
+      });
       
-      setCreateEvents(prev => prev.map(ev => ev.id === originalEvent.id ? updatedEvent : ev));
-      setDraggingEventId(null);
-    } else {
-      // This is a new event creation on Friday
+      let preSelectedTeacherId = "";
+      if (overlappingAvailabilities.length === 1) {
+        preSelectedTeacherId = overlappingAvailabilities[0].teacher_id.toString();
+      }
+      
+      const dayIdx = 4; // Friday index
+      const recurringDays = [dayIdx];
+      
       setSelectedSlot({ start, end });
-      setDetails(d => ({ 
-        ...d, 
-        startTime: moment(start).format("h:mm A"), 
+      setDetails({
+        teacherId: preSelectedTeacherId,
+        grade: "",
+        customGrade: "",
+        subject: "",
+        room: "",
+        startTime: moment(start).format("h:mm A"),
         endTime: moment(end).format("h:mm A"),
-        abDay,
-        dayType: abDay,
-        recurringDays: [4] // Friday is index 4 (0=Monday, ... 4=Friday)
-      }));
+        recurringDays,
+        abDay: abDay,
+        dayType: abDay
+      });
       setModalOpen(true);
+      return;
+    }
+    
+    if (dragEvent && originalEvent) {
+      // Simple direct update - just move the event to Friday with A/B day
+      setCreateEvents(prev => {
+        return prev.map(ev => {
+          if (ev.id === draggedEventId) {
+            const updatedEvent = {
+              ...ev,
+              start: start,
+              end: end,
+              abDay: abDay
+            };
+            
+            // Check if the updated event is within teacher availability
+            const isInAvailability = isEventInTeacherAvailability(updatedEvent);
+            updatedEvent.outOfAvailability = !isInAvailability;
+            
+            return updatedEvent;
+          }
+          return ev;
+        });
+      });
+      
+      setDraggingEventId(null);
+      setDragStartPosition(null);
     }
   };
 
@@ -1352,6 +1472,10 @@ export default function Schedules() {
       abDay: newAbDay,
       hasConflicts: false
     };
+    
+    // Check if the event is within teacher availability
+    const isInAvailability = isEventInTeacherAvailability(newEvent);
+    newEvent.outOfAvailability = !isInAvailability;
 
     if (editMode) {
       setCreateEvents(prev => prev.map(ev => ev.id === editingEventId ? newEvent : ev));
@@ -1381,57 +1505,119 @@ export default function Schedules() {
   // Handle drag start
   const handleEventDragStart = ({ event }) => {
     setDraggingEventId(event.id);
+    setDragStartPosition({
+      start: event.start,
+      end: event.end,
+      day: moment(event.start).day()
+    });
+    
+    // Prevent page scrolling during drag
+    document.body.style.overflow = 'hidden';
+    
+    // Add custom CSS for drag operations
+    const style = document.createElement('style');
+    style.id = 'drag-scroll-prevent';
+    style.textContent = `
+      .rbc-addons-dnd-drag-preview {
+        pointer-events: none !important;
+      }
+      .rbc-calendar {
+        overflow: hidden !important;
+      }
+      body {
+        overflow: hidden !important;
+      }
+    `;
+    document.head.appendChild(style);
   };
 
   // Handle drag end
   const handleDragEnd = () => {
     setDraggingEventId(null);
+    setDragStartPosition(null);
+    
+    // Restore page scrolling
+    document.body.style.overflow = '';
+    
+    // Remove drag-specific CSS
+    const dragStyle = document.getElementById('drag-scroll-prevent');
+    if (dragStyle) {
+      dragStyle.remove();
+    }
+    
+    // Clear any pending drag timeouts
+    if (dragTimeout) {
+      clearTimeout(dragTimeout);
+      setDragTimeout(null);
+    }
   };
 
   // Handle event drop
   const handleEventDrop = ({ event, start, end }) => {
-    console.log('Event drop triggered:', { event, start, end });
-    
     if (event.availability) return; // Don't allow dragging availability blocks
     
-    const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
-    const eventToUpdate = createEvents.find(ev => ev.id === baseId);
+    // Clear any pending drag timeouts to prevent duplicate operations
+    if (dragTimeout) {
+      clearTimeout(dragTimeout);
+      setDragTimeout(null);
+    }
     
-    console.log('Event to update:', eventToUpdate);
-    
-    if (!eventToUpdate) return;
+    // Check if the event actually moved from its original position
+    if (dragStartPosition) {
+      const startDiff = Math.abs(moment(start).diff(moment(dragStartPosition.start), 'minutes'));
+      const endDiff = Math.abs(moment(end).diff(moment(dragStartPosition.end), 'minutes'));
+      
+      // Only consider it moved if it's moved by more than 5 minutes or to a different day
+      const hasMoved = startDiff > 5 || endDiff > 5 || moment(start).day() !== dragStartPosition.day;
+      
+      if (!hasMoved) {
+        // Event didn't actually move significantly, just reset state
+        setDraggingEventId(null);
+        setDragStartPosition(null);
+        return;
+      }
+    }
 
-    // Calculate new day and time
     const newDayOfWeek = moment(start).day();
     
-    // Convert day of week to recurring days array (Monday=0, Tuesday=1, etc.)
-    const newRecurringDays = newDayOfWeek >= 1 && newDayOfWeek <= 5 ? [newDayOfWeek - 1] : [];
-    
     // Handle Friday A/B day logic
-    if (newDayOfWeek === 5) { // Friday
-      setFridayModal({ 
-        open: true, 
-        slotInfo: { 
-          start, 
-          end, 
-          dragEvent: true, 
-          originalEvent: eventToUpdate 
-        } 
+    if (newDayOfWeek === 5) {
+      setFridayModal({
+        open: true,
+        slotInfo: {
+          start,
+          end,
+          dragEvent: true,
+          originalEvent: event,
+          draggedEventId: event.id
+        }
       });
       return;
     }
     
-    // Update the event with new day and time
-    const updatedEvent = {
-      ...eventToUpdate,
-      start: start,
-      end: end,
-      recurringDays: newRecurringDays,
-      abDay: newDayOfWeek === 5 ? eventToUpdate.abDay : ""
-    };
+    // Simple direct update - just move the event to the new position
+    setCreateEvents(prev => {
+      return prev.map(ev => {
+        if (ev.id === event.id) {
+          // Direct update of the dragged event
+          const updatedEvent = {
+            ...ev,
+            start: start,
+            end: end
+          };
+          
+          // Check if the updated event is within teacher availability
+          const isInAvailability = isEventInTeacherAvailability(updatedEvent);
+          updatedEvent.outOfAvailability = !isInAvailability;
+          
+          return updatedEvent;
+        }
+        return ev;
+      });
+    });
     
-    setCreateEvents(prev => prev.map(ev => ev.id === eventToUpdate.id ? updatedEvent : ev));
     setDraggingEventId(null);
+    setDragStartPosition(null);
   };
 
   // Handle edit event
@@ -1469,6 +1655,7 @@ export default function Schedules() {
   // Confirm delete selected events
   const handleConfirmDelete = () => {
     setCreateEvents(evts => evts.filter(ev => {
+      // For all events, check if the base ID is selected
       const baseId = ev.id.includes('-recurring-') ? ev.id.split('-recurring-')[0] : ev.id;
       return !selectedToDelete.includes(baseId);
     }));
@@ -1546,6 +1733,38 @@ export default function Schedules() {
             border-radius: 8px !important;
             overflow: hidden !important;
           }
+          /* Slow down auto-scroll during drag */
+          .rbc-time-content {
+            overflow-y: auto;
+            scroll-behavior: smooth;
+          }
+          
+          /* Reduce auto-scroll sensitivity during drag */
+          .rbc-dnd-dragging .rbc-time-content {
+            scroll-behavior: auto;
+          }
+          
+          /* Override react-big-calendar's auto-scroll behavior */
+          .rbc-time-view .rbc-time-content {
+            scroll-padding-top: 20px;
+            scroll-padding-bottom: 20px;
+          }
+          
+          /* Custom styles for dragging state */
+          .rbc-addons-dnd-drag-preview {
+            opacity: 0.7;
+            transform: rotate(5deg);
+          }
+          
+          /* Prevent auto-scroll during drag operations */
+          .rbc-dnd-dragging {
+            scroll-behavior: auto !important;
+          }
+          
+          .rbc-dnd-dragging .rbc-time-content {
+            overflow: hidden !important;
+            scroll-behavior: auto !important;
+          }
         `}</style>
         <DragAndDropCalendar
           localizer={localizer}
@@ -1572,21 +1791,27 @@ export default function Schedules() {
           step={5}
           timeslots={6}
           showMultiDayTimes={false}
+          scrollToTime={moment().set({ hour: 8, minute: 0 }).toDate()}
+          enableAutoScroll={false}
           onSelectEvent={deleteMode ? (event) => {
             if (event.availability) return;
-            const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
+            
+            // For exception events, use the exact ID
+            const eventId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
+            
             setSelectedToDelete(prev => 
-              prev.includes(baseId) 
-                ? prev.filter(id => id !== baseId)
-                : [...prev, baseId]
+              prev.includes(eventId) 
+                ? prev.filter(id => id !== eventId)
+                : [...prev, eventId]
             );
           } : (event) => {
             if (event.availability) return;
             setEventDetailsModal({ open: true, event });
           }}
           eventPropGetter={event => {
+            const eventId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
             const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
-            const isSelected = selectedToDelete.includes(baseId);
+            const isSelected = selectedToDelete.includes(eventId);
             const hasConflict = overlappingIds.includes(baseId);
             const isBeingDragged = draggingEventId === event.id;
             
@@ -1610,11 +1835,17 @@ export default function Schedules() {
             let border = "none";
             let opacity = isBeingDragged ? 0.6 : 1;
             
+            // Check if event is outside teacher availability
+            const isOutOfAvailability = event.outOfAvailability || (!event.availability && !isEventInTeacherAvailability(event));
+            
             if (deleteMode && isSelected) {
               backgroundColor = "#e74c3c";
               border = "2px solid #c0392b";
             } else if (hasConflict) {
               border = "2px solid #e74c3c";
+            } else if (isOutOfAvailability && !event.availability) {
+              backgroundColor = "#ff9800"; // Orange for availability warning
+              border = "2px dashed #f57c00";
             }
             
             return {
@@ -1626,29 +1857,60 @@ export default function Schedules() {
                 fontSize: "12px",
                 fontWeight: "500",
                 opacity,
-                cursor: deleteMode ? "pointer" : (isBeingDragged ? "grabbing" : "grab")
+                cursor: deleteMode ? "pointer" : (isBeingDragged ? "grabbing" : "grab"),
+                position: "relative"
               }
             };
           }}
           components={{
-            event: ({ event }) => (
-              <div style={{ 
-                padding: "2px 4px", 
-                fontSize: event.availability ? "10px" : "12px",
-                fontWeight: event.availability ? 400 : 500,
-                opacity: event.availability ? 0.8 : 1
-              }}>
-                {event.availability 
-                  ? `${event.teacher_first_name} ${event.teacher_last_name}`
-                  : (event.title || event.subject)
-                }
-                {deleteMode && !event.availability && (
-                  <span style={{ marginLeft: "4px", fontSize: "10px" }}>
-                    {selectedToDelete.includes(event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id) ? "✓" : ""}
+            event: ({ event }) => {
+              const isOutOfAvailability = event.outOfAvailability || (!event.availability && !isEventInTeacherAvailability(event));
+              
+              return (
+                <div style={{ 
+                  padding: "2px 4px", 
+                  fontSize: event.availability ? "10px" : "12px",
+                  fontWeight: event.availability ? 400 : 500,
+                  opacity: event.availability ? 0.8 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between"
+                }}>
+                  <span>
+                    {event.availability 
+                      ? `${event.teacher_first_name} ${event.teacher_last_name}`
+                      : (event.title || event.subject)
+                    }
                   </span>
-                )}
-              </div>
-            ),
+                  
+                  <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+
+                    
+                    {!event.availability && isOutOfAvailability && (
+                      <span 
+                        style={{ 
+                          fontSize: "10px", 
+                          color: "#fff",
+                          backgroundColor: "rgba(255,152,0,0.8)",
+                          borderRadius: "2px",
+                          padding: "1px 3px",
+                          fontWeight: "bold"
+                        }}
+                        title="Outside teacher availability"
+                      >
+                        ⚠
+                      </span>
+                    )}
+                    
+                    {deleteMode && !event.availability && (
+                      <span style={{ fontSize: "10px" }}>
+                        {selectedToDelete.includes(event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id) ? "✓" : ""}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            },
             header: CustomHeader
           }}
         />
