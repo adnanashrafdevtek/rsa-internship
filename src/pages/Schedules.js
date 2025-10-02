@@ -776,23 +776,80 @@ export default function Schedules() {
         boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
         marginBottom: "12px"
       }}>
-        <h1 style={{ 
-          fontSize: 20, 
-          fontWeight: "bold", 
-          margin: 0, 
-          color: "#2c3e50",
-          display: "flex",
-          alignItems: "center",
-          gap: "6px"
-        }}>
-          ➕ Create Schedule
-        </h1>
-        <p style={{ margin: "8px 0 0 0", color: "#7f8c8d", fontSize: "14px" }}>
-          Drag on the calendar to create new class schedules. Select teachers to view their availability.
-        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h1 style={{ 
+              fontSize: 20, 
+              fontWeight: "bold", 
+              margin: 0, 
+              color: "#2c3e50",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }}>
+              ➕ Create Schedule
+            </h1>
+            <p style={{ margin: "8px 0 0 0", color: "#7f8c8d", fontSize: "14px" }}>
+              Drag on the calendar to create new class schedules. Select teachers to view their availability.
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            {deleteMode ? (
+              <>
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={selectedToDelete.length === 0}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: selectedToDelete.length > 0 ? "#e74c3c" : "#bdc3c7",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: selectedToDelete.length > 0 ? "pointer" : "not-allowed",
+                    fontSize: "14px",
+                    fontWeight: "500"
+                  }}
+                >
+                  Delete Selected ({selectedToDelete.length})
+                </button>
+                <button
+                  onClick={handleDeleteMode}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#95a5a6",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    fontWeight: "500"
+                  }}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleDeleteMode}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e74c3c",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: "500"
+                }}
+              >
+                🗑️ Delete Mode
+              </button>
+            )}
+          </div>
+        </div>
       </div>
       
-      <div style={{ display: "flex", gap: "16px", height: "calc(100vh - 200px)" }}>
+      <div style={{ display: "flex", gap: "16px", height: "calc(100vh - 240px)" }}>
         {/* Calendar */}
         <div style={{ flex: 1 }}>
           {renderCreateCalendar()}
@@ -810,6 +867,29 @@ export default function Schedules() {
           flexDirection: "column" 
         }}>
           <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 18 }}>Teacher Availability</h3>
+          
+          {/* Controls */}
+          <div style={{ marginBottom: 16 }}>
+            {selectedTeachers.length > 0 && (
+              <button
+                onClick={() => setSelectedTeachers([])}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#e74c3c",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  fontWeight: "500",
+                  marginBottom: "8px",
+                  width: "100%"
+                }}
+              >
+                Unselect All
+              </button>
+            )}
+          </div>
           
           {/* Search bar */}
           <input
@@ -920,6 +1000,437 @@ export default function Schedules() {
     return teacherColors[idx % teacherColors.length];
   };
 
+  // Helper: expand recurring events for calendar
+  const getCalendarEvents = () => {
+    const expanded = [];
+    for (const ev of createEvents) {
+      if (Array.isArray(ev.recurringDays) && ev.recurringDays.length > 0 && ev.start && ev.end) {
+        // For recurring events, create instances on each selected day
+        const baseStart = moment(ev.start);
+        const baseEnd = moment(ev.end);
+        const duration = baseEnd.diff(baseStart, 'minutes');
+        
+        for (const recurDay of ev.recurringDays) {
+          // Map 0=Monday, ... 4=Friday to moment's 1=Monday, ... 5=Friday
+          const momentDay = recurDay + 1;
+          
+          // Create new event for this day of the week
+          const weekStart = moment().startOf('week');
+          const dayStart = weekStart.clone().day(momentDay);
+          const instanceStart = dayStart.set({ hour: baseStart.hour(), minute: baseStart.minute(), second: 0 });
+          const instanceEnd = instanceStart.clone().add(duration, 'minutes');
+          
+          expanded.push({
+            ...ev,
+            id: `${ev.id}-recurring-${recurDay}`,
+            start: instanceStart.toDate(),
+            end: instanceEnd.toDate(),
+            title: ev.subject
+          });
+        }
+      } else {
+        // Non-recurring event
+        expanded.push({
+          ...ev,
+          title: ev.subject
+        });
+      }
+    }
+    return expanded;
+  };
+
+  // Overlap detection (returns array of event ids that overlap for same teacher or same room)
+  const getOverlappingEventIds = () => {
+    const ids = new Set();
+    const expandedEvents = getCalendarEvents();
+    
+    for (let i = 0; i < expandedEvents.length; i++) {
+      for (let j = i + 1; j < expandedEvents.length; j++) {
+        const a = expandedEvents[i], b = expandedEvents[j];
+        
+        // Skip if either is an availability block
+        if (a.availability || b.availability) continue;
+        
+        // Check if they are on the same day
+        const aStart = moment(a.start);
+        const aEnd = moment(a.end);
+        const bStart = moment(b.start);
+        const bEnd = moment(b.end);
+        const sameDay = aStart.format('YYYY-MM-DD') === bStart.format('YYYY-MM-DD');
+        
+        if (!sameDay) continue;
+        
+        // Check for any time overlap (even 1 minute)
+        const hasTimeOverlap = aStart.isBefore(bEnd) && bStart.isBefore(aEnd);
+        
+        if (hasTimeOverlap) {
+          // Flag for same teacher conflicts
+          const sameTeacher = a.teacher && b.teacher && a.teacher === b.teacher;
+          
+          // Flag for same room conflicts
+          const sameRoom = a.room && b.room && a.room === b.room;
+          
+          if (sameTeacher || sameRoom) {
+            // Get the original event IDs for highlighting
+            const aId = a.id.includes('-recurring-') ? a.id.split('-recurring-')[0] : a.id;
+            const bId = b.id.includes('-recurring-') ? b.id.split('-recurring-')[0] : b.id;
+            ids.add(aId);
+            ids.add(bId);
+          }
+        }
+      }
+    }
+    return Array.from(ids);
+  };
+
+  // Generate time options for dropdown (6:30 AM - 4:00 PM in 5-minute intervals)
+  const generateTimeOptions = () => {
+    const times = [];
+    const start = moment().set({ hour: 6, minute: 30, second: 0 });
+    const end = moment().set({ hour: 16, minute: 0, second: 0 });
+    
+    while (start.isSameOrBefore(end)) {
+      times.push(start.format('h:mm A'));
+      start.add(5, 'minutes');
+    }
+    return times;
+  };
+
+  // Handle slot selection for creating new events
+  const handleSelectSlot = ({ start, end }) => {
+    const isFriday = moment(start).day() === 5;
+    
+    if (isFriday) {
+      // For Friday, show A/B day selection modal
+      setFridayModal({ open: true, slotInfo: { start, end } });
+      return;
+    }
+    
+    const abDay = getABDay(start);
+    
+    // Find overlapping teacher availabilities
+    const overlappingAvailabilities = allAvailabilities.filter(av => {
+      const slotStart = moment(start);
+      const slotEnd = moment(end);
+      const dayOfWeek = slotStart.day() === 0 ? 7 : slotStart.day(); // Convert Sunday (0) to 7
+      
+      if (av.day_of_week !== dayOfWeek) return false;
+      
+      const [avStartHour, avStartMin] = av.start_time.split(':').map(Number);
+      const [avEndHour, avEndMin] = av.end_time.split(':').map(Number);
+      const avStart = slotStart.clone().set({ hour: avStartHour, minute: avStartMin, second: 0 });
+      const avEnd = slotStart.clone().set({ hour: avEndHour, minute: avEndMin, second: 0 });
+      
+      return slotStart.isSameOrAfter(avStart) && slotEnd.isSameOrBefore(avEnd);
+    });
+    
+    // Auto-select teacher if exactly one availability matches
+    let preSelectedTeacherId = "";
+    if (overlappingAvailabilities.length === 1) {
+      preSelectedTeacherId = overlappingAvailabilities[0].teacher_id.toString();
+    }
+    
+    // Pre-select recurring day for the day being added
+    const dayIdx = moment(start).day() - 1; // 0=Monday, ... 4=Friday
+    const recurringDays = (dayIdx >= 0 && dayIdx <= 4) ? [dayIdx] : [];
+    
+    setSelectedSlot({ start, end });
+    setDetails(d => ({ 
+      ...d, 
+      teacherId: preSelectedTeacherId,
+      startTime: moment(start).format("h:mm A"), 
+      endTime: moment(end).format("h:mm A"),
+      abDay: abDay || (isFriday ? "" : ""),
+      dayType: abDay || (isFriday ? "" : ""),
+      recurringDays
+    }));
+    setModalOpen(true);
+  };
+
+  // Handle Friday A/B day selection
+  const handleFridaySelection = (abDay) => {
+    const { start, end } = fridayModal.slotInfo;
+    setFridayModal({ open: false, slotInfo: null });
+    
+    setSelectedSlot({ start, end });
+    setDetails(d => ({ 
+      ...d, 
+      startTime: moment(start).format("h:mm A"), 
+      endTime: moment(end).format("h:mm A"),
+      abDay,
+      dayType: abDay,
+      recurringDays: [4] // Friday is index 4 (0=Monday, ... 4=Friday)
+    }));
+    setModalOpen(true);
+  };
+
+  // Handle detail changes in modal
+  const handleDetailChange = (e) => {
+    const { name, value } = e.target;
+    setDetails(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Handle time change
+  const handleTimeChange = (field, value) => {
+    setDetails(prev => ({ ...prev, [field]: value }));
+    
+    // Update selectedSlot times for validation
+    if (selectedSlot) {
+      const newStart = moment(selectedSlot.start);
+      const newEnd = moment(selectedSlot.end);
+      
+      if (field === 'startTime') {
+        const [hour, minute] = moment(value, 'h:mm A').format('HH:mm').split(':');
+        newStart.hour(parseInt(hour)).minute(parseInt(minute));
+      } else if (field === 'endTime') {
+        const [hour, minute] = moment(value, 'h:mm A').format('HH:mm').split(':');
+        newEnd.hour(parseInt(hour)).minute(parseInt(minute));
+      }
+      
+      setSelectedSlot({ start: newStart.toDate(), end: newEnd.toDate() });
+    }
+  };
+
+  // Save event from modal
+  const handleSaveEvent = (e) => {
+    e.preventDefault();
+
+    // Validate required fields
+    if (!details.subject || !details.teacherId || !details.grade || !details.room) {
+      alert('Please fill in all required fields.');
+      return;
+    }
+
+    const newTeacherId = parseInt(details.teacherId);
+    const newRoom = details.room;
+    const newGrade = details.grade === "Not here?" ? details.customGrade : details.grade;
+    const newSubject = details.subject;
+    const newStart = moment(selectedSlot.start);
+    const newEnd = moment(selectedSlot.end);
+    const newRecurringDays = details.recurringDays || [];
+    const newAbDay = details.abDay || "";
+
+    // Get teacher name for conflict messages
+    const newTeacherName = (() => {
+      const t = teachers.find(t => t.id === newTeacherId);
+      return t ? `${t.first_name} ${t.last_name}` : "";
+    })();
+
+    let conflictMessages = [];
+
+    // Helper function to check if two time ranges overlap
+    const isOverlap = (start1, end1, start2, end2) => {
+      return moment(start1).isBefore(moment(end2)) && moment(start2).isBefore(moment(end1));
+    };
+
+    // Check for conflicts with existing events
+    const checkConflicts = () => {
+      const newInstances = [];
+      
+      if (newRecurringDays && newRecurringDays.length > 0) {
+        const duration = newEnd.diff(newStart, 'minutes');
+        for (const recurDay of newRecurringDays) {
+          const momentDay = recurDay + 1;
+          const weekStart = moment().startOf('week');
+          const dayStart = weekStart.clone().day(momentDay);
+          const instanceStart = dayStart.set({ hour: newStart.hour(), minute: newStart.minute(), second: 0 });
+          const instanceEnd = instanceStart.clone().add(duration, 'minutes');
+          newInstances.push({ start: instanceStart, end: instanceEnd, dayOfWeek: momentDay });
+        }
+      } else {
+        newInstances.push({ start: newStart, end: newEnd, dayOfWeek: newStart.day() });
+      }
+
+      for (const newInst of newInstances) {
+        // Check teacher availability
+        const teacherAvailabilities = allAvailabilities.filter(av => av.teacher_id === newTeacherId);
+        if (teacherAvailabilities.length > 0) {
+          const newInstDayOfWeek = newInst.dayOfWeek === 0 ? 7 : newInst.dayOfWeek;
+          const availableOnDay = teacherAvailabilities.some(av => {
+            if (av.day_of_week !== newInstDayOfWeek) return false;
+            const [avStartHour, avStartMin] = av.start_time.split(':').map(Number);
+            const [avEndHour, avEndMin] = av.end_time.split(':').map(Number);
+            const avStart = moment(newInst.start).clone().set({ hour: avStartHour, minute: avStartMin, second: 0 });
+            const avEnd = moment(newInst.start).clone().set({ hour: avEndHour, minute: avEndMin, second: 0 });
+            return newInst.start.isSameOrAfter(avStart) && newInst.end.isSameOrBefore(avEnd);
+          });
+          if (!availableOnDay) {
+            const dayName = moment().day(newInstDayOfWeek).format('dddd');
+            conflictMessages.push(`${newTeacherName} is not available on ${dayName} from ${newInst.start.format('h:mm A')} to ${newInst.end.format('h:mm A')}`);
+          }
+        }
+
+        // Check conflicts with existing events
+        const otherEvents = editMode ? createEvents.filter(ev => ev.id !== editingEventId) : createEvents;
+        for (const otherEvent of otherEvents) {
+          let otherInstances = [];
+          if (Array.isArray(otherEvent.recurringDays) && otherEvent.recurringDays.length > 0) {
+            const baseStart = moment(otherEvent.start);
+            const baseEnd = moment(otherEvent.end);
+            const duration = baseEnd.diff(baseStart, 'minutes');
+            for (const recurDay of otherEvent.recurringDays) {
+              const momentDay = recurDay + 1;
+              const weekStart = moment().startOf('week');
+              const dayStart = weekStart.clone().day(momentDay);
+              const instanceStart = dayStart.set({ hour: baseStart.hour(), minute: baseStart.minute(), second: 0 });
+              const instanceEnd = instanceStart.clone().add(duration, 'minutes');
+              otherInstances.push({ ...otherEvent, start: instanceStart, end: instanceEnd });
+            }
+          } else {
+            otherInstances.push({ ...otherEvent, start: moment(otherEvent.start), end: moment(otherEvent.end) });
+          }
+          
+          for (const otherInst of otherInstances) {
+            if (isOverlap(newInst.start, newInst.end, otherInst.start, otherInst.end) && newInst.start.day() === otherInst.start.day()) {
+              if (otherInst.teacher === newTeacherName) {
+                const dayName = newInst.start.format('dddd');
+                conflictMessages.push(`${newTeacherName} already has "${otherInst.subject}" on ${dayName} from ${otherInst.start.format('h:mm A')} to ${otherInst.end.format('h:mm A')}`);
+              }
+              if (otherInst.room === newRoom) {
+                const dayName = newInst.start.format('dddd');
+                conflictMessages.push(`Room ${newRoom} is already booked for "${otherInst.subject}" on ${dayName} from ${otherInst.start.format('h:mm A')} to ${otherInst.end.format('h:mm A')}`);
+              }
+            }
+          }
+        }
+      }
+    };
+
+    checkConflicts();
+
+    // If there are conflicts, show conflict modal
+    if (conflictMessages.length > 0) {
+      const newEvent = {
+        id: editMode ? editingEventId : Date.now().toString(),
+        subject: newSubject,
+        teacher: newTeacherName,
+        teacherId: newTeacherId, 
+        grade: newGrade,
+        room: newRoom,
+        start: newStart.toDate(),
+        end: newEnd.toDate(),
+        recurringDays: newRecurringDays,
+        abDay: newAbDay,
+        hasConflicts: true
+      };
+      
+      setConflictModal({ open: true, messages: conflictMessages, pendingEvent: newEvent });
+      return;
+    }
+
+    // No conflicts, save the event
+    const newEvent = {
+      id: editMode ? editingEventId : Date.now().toString(),
+      subject: newSubject,
+      teacher: newTeacherName,
+      teacherId: newTeacherId,
+      grade: newGrade,
+      room: newRoom,
+      start: newStart.toDate(),
+      end: newEnd.toDate(),
+      recurringDays: newRecurringDays,
+      abDay: newAbDay,
+      hasConflicts: false
+    };
+
+    if (editMode) {
+      setCreateEvents(prev => prev.map(ev => ev.id === editingEventId ? newEvent : ev));
+      setEditMode(false);
+      setEditingEventId(null);
+    } else {
+      setCreateEvents(prev => [...prev, newEvent]);
+    }
+
+    // Reset form
+    setModalOpen(false);
+    setDetails({
+      teacherId: "",
+      grade: "",
+      customGrade: "",
+      subject: "",
+      room: "",
+      startTime: "",
+      endTime: "",
+      recurringDays: [],
+      abDay: "",
+      dayType: ""
+    });
+    setSelectedSlot(null);
+  };
+
+  // Handle drag start
+  const handleEventDragStart = ({ event }) => {
+    setDraggingEventId(event.id);
+  };
+
+  // Handle drag end
+  const handleDragEnd = () => {
+    setDraggingEventId(null);
+  };
+
+  // Handle event drop
+  const handleEventDrop = ({ event, start, end }) => {
+    if (event.availability) return; // Don't allow dragging availability blocks
+    
+    const eventToUpdate = createEvents.find(ev => {
+      const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
+      return ev.id === baseId;
+    });
+    
+    if (!eventToUpdate) return;
+    
+    const updatedEvent = {
+      ...eventToUpdate,
+      start: start,
+      end: end
+    };
+    
+    setCreateEvents(prev => prev.map(ev => ev.id === eventToUpdate.id ? updatedEvent : ev));
+    setDraggingEventId(null);
+  };
+
+  // Handle edit event
+  const handleEditEvent = (event) => {
+    setEditMode(true);
+    setEditingEventId(event.id);
+    setSelectedSlot({ start: event.start, end: event.end });
+    setDetails({
+      teacherId: (() => {
+        const t = teachers.find(t =>
+          `${t.first_name} ${t.last_name}` === event.teacher
+        );
+        return t ? t.id : "";
+      })(),
+      grade: grades.includes(event.grade) ? event.grade : "Not here?",
+      customGrade: grades.includes(event.grade) ? "" : event.grade,
+      subject: event.subject,
+      room: event.room,
+      startTime: moment(event.start).format("h:mm A"),
+      endTime: moment(event.end).format("h:mm A"),
+      recurringDays: event.recurringDays || [],
+      abDay: event.abDay || "",
+      dayType: event.abDay || ""
+    });
+    setModalOpen(true);
+    setEventDetailsModal({ open: false, event: null });
+  };
+
+  // Toggle delete mode
+  const handleDeleteMode = () => {
+    setDeleteMode(dm => !dm);
+    setSelectedToDelete([]);
+  };
+
+  // Confirm delete selected events
+  const handleConfirmDelete = () => {
+    setCreateEvents(evts => evts.filter(ev => {
+      const baseId = ev.id.includes('-recurring-') ? ev.id.split('-recurring-')[0] : ev.id;
+      return !selectedToDelete.includes(baseId);
+    }));
+    setDeleteMode(false);
+    setSelectedToDelete([]);
+  };
+
   // Render Create Calendar with drag and drop functionality
   const renderCreateCalendar = () => {
     // Show availabilities for selected teachers
@@ -943,7 +1454,10 @@ export default function Schedules() {
       };
     });
 
-    const allEventsForCreate = [...createEvents, ...selectedAvailabilities];
+    // Get expanded calendar events (with recurring instances)
+    const expandedEvents = getCalendarEvents();
+    const overlappingIds = getOverlappingEventIds();
+    const allEventsForCreate = [...expandedEvents, ...selectedAvailabilities];
 
     return (
       <div style={{
@@ -953,7 +1467,7 @@ export default function Schedules() {
         boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
         height: "100%"
       }}>
-        <Calendar
+        <DragAndDropCalendar
           localizer={localizer}
           events={allEventsForCreate}
           startAccessor="start"
@@ -966,38 +1480,65 @@ export default function Schedules() {
           min={moment().startOf('day').set({ hour: 6, minute: 30 }).toDate()}
           max={moment().startOf('day').set({ hour: 16, minute: 0 }).toDate()}
           selectable={true}
-          onSelectSlot={({ start, end }) => {
-            // Simple slot selection for now
-            setSelectedSlot({ start, end });
-            setCreateDetails(prev => ({
-              ...prev,
-              startTime: moment(start).format("HH:mm"),
-              endTime: moment(end).format("HH:mm")
-            }));
-            setCreateModalOpen(true);
+          onSelectSlot={handleSelectSlot}
+          onEventDrop={handleEventDrop}
+          onDragStart={handleEventDragStart}
+          onDragEnd={handleDragEnd}
+          resizable={false}
+          onSelectEvent={deleteMode ? (event) => {
+            if (event.availability) return;
+            const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
+            setSelectedToDelete(prev => 
+              prev.includes(baseId) 
+                ? prev.filter(id => id !== baseId)
+                : [...prev, baseId]
+            );
+          } : (event) => {
+            if (event.availability) return;
+            setEventDetailsModal({ open: true, event });
           }}
           eventPropGetter={event => {
+            const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
+            const isSelected = selectedToDelete.includes(baseId);
+            const hasConflict = overlappingIds.includes(baseId);
+            const isBeingDragged = draggingEventId === event.id;
+            
             if (event.availability) {
               return {
                 style: {
-                  backgroundColor: event.color || "#27ae60",
+                  backgroundColor: event.color,
                   color: "white",
                   border: "none",
                   borderRadius: "4px",
+                  fontSize: "10px",
+                  fontWeight: "400",
                   opacity: 0.7,
-                  fontSize: "11px",
-                  padding: "2px 4px"
+                  cursor: "default"
                 }
               };
             }
+            
+            let backgroundColor = "#3498db";
+            let border = "none";
+            let opacity = isBeingDragged ? 0.6 : 1;
+            
+            if (deleteMode && isSelected) {
+              backgroundColor = "#e74c3c";
+              border = "2px solid #c0392b";
+            } else if (hasConflict) {
+              border = "2px solid #e74c3c";
+            }
+            
             return {
               style: {
-                backgroundColor: "#3498db",
+                backgroundColor,
                 color: "white",
-                border: "none",
+                border,
                 borderRadius: "4px",
                 fontSize: "12px",
-                fontWeight: "500"
+                fontWeight: "500",
+                opacity,
+                cursor: deleteMode ? "pointer" : "grab"
               }
             };
           }}
@@ -1011,10 +1552,16 @@ export default function Schedules() {
               }}>
                 {event.availability 
                   ? `${event.teacher_first_name} ${event.teacher_last_name}`
-                  : event.title
+                  : (event.title || event.subject)
                 }
+                {deleteMode && !event.availability && (
+                  <span style={{ marginLeft: "4px", fontSize: "10px" }}>
+                    {selectedToDelete.includes(event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id) ? "✓" : ""}
+                  </span>
+                )}
               </div>
-            )
+            ),
+            header: CustomHeader
           }}
         />
       </div>
@@ -1142,6 +1689,655 @@ export default function Schedules() {
         <TabNavigation />
         {renderTabContent()}
       </div>
+
+      {/* Create Event Modal */}
+      {modalOpen && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{ 
+            background: "#fff", 
+            padding: 32, 
+            borderRadius: 16, 
+            minWidth: 500, 
+            maxWidth: 600,
+            maxHeight: "80vh",
+            overflowY: "auto",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.12)" 
+          }}>
+            <h2 style={{ margin: "0 0 24px 0", fontWeight: 700, fontSize: 24, color: "#2c3e50" }}>
+              {editMode ? "Edit Class" : "Add New Class"}
+            </h2>
+            
+            <form onSubmit={handleSaveEvent}>
+              {/* Teacher Selection */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#2c3e50" }}>
+                  Teacher <span style={{ color: "#e74c3c" }}>*</span>
+                </label>
+                <select
+                  name="teacherId"
+                  value={details.teacherId}
+                  onChange={handleDetailChange}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    border: "2px solid #e1e8ed",
+                    borderRadius: 8,
+                    fontSize: 16,
+                    backgroundColor: "white"
+                  }}
+                >
+                  <option value="">Select Teacher</option>
+                  {teachers.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.first_name} {t.last_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Subject */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#2c3e50" }}>
+                  Subject <span style={{ color: "#e74c3c" }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  name="subject"
+                  value={details.subject}
+                  onChange={handleDetailChange}
+                  required
+                  placeholder="e.g. Math, Science, English"
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    border: "2px solid #e1e8ed",
+                    borderRadius: 8,
+                    fontSize: 16,
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+
+              {/* Grade */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#2c3e50" }}>
+                  Grade <span style={{ color: "#e74c3c" }}>*</span>
+                </label>
+                <select
+                  name="grade"
+                  value={details.grade}
+                  onChange={handleDetailChange}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    border: "2px solid #e1e8ed",
+                    borderRadius: 8,
+                    fontSize: 16,
+                    backgroundColor: "white"
+                  }}
+                >
+                  <option value="">Select Grade</option>
+                  {grades.map(grade => (
+                    <option key={grade} value={grade}>{grade}</option>
+                  ))}
+                </select>
+                {details.grade === "Not here?" && (
+                  <input
+                    type="text"
+                    name="customGrade"
+                    value={details.customGrade}
+                    onChange={handleDetailChange}
+                    placeholder="Enter custom grade"
+                    style={{
+                      width: "100%",
+                      padding: "12px",
+                      border: "2px solid #e1e8ed",
+                      borderRadius: 8,
+                      fontSize: 16,
+                      marginTop: 8,
+                      boxSizing: "border-box"
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Room */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#2c3e50" }}>
+                  Room <span style={{ color: "#e74c3c" }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  name="room"
+                  value={details.room}
+                  onChange={handleDetailChange}
+                  required
+                  placeholder="e.g. 101, Lab A, Gym"
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    border: "2px solid #e1e8ed",
+                    borderRadius: 8,
+                    fontSize: 16,
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+
+              {/* Time Selection */}
+              <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#2c3e50" }}>
+                    Start Time
+                  </label>
+                  <select
+                    value={details.startTime}
+                    onChange={(e) => handleTimeChange('startTime', e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "12px",
+                      border: "2px solid #e1e8ed",
+                      borderRadius: 8,
+                      fontSize: 16,
+                      backgroundColor: "white"
+                    }}
+                  >
+                    {generateTimeOptions().map(time => (
+                      <option key={time} value={time}>{time}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#2c3e50" }}>
+                    End Time
+                  </label>
+                  <select
+                    value={details.endTime}
+                    onChange={(e) => handleTimeChange('endTime', e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "12px",
+                      border: "2px solid #e1e8ed",
+                      borderRadius: 8,
+                      fontSize: 16,
+                      backgroundColor: "white"
+                    }}
+                  >
+                    {generateTimeOptions().map(time => (
+                      <option key={time} value={time}>{time}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Recurring Days */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: "block", marginBottom: 12, fontWeight: 600, color: "#2c3e50" }}>
+                  Recurring Days
+                </label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {["Mon", "Tue", "Wed", "Thu", "Fri"].map((day, idx) => (
+                    <label key={idx} style={{ 
+                      display: "flex", 
+                      alignItems: "center", 
+                      gap: 6, 
+                      padding: "8px 12px",
+                      border: "2px solid #e1e8ed",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      backgroundColor: details.recurringDays.includes(idx) ? "#3498db" : "white",
+                      color: details.recurringDays.includes(idx) ? "white" : "#2c3e50",
+                      fontWeight: 500,
+                      transition: "all 0.2s ease"
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={details.recurringDays.includes(idx)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setDetails(prev => ({
+                              ...prev,
+                              recurringDays: [...prev.recurringDays, idx]
+                            }));
+                          } else {
+                            setDetails(prev => ({
+                              ...prev,
+                              recurringDays: prev.recurringDays.filter(d => d !== idx)
+                            }));
+                          }
+                        }}
+                        style={{ display: "none" }}
+                      />
+                      {day}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* A/B Day Selection (if applicable) */}
+              {details.recurringDays.includes(4) && (
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: "block", marginBottom: 12, fontWeight: 600, color: "#2c3e50" }}>
+                    Friday A/B Day
+                  </label>
+                  <div style={{ display: "flex", gap: 12 }}>
+                    {["A", "B", "Both"].map(abDay => (
+                      <label key={abDay} style={{ 
+                        display: "flex", 
+                        alignItems: "center", 
+                        gap: 6, 
+                        padding: "8px 16px",
+                        border: "2px solid #e1e8ed",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                        backgroundColor: details.abDay === abDay ? "#3498db" : "white",
+                        color: details.abDay === abDay ? "white" : "#2c3e50",
+                        fontWeight: 500,
+                        transition: "all 0.2s ease"
+                      }}>
+                        <input
+                          type="radio"
+                          name="abDay"
+                          value={abDay}
+                          checked={details.abDay === abDay}
+                          onChange={handleDetailChange}
+                          style={{ display: "none" }}
+                        />
+                        {abDay} Day{abDay === "Both" ? "s" : ""}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 24 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalOpen(false);
+                    setEditMode(false);
+                    setEditingEventId(null);
+                    setDetails({
+                      teacherId: "",
+                      grade: "",
+                      customGrade: "",
+                      subject: "",
+                      room: "",
+                      startTime: "",
+                      endTime: "",
+                      recurringDays: [],
+                      abDay: "",
+                      dayType: ""
+                    });
+                  }}
+                  style={{ 
+                    background: "#95a5a6", 
+                    color: "white", 
+                    fontWeight: 600, 
+                    fontSize: 16, 
+                    border: "none", 
+                    borderRadius: 8, 
+                    padding: "12px 24px", 
+                    cursor: "pointer",
+                    transition: "background 0.2s"
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{ 
+                    background: "#27ae60", 
+                    color: "white", 
+                    fontWeight: 600, 
+                    fontSize: 16, 
+                    border: "none", 
+                    borderRadius: 8, 
+                    padding: "12px 24px", 
+                    cursor: "pointer",
+                    transition: "background 0.2s"
+                  }}
+                >
+                  {editMode ? "Update Class" : "Add Class"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Friday A/B Day Selection Modal */}
+      {fridayModal.open && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{ 
+            background: "#fff", 
+            padding: 32, 
+            borderRadius: 16, 
+            minWidth: 400,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.12)" 
+          }}>
+            <h2 style={{ margin: "0 0 16px 0", fontWeight: 700, fontSize: 20, color: "#2c3e50" }}>
+              Friday Schedule
+            </h2>
+            <p style={{ margin: "0 0 24px 0", color: "#7f8c8d" }}>
+              Which A/B day pattern should this Friday class follow?
+            </p>
+            
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <button
+                onClick={() => handleFridaySelection("A")}
+                style={{
+                  padding: "12px 24px",
+                  backgroundColor: "#3498db",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontSize: "16px",
+                  fontWeight: "600"
+                }}
+              >
+                A Day Only
+              </button>
+              <button
+                onClick={() => handleFridaySelection("B")}
+                style={{
+                  padding: "12px 24px",
+                  backgroundColor: "#e74c3c",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontSize: "16px",
+                  fontWeight: "600"
+                }}
+              >
+                B Day Only
+              </button>
+              <button
+                onClick={() => handleFridaySelection("Both")}
+                style={{
+                  padding: "12px 24px",
+                  backgroundColor: "#9b59b6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontSize: "16px",
+                  fontWeight: "600"
+                }}
+              >
+                Both A/B Days
+              </button>
+            </div>
+            
+            <div style={{ textAlign: "center", marginTop: 16 }}>
+              <button
+                onClick={() => setFridayModal({ open: false, slotInfo: null })}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#95a5a6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "14px"
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Event Details Modal */}
+      {eventDetailsModal.open && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{ 
+            background: "#fff", 
+            padding: 32, 
+            borderRadius: 16, 
+            minWidth: 400,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.12)" 
+          }}>
+            <h2 style={{ margin: "0 0 20px 0", fontWeight: 700, fontSize: 20, color: "#2c3e50" }}>
+              Class Details
+            </h2>
+            
+            {eventDetailsModal.event && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ marginBottom: 12 }}>
+                  <strong>Subject:</strong> {eventDetailsModal.event.subject}
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <strong>Teacher:</strong> {eventDetailsModal.event.teacher}
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <strong>Grade:</strong> {eventDetailsModal.event.grade}
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <strong>Room:</strong> {eventDetailsModal.event.room}
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <strong>Time:</strong> {moment(eventDetailsModal.event.start).format('h:mm A')} - {moment(eventDetailsModal.event.end).format('h:mm A')}
+                </div>
+                {eventDetailsModal.event.recurringDays && eventDetailsModal.event.recurringDays.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <strong>Days:</strong> {eventDetailsModal.event.recurringDays.map(d => 
+                      ["Mon", "Tue", "Wed", "Thu", "Fri"][d]
+                    ).join(", ")}
+                  </div>
+                )}
+                {eventDetailsModal.event.abDay && (
+                  <div style={{ marginBottom: 12 }}>
+                    <strong>A/B Day:</strong> {eventDetailsModal.event.abDay}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setEventDetailsModal({ open: false, event: null })}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#95a5a6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "14px"
+                }}
+              >
+                Close
+              </button>
+              <button
+                onClick={() => handleEditEvent(eventDetailsModal.event)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#3498db",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "14px"
+                }}
+              >
+                Edit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conflict Modal */}
+      {conflictModal.open && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 2000
+        }}>
+          <div style={{ 
+            background: "#fff", 
+            padding: 32, 
+            borderRadius: 16, 
+            minWidth: 400, 
+            maxWidth: 600,
+            maxHeight: "80vh",
+            overflowY: "auto",
+            boxShadow: "0 8px 32px rgba(231,76,60,0.18)" 
+          }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
+              <span style={{ fontSize: 28, marginRight: 12 }}>⚠️</span>
+              <h2 style={{ margin: 0, fontWeight: 700, fontSize: 24, color: "#e74c3c" }}>Schedule Conflicts Detected</h2>
+            </div>
+            
+            <div style={{ 
+              background: "#fff5f5", 
+              border: "1px solid #fed7d7", 
+              borderRadius: 8, 
+              padding: 16, 
+              marginBottom: 20 
+            }}>
+              <p style={{ margin: "0 0 12px 0", color: "#c53030", fontWeight: 600 }}>
+                The following conflicts were found with your class schedule:
+              </p>
+              <ul style={{ 
+                margin: 0, 
+                paddingLeft: 20, 
+                color: "#c53030", 
+                fontWeight: 500, 
+                fontSize: 14,
+                lineHeight: "1.5" 
+              }}>
+                {conflictModal.messages.map((msg, idx) => (
+                  <li key={idx} style={{ marginBottom: 8 }}>{msg}</li>
+                ))}
+              </ul>
+            </div>
+            
+            <div style={{ 
+              background: "#f7fafc", 
+              border: "1px solid #e2e8f0", 
+              borderRadius: 8, 
+              padding: 16, 
+              marginBottom: 20 
+            }}>
+              <p style={{ margin: 0, color: "#4a5568", fontSize: 14 }}>
+                <strong>What can you do?</strong><br/>
+                • <strong>Fix Conflicts:</strong> Close this dialog and adjust the time, teacher, room, or day to resolve conflicts.<br/>
+                • <strong>Add Anyway:</strong> Create the class despite conflicts. It will be highlighted with a red outline for review.
+              </p>
+            </div>
+            
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setConflictModal({ open: false, messages: [], pendingEvent: null })}
+                style={{ 
+                  background: "#718096", 
+                  color: "white", 
+                  fontWeight: 600, 
+                  fontSize: 14, 
+                  border: "none", 
+                  borderRadius: 8, 
+                  padding: "10px 20px", 
+                  cursor: "pointer",
+                  transition: "background 0.2s"
+                }}
+              >
+                Cancel & Fix Conflicts
+              </button>
+              {conflictModal.pendingEvent && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (editMode) {
+                      setCreateEvents(prev => prev.map(ev => ev.id === editingEventId ? conflictModal.pendingEvent : ev));
+                      setEditMode(false);
+                      setEditingEventId(null);
+                    } else {
+                      setCreateEvents(prev => [...prev, conflictModal.pendingEvent]);
+                    }
+                    setConflictModal({ open: false, messages: [], pendingEvent: null });
+                    setModalOpen(false);
+                    setDetails({
+                      teacherId: "",
+                      grade: "",
+                      customGrade: "",
+                      subject: "",
+                      room: "",
+                      startTime: "",
+                      endTime: "",
+                      recurringDays: [],
+                      abDay: "",
+                      dayType: ""
+                    });
+                    setSelectedSlot(null);
+                  }}
+                  style={{
+                    background: "#e53e3e",
+                    color: "white",
+                    fontWeight: 600,
+                    fontSize: 14,
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "10px 20px",
+                    cursor: "pointer",
+                    transition: "background 0.2s"
+                  }}
+                >
+                  ⚠️ Add Anyway
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
