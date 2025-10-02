@@ -27,7 +27,8 @@ const CustomHeader = ({ label, date }) => {
   return (
     <div style={{ 
       textAlign: 'center', 
-      padding: '12px 8px 8px 8px',
+      padding: '8px 4px 8px 4px',
+      minHeight: '60px',
       height: '60px',
       display: 'flex',
       flexDirection: 'column',
@@ -35,28 +36,32 @@ const CustomHeader = ({ label, date }) => {
       alignItems: 'center',
       backgroundColor: '#ffffff',
       position: 'relative',
-      zIndex: 1
+      zIndex: 20,
+      borderBottom: '1px solid #ddd',
+      boxSizing: 'border-box'
     }}>
       <div style={{ 
-        fontSize: '16px', 
+        fontSize: '14px', 
         fontWeight: 'bold', 
-        marginBottom: '8px',
+        marginBottom: '6px',
         color: '#2c3e50',
-        textShadow: '0 1px 2px rgba(255,255,255,0.8)'
+        textShadow: '0 1px 2px rgba(255,255,255,0.8)',
+        lineHeight: '1.2'
       }}>
         {dayName}
       </div>
       <div style={{
-        fontSize: '11px',
-        padding: '4px 10px',
+        fontSize: '10px',
+        padding: '3px 8px',
         backgroundColor: isFriday ? '#9b59b6' : (abDay === 'A' ? '#3498db' : '#e74c3c'),
         color: 'white',
-        borderRadius: '12px',
+        borderRadius: '10px',
         fontWeight: 'bold',
         boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
         border: '1px solid rgba(255,255,255,0.2)',
-        minWidth: '60px',
-        textAlign: 'center'
+        minWidth: '50px',
+        textAlign: 'center',
+        lineHeight: '1.2'
       }}>
         {isFriday ? 'A/B Day' : `${abDay} Day`}
       </div>
@@ -1149,19 +1154,34 @@ export default function Schedules() {
 
   // Handle Friday A/B day selection
   const handleFridaySelection = (abDay) => {
-    const { start, end } = fridayModal.slotInfo;
+    const { start, end, dragEvent, originalEvent } = fridayModal.slotInfo;
     setFridayModal({ open: false, slotInfo: null });
     
-    setSelectedSlot({ start, end });
-    setDetails(d => ({ 
-      ...d, 
-      startTime: moment(start).format("h:mm A"), 
-      endTime: moment(end).format("h:mm A"),
-      abDay,
-      dayType: abDay,
-      recurringDays: [4] // Friday is index 4 (0=Monday, ... 4=Friday)
-    }));
-    setModalOpen(true);
+    if (dragEvent && originalEvent) {
+      // This is a drag operation to Friday
+      const updatedEvent = {
+        ...originalEvent,
+        start: start,
+        end: end,
+        recurringDays: [4], // Friday is index 4
+        abDay: abDay
+      };
+      
+      setCreateEvents(prev => prev.map(ev => ev.id === originalEvent.id ? updatedEvent : ev));
+      setDraggingEventId(null);
+    } else {
+      // This is a new event creation on Friday
+      setSelectedSlot({ start, end });
+      setDetails(d => ({ 
+        ...d, 
+        startTime: moment(start).format("h:mm A"), 
+        endTime: moment(end).format("h:mm A"),
+        abDay,
+        dayType: abDay,
+        recurringDays: [4] // Friday is index 4 (0=Monday, ... 4=Friday)
+      }));
+      setModalOpen(true);
+    }
   };
 
   // Handle detail changes in modal
@@ -1370,19 +1390,44 @@ export default function Schedules() {
 
   // Handle event drop
   const handleEventDrop = ({ event, start, end }) => {
+    console.log('Event drop triggered:', { event, start, end });
+    
     if (event.availability) return; // Don't allow dragging availability blocks
     
-    const eventToUpdate = createEvents.find(ev => {
-      const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
-      return ev.id === baseId;
-    });
+    const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
+    const eventToUpdate = createEvents.find(ev => ev.id === baseId);
+    
+    console.log('Event to update:', eventToUpdate);
     
     if (!eventToUpdate) return;
+
+    // Calculate new day and time
+    const newDayOfWeek = moment(start).day();
     
+    // Convert day of week to recurring days array (Monday=0, Tuesday=1, etc.)
+    const newRecurringDays = newDayOfWeek >= 1 && newDayOfWeek <= 5 ? [newDayOfWeek - 1] : [];
+    
+    // Handle Friday A/B day logic
+    if (newDayOfWeek === 5) { // Friday
+      setFridayModal({ 
+        open: true, 
+        slotInfo: { 
+          start, 
+          end, 
+          dragEvent: true, 
+          originalEvent: eventToUpdate 
+        } 
+      });
+      return;
+    }
+    
+    // Update the event with new day and time
     const updatedEvent = {
       ...eventToUpdate,
       start: start,
-      end: end
+      end: end,
+      recurringDays: newRecurringDays,
+      abDay: newDayOfWeek === 5 ? eventToUpdate.abDay : ""
     };
     
     setCreateEvents(prev => prev.map(ev => ev.id === eventToUpdate.id ? updatedEvent : ev));
@@ -1463,10 +1508,45 @@ export default function Schedules() {
       <div style={{
         backgroundColor: "white",
         borderRadius: "12px",
-        padding: "24px",
+        padding: "16px",
         boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
-        height: "100%"
+        height: "100%",
+        position: "relative",
+        display: "flex",
+        flexDirection: "column"
       }}>
+        <style>{`
+          .rbc-header {
+            z-index: 15 !important;
+            position: relative !important;
+            background: white !important;
+            border-bottom: 1px solid #ddd !important;
+          }
+          .rbc-time-view .rbc-header {
+            z-index: 15 !important;
+            background: white !important;
+            min-height: 60px !important;
+          }
+          .rbc-time-header {
+            z-index: 14 !important;
+            background: white !important;
+          }
+          .rbc-time-header-content {
+            z-index: 13 !important;
+            background: white !important;
+          }
+          .rbc-time-content {
+            border-top: none !important;
+          }
+          .rbc-calendar {
+            height: 100% !important;
+          }
+          .rbc-time-view {
+            border: 1px solid #ddd !important;
+            border-radius: 8px !important;
+            overflow: hidden !important;
+          }
+        `}</style>
         <DragAndDropCalendar
           localizer={localizer}
           events={allEventsForCreate}
@@ -1475,16 +1555,23 @@ export default function Schedules() {
           style={{ height: "calc(100% - 20px)" }}
           views={{ work_week: true }}
           defaultView="work_week"
-          toolbar={true}
+          toolbar={false}
           popup={false}
           min={moment().startOf('day').set({ hour: 6, minute: 30 }).toDate()}
           max={moment().startOf('day').set({ hour: 16, minute: 0 }).toDate()}
+          daysOfWeek={[1,2,3,4,5]}
           selectable={true}
           onSelectSlot={handleSelectSlot}
           onEventDrop={handleEventDrop}
           onDragStart={handleEventDragStart}
           onDragEnd={handleDragEnd}
           resizable={false}
+          draggableAccessor={(event) => !event.availability}
+          dragFromOutsideItem={null}
+          onDropFromOutside={null}
+          step={5}
+          timeslots={6}
+          showMultiDayTimes={false}
           onSelectEvent={deleteMode ? (event) => {
             if (event.availability) return;
             const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
@@ -1513,7 +1600,8 @@ export default function Schedules() {
                   fontSize: "10px",
                   fontWeight: "400",
                   opacity: 0.7,
-                  cursor: "default"
+                  cursor: "default",
+                  pointerEvents: "none"
                 }
               };
             }
@@ -1538,7 +1626,7 @@ export default function Schedules() {
                 fontSize: "12px",
                 fontWeight: "500",
                 opacity,
-                cursor: deleteMode ? "pointer" : "grab"
+                cursor: deleteMode ? "pointer" : (isBeingDragged ? "grabbing" : "grab")
               }
             };
           }}
@@ -1693,425 +1781,478 @@ export default function Schedules() {
       {/* Create Event Modal */}
       {modalOpen && (
         <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          width: "100vw",
+          position: "fixed", 
+          top: 0, 
+          left: 0, 
+          width: "100vw", 
           height: "100vh",
-          background: "rgba(0,0,0,0.5)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 1000
+          background: "rgba(0,0,0,0.3)", 
+          display: "flex", 
+          alignItems: "center", 
+          justifyContent: "center", 
+          zIndex: 2000
         }}>
-          <div style={{ 
+          <form onSubmit={handleSaveEvent} style={{ 
             background: "#fff", 
-            padding: 32, 
+            padding: "24px 16px 24px 16px", 
             borderRadius: 16, 
-            minWidth: 500, 
-            maxWidth: 600,
-            maxHeight: "80vh",
-            overflowY: "auto",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.12)" 
+            minWidth: 300, 
+            maxWidth: 340, 
+            boxShadow: "0 8px 32px rgba(38,190,221,0.18)", 
+            width: 340, 
+            boxSizing: "border-box" 
           }}>
-            <h2 style={{ margin: "0 0 24px 0", fontWeight: 700, fontSize: 24, color: "#2c3e50" }}>
-              {editMode ? "Edit Class" : "Add New Class"}
+            <h2 style={{ 
+              marginBottom: 10, 
+              fontWeight: 700, 
+              fontSize: 22 
+            }}>
+              {editMode ? "Edit Schedule Details" : "Add Schedule Details"}
             </h2>
             
-            <form onSubmit={handleSaveEvent}>
-              {/* Teacher Selection */}
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#2c3e50" }}>
-                  Teacher <span style={{ color: "#e74c3c" }}>*</span>
-                </label>
-                <select
-                  name="teacherId"
-                  value={details.teacherId}
-                  onChange={handleDetailChange}
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    border: "2px solid #e1e8ed",
-                    borderRadius: 8,
-                    fontSize: 16,
-                    backgroundColor: "white"
-                  }}
+            {/* Time Selection */}
+            <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Start Time</label>
+                <select 
+                  value={details.startTime || (selectedSlot && moment(selectedSlot.start).format("h:mm A"))}
+                  onChange={e => handleTimeChange('startTime', e.target.value)}
+                  required 
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", fontSize: 15, boxSizing: "border-box" }}
                 >
-                  <option value="">Select Teacher</option>
-                  {teachers.map(t => (
-                    <option key={t.id} value={t.id}>
-                      {t.first_name} {t.last_name}
-                    </option>
+                  {generateTimeOptions().map(time => (
+                    <option key={time} value={time}>{time}</option>
                   ))}
                 </select>
               </div>
-
-              {/* Subject */}
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#2c3e50" }}>
-                  Subject <span style={{ color: "#e74c3c" }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  name="subject"
-                  value={details.subject}
-                  onChange={handleDetailChange}
-                  required
-                  placeholder="e.g. Math, Science, English"
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    border: "2px solid #e1e8ed",
-                    borderRadius: 8,
-                    fontSize: 16,
-                    boxSizing: "border-box"
-                  }}
-                />
-              </div>
-
-              {/* Grade */}
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#2c3e50" }}>
-                  Grade <span style={{ color: "#e74c3c" }}>*</span>
-                </label>
-                <select
-                  name="grade"
-                  value={details.grade}
-                  onChange={handleDetailChange}
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    border: "2px solid #e1e8ed",
-                    borderRadius: 8,
-                    fontSize: 16,
-                    backgroundColor: "white"
-                  }}
+              <div style={{ flex: 1 }}>
+                <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>End Time</label>
+                <select 
+                  value={details.endTime || (selectedSlot && moment(selectedSlot.end).format("h:mm A"))}
+                  onChange={e => handleTimeChange('endTime', e.target.value)}
+                  required 
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "2px solid #e1e8ed", fontSize: 15, boxSizing: "border-box" }}
                 >
-                  <option value="">Select Grade</option>
-                  {grades.map(grade => (
-                    <option key={grade} value={grade}>{grade}</option>
+                  {generateTimeOptions().map(time => (
+                    <option key={time} value={time}>{time}</option>
                   ))}
                 </select>
-                {details.grade === "Not here?" && (
-                  <input
-                    type="text"
-                    name="customGrade"
-                    value={details.customGrade}
-                    onChange={handleDetailChange}
-                    placeholder="Enter custom grade"
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      border: "2px solid #e1e8ed",
-                      borderRadius: 8,
-                      fontSize: 16,
-                      marginTop: 8,
-                      boxSizing: "border-box"
-                    }}
-                  />
-                )}
               </div>
-
-              {/* Room */}
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#2c3e50" }}>
-                  Room <span style={{ color: "#e74c3c" }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  name="room"
-                  value={details.room}
-                  onChange={handleDetailChange}
-                  required
-                  placeholder="e.g. 101, Lab A, Gym"
+            </div>
+            
+            <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Teacher</label>
+            <div style={{ position: "relative", marginBottom: 12 }}>
+              {/* Custom dropdown button */}
+              <div 
+                onClick={() => setTeacherDropdownOpen(!teacherDropdownOpen)}
+                style={{ 
+                  width: "100%", 
+                  padding: "8px 12px", 
+                  paddingLeft: details.teacherId ? "32px" : "12px",
+                  borderRadius: 8, 
+                  border: "2px solid #e1e8ed", 
+                  fontSize: 15, 
+                  boxSizing: "border-box",
+                  cursor: "pointer",
+                  backgroundColor: "white",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  minHeight: "40px"
+                }}
+              >
+                <span style={{ color: details.teacherId ? "#000" : "#999" }}>
+                  {details.teacherId 
+                    ? (() => {
+                        const teacher = teachers.find(t => t.id.toString() === details.teacherId);
+                        return teacher ? `${teacher.first_name} ${teacher.last_name}` : "Select a teacher...";
+                      })()
+                    : "Select a teacher..."
+                  }
+                </span>
+                <span style={{ fontSize: "12px", color: "#666" }}>
+                  {teacherDropdownOpen ? "▲" : "▼"}
+                </span>
+              </div>
+              
+              {/* Color indicator for selected teacher */}
+              {details.teacherId && (
+                <div 
                   style={{
-                    width: "100%",
-                    padding: "12px",
-                    border: "2px solid #e1e8ed",
-                    borderRadius: 8,
-                    fontSize: 16,
-                    boxSizing: "border-box"
+                    position: "absolute",
+                    left: "8px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: "16px",
+                    height: "16px",
+                    borderRadius: "4px",
+                    backgroundColor: getTeacherColor(parseInt(details.teacherId)),
+                    border: "1px solid #ccc",
+                    pointerEvents: "none",
+                    zIndex: 1
                   }}
                 />
-              </div>
-
-              {/* Time Selection */}
-              <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#2c3e50" }}>
-                    Start Time
-                  </label>
-                  <select
-                    value={details.startTime}
-                    onChange={(e) => handleTimeChange('startTime', e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      border: "2px solid #e1e8ed",
-                      borderRadius: 8,
-                      fontSize: 16,
-                      backgroundColor: "white"
+              )}
+              
+              {/* Dropdown options */}
+              {teacherDropdownOpen && (
+                <div style={{ 
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  maxHeight: "200px", 
+                  overflowY: "auto",
+                  border: "2px solid #e1e8ed", 
+                  borderRadius: 8,
+                  backgroundColor: "white",
+                  zIndex: 3000,
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                }}>
+                  <div 
+                    onClick={() => {
+                      setDetails(d => ({ ...d, teacherId: "" }));
+                      setTeacherDropdownOpen(false);
                     }}
-                  >
-                    {generateTimeOptions().map(time => (
-                      <option key={time} value={time}>{time}</option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#2c3e50" }}>
-                    End Time
-                  </label>
-                  <select
-                    value={details.endTime}
-                    onChange={(e) => handleTimeChange('endTime', e.target.value)}
                     style={{
-                      width: "100%",
-                      padding: "12px",
-                      border: "2px solid #e1e8ed",
-                      borderRadius: 8,
-                      fontSize: 16,
-                      backgroundColor: "white"
-                    }}
-                  >
-                    {generateTimeOptions().map(time => (
-                      <option key={time} value={time}>{time}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Recurring Days */}
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: "block", marginBottom: 12, fontWeight: 600, color: "#2c3e50" }}>
-                  Recurring Days
-                </label>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {["Mon", "Tue", "Wed", "Thu", "Fri"].map((day, idx) => (
-                    <label key={idx} style={{ 
-                      display: "flex", 
-                      alignItems: "center", 
-                      gap: 6, 
                       padding: "8px 12px",
-                      border: "2px solid #e1e8ed",
-                      borderRadius: 8,
                       cursor: "pointer",
-                      backgroundColor: details.recurringDays.includes(idx) ? "#3498db" : "white",
-                      color: details.recurringDays.includes(idx) ? "white" : "#2c3e50",
-                      fontWeight: 500,
-                      transition: "all 0.2s ease"
-                    }}>
-                      <input
-                        type="checkbox"
-                        checked={details.recurringDays.includes(idx)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setDetails(prev => ({
-                              ...prev,
-                              recurringDays: [...prev.recurringDays, idx]
-                            }));
-                          } else {
-                            setDetails(prev => ({
-                              ...prev,
-                              recurringDays: prev.recurringDays.filter(d => d !== idx)
-                            }));
-                          }
-                        }}
-                        style={{ display: "none" }}
-                      />
-                      {day}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* A/B Day Selection (if applicable) */}
-              {details.recurringDays.includes(4) && (
-                <div style={{ marginBottom: 20 }}>
-                  <label style={{ display: "block", marginBottom: 12, fontWeight: 600, color: "#2c3e50" }}>
-                    Friday A/B Day
-                  </label>
-                  <div style={{ display: "flex", gap: 12 }}>
-                    {["A", "B", "Both"].map(abDay => (
-                      <label key={abDay} style={{ 
-                        display: "flex", 
-                        alignItems: "center", 
-                        gap: 6, 
-                        padding: "8px 16px",
-                        border: "2px solid #e1e8ed",
-                        borderRadius: 8,
-                        cursor: "pointer",
-                        backgroundColor: details.abDay === abDay ? "#3498db" : "white",
-                        color: details.abDay === abDay ? "white" : "#2c3e50",
-                        fontWeight: 500,
-                        transition: "all 0.2s ease"
-                      }}>
-                        <input
-                          type="radio"
-                          name="abDay"
-                          value={abDay}
-                          checked={details.abDay === abDay}
-                          onChange={handleDetailChange}
-                          style={{ display: "none" }}
-                        />
-                        {abDay} Day{abDay === "Both" ? "s" : ""}
-                      </label>
-                    ))}
+                      borderBottom: "1px solid #f0f0f0",
+                      backgroundColor: !details.teacherId ? "#f8f9fa" : "white",
+                      fontSize: 15
+                    }}
+                    onMouseEnter={e => {
+                      if (details.teacherId) {
+                        e.target.style.backgroundColor = "#f5f5f5";
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (details.teacherId) {
+                        e.target.style.backgroundColor = "white";
+                      }
+                    }}
+                  >
+                    Select a teacher...
                   </div>
+                  {teachers.map(t => (
+                    <div 
+                      key={t.id}
+                      onClick={() => {
+                        setDetails(d => ({ ...d, teacherId: t.id.toString() }));
+                        setTeacherDropdownOpen(false);
+                      }}
+                      style={{
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        borderBottom: "1px solid #f0f0f0",
+                        backgroundColor: details.teacherId === t.id.toString() ? "#e3f2fd" : "white",
+                        fontSize: 15,
+                        transition: "background-color 0.2s"
+                      }}
+                      onMouseEnter={e => {
+                        if (details.teacherId !== t.id.toString()) {
+                          e.target.style.backgroundColor = "#f5f5f5";
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (details.teacherId !== t.id.toString()) {
+                          e.target.style.backgroundColor = "white";
+                        }
+                      }}
+                    >
+                      <div 
+                        style={{
+                          width: "16px",
+                          height: "16px",
+                          borderRadius: "4px",
+                          backgroundColor: getTeacherColor(t.id),
+                          border: "1px solid #ccc",
+                          flexShrink: 0
+                        }}
+                      />
+                      <span>{t.first_name} {t.last_name}</span>
+                    </div>
+                  ))}
                 </div>
               )}
+            </div>
+            
+            <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Grade</label>
+            <select 
+              name="grade" 
+              value={details.grade} 
+              onChange={handleDetailChange} 
+              required 
+              style={{ 
+                width: "100%", 
+                padding: "8px 12px", 
+                borderRadius: 8, 
+                border: "2px solid #e1e8ed", 
+                marginBottom: details.grade === "Not here?" ? 6 : 12, 
+                fontSize: 15, 
+                boxSizing: "border-box" 
+              }}
+            >
+              <option value="">Select grade...</option>
+              {grades.map(g => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+            {details.grade === "Not here?" && (
+              <input
+                name="customGrade"
+                value={details.customGrade}
+                onChange={handleDetailChange}
+                required
+                placeholder="Enter custom grade..."
+                style={{ 
+                  width: "100%", 
+                  padding: "8px 12px", 
+                  borderRadius: 8, 
+                  border: "2px solid #e1e8ed", 
+                  marginBottom: 12, 
+                  fontSize: 15, 
+                  boxSizing: "border-box" 
+                }}
+              />
+            )}
+            
+            {/* Show A/B day field for Friday classes */}
+            {selectedSlot && moment(selectedSlot.start).day() === 5 && (
+              <>
+                <label
+                  style={{
+                    fontWeight: 600,
+                    marginBottom: 4,
+                    display: "block",
+                    marginLeft: 2
+                  }}
+                >
+                  Friday Type
+                </label>
+                <select
+                  name="abDay"
+                  value={details.abDay || ""}
+                  onChange={handleDetailChange}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: "2px solid #e1e8ed",
+                    marginBottom: 12,
+                    fontSize: 15,
+                    boxSizing: "border-box"
+                  }}
+                >
+                  <option value="">Select A or B day</option>
+                  <option value="A">A Day</option>
+                  <option value="B">B Day</option>
+                </select>
+              </>
+            )}
 
-              {/* Buttons */}
-              <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 24 }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setModalOpen(false);
-                    setEditMode(false);
-                    setEditingEventId(null);
-                    setDetails({
-                      teacherId: "",
-                      grade: "",
-                      customGrade: "",
-                      subject: "",
-                      room: "",
-                      startTime: "",
-                      endTime: "",
-                      recurringDays: [],
-                      abDay: "",
-                      dayType: ""
-                    });
-                  }}
-                  style={{ 
-                    background: "#95a5a6", 
-                    color: "white", 
-                    fontWeight: 600, 
-                    fontSize: 16, 
-                    border: "none", 
-                    borderRadius: 8, 
-                    padding: "12px 24px", 
-                    cursor: "pointer",
-                    transition: "background 0.2s"
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  style={{ 
-                    background: "#27ae60", 
-                    color: "white", 
-                    fontWeight: 600, 
-                    fontSize: 16, 
-                    border: "none", 
-                    borderRadius: 8, 
-                    padding: "12px 24px", 
-                    cursor: "pointer",
-                    transition: "background 0.2s"
-                  }}
-                >
-                  {editMode ? "Update Class" : "Add Class"}
-                </button>
+            {/* Recurring days checkboxes */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Recurring Days</label>
+              <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", justifyContent: "space-between", width: "100%" }}>
+                {["Mon", "Tue", "Wed", "Thu", "Fri"].map((day, idx) => (
+                  <label key={day} style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 14, fontWeight: 500, minWidth: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={details.recurringDays.includes(idx)}
+                      onChange={e => {
+                        setDetails(d => ({
+                          ...d,
+                          recurringDays: e.target.checked
+                            ? [...d.recurringDays, idx]
+                            : d.recurringDays.filter(i => i !== idx)
+                        }));
+                      }}
+                      style={{ width: 14, height: 14, accentColor: "#26bedd", margin: 0 }}
+                    />
+                    {day}
+                  </label>
+                ))}
               </div>
-            </form>
-          </div>
+            </div>
+            
+            <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Subject</label>
+            <input 
+              name="subject" 
+              value={details.subject} 
+              onChange={handleDetailChange} 
+              required 
+              placeholder="Enter subject..." 
+              style={{ 
+                width: "100%", 
+                padding: "8px 12px", 
+                borderRadius: 8, 
+                border: "2px solid #e1e8ed", 
+                marginBottom: 12, 
+                fontSize: 15, 
+                boxSizing: "border-box" 
+              }} 
+            />
+            
+            <label style={{ fontWeight: 600, marginBottom: 4, display: "block", marginLeft: 2 }}>Room Number</label>
+            <input
+              name="room"
+              value={details.room}
+              onChange={handleDetailChange}
+              required
+              placeholder="Enter room number..."
+              style={{ 
+                width: "100%", 
+                padding: "8px 12px", 
+                borderRadius: 8, 
+                border: "2px solid #e1e8ed", 
+                marginBottom: 12, 
+                fontSize: 15, 
+                boxSizing: "border-box" 
+              }}
+            />
+            
+            <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+              <button 
+                type="button" 
+                onClick={() => { 
+                  setModalOpen(false); 
+                  setEditMode(false); 
+                  setEditingEventId(null); 
+                  setDetails({ 
+                    teacherId: "", 
+                    grade: "", 
+                    customGrade: "", 
+                    subject: "", 
+                    room: "", 
+                    startTime: "", 
+                    endTime: "", 
+                    recurringDays: [], 
+                    abDay: "", 
+                    dayType: "" 
+                  }); 
+                }} 
+                style={{ 
+                  background: "#95a5a6", 
+                  color: "white", 
+                  fontWeight: 700, 
+                  fontSize: 15, 
+                  border: "none", 
+                  borderRadius: 8, 
+                  padding: "8px 18px", 
+                  cursor: "pointer" 
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit" 
+                style={{ 
+                  background: "#26bedd", 
+                  color: "white", 
+                  fontWeight: 700, 
+                  fontSize: 15, 
+                  border: "none", 
+                  borderRadius: 8, 
+                  padding: "8px 18px", 
+                  cursor: "pointer" 
+                }}
+              >
+                {editMode ? "Save Changes" : "Save"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
       {/* Friday A/B Day Selection Modal */}
       {fridayModal.open && (
         <div style={{
-          position: "fixed",
+          position: 'fixed',
           top: 0,
           left: 0,
-          width: "100vw",
-          height: "100vh",
-          background: "rgba(0,0,0,0.5)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 1000
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 3000
         }}>
-          <div style={{ 
-            background: "#fff", 
-            padding: 32, 
-            borderRadius: 16, 
-            minWidth: 400,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.12)" 
+          <div style={{
+            backgroundColor: 'white',
+            padding: '24px',
+            borderRadius: '12px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+            maxWidth: '400px',
+            textAlign: 'center'
           }}>
-            <h2 style={{ margin: "0 0 16px 0", fontWeight: 700, fontSize: 20, color: "#2c3e50" }}>
-              Friday Schedule
-            </h2>
-            <p style={{ margin: "0 0 24px 0", color: "#7f8c8d" }}>
-              Which A/B day pattern should this Friday class follow?
+            <h3 style={{ marginBottom: '16px', color: '#333' }}>
+              {fridayModal.slotInfo?.dragEvent ? 'Moving Class to Friday' : 'Friday Class Selection'}
+            </h3>
+            <p style={{ marginBottom: '24px', color: '#666' }}>
+              {fridayModal.slotInfo?.dragEvent 
+                ? 'You\'re moving a class to Friday. Is this an A day Friday or B day Friday?'
+                : 'Is this an A day Friday or B day Friday?'
+              }
             </p>
-            
-            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button
-                onClick={() => handleFridaySelection("A")}
+                onClick={() => handleFridaySelection('A')}
                 style={{
-                  padding: "12px 24px",
-                  backgroundColor: "#3498db",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "16px",
-                  fontWeight: "600"
+                  padding: '12px 24px',
+                  backgroundColor: '#3498db',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  transition: 'background-color 0.2s'
                 }}
+                onMouseEnter={e => e.target.style.backgroundColor = '#2980b9'}
+                onMouseLeave={e => e.target.style.backgroundColor = '#3498db'}
               >
-                A Day Only
+                A Day Friday
               </button>
               <button
-                onClick={() => handleFridaySelection("B")}
+                onClick={() => handleFridaySelection('B')}
                 style={{
-                  padding: "12px 24px",
-                  backgroundColor: "#e74c3c",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "16px",
-                  fontWeight: "600"
+                  padding: '12px 24px',
+                  backgroundColor: '#e74c3c',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  transition: 'background-color 0.2s'
                 }}
+                onMouseEnter={e => e.target.style.backgroundColor = '#c0392b'}
+                onMouseLeave={e => e.target.style.backgroundColor = '#e74c3c'}
               >
-                B Day Only
-              </button>
-              <button
-                onClick={() => handleFridaySelection("Both")}
-                style={{
-                  padding: "12px 24px",
-                  backgroundColor: "#9b59b6",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "16px",
-                  fontWeight: "600"
-                }}
-              >
-                Both A/B Days
+                B Day Friday
               </button>
             </div>
-            
-            <div style={{ textAlign: "center", marginTop: 16 }}>
-              <button
-                onClick={() => setFridayModal({ open: false, slotInfo: null })}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#95a5a6",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "14px"
-                }}
-              >
-                Cancel
-              </button>
-            </div>
+            <button
+              onClick={() => setFridayModal({ open: false, slotInfo: null })}
+              style={{
+                marginTop: '16px',
+                padding: '8px 16px',
+                backgroundColor: 'transparent',
+                color: '#666',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -2219,7 +2360,7 @@ export default function Schedules() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          zIndex: 2000
+          zIndex: 4000
         }}>
           <div style={{ 
             background: "#fff", 
