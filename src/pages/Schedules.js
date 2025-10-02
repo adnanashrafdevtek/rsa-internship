@@ -1077,6 +1077,7 @@ export default function Schedules() {
   // Helper: expand recurring events for calendar
   const getCalendarEvents = () => {
     const expanded = [];
+    console.log('Getting calendar events from:', createEvents);
     
     for (const ev of createEvents) {
       if (Array.isArray(ev.recurringDays) && ev.recurringDays.length > 0 && ev.start && ev.end) {
@@ -1097,7 +1098,7 @@ export default function Schedules() {
           
           expanded.push({
             ...ev,
-            id: `${ev.id}-${recurDay}`,
+            id: `${ev.id}-recurring-${recurDay}`,
             start: instanceStart.toDate(),
             end: instanceEnd.toDate(),
             title: ev.subject
@@ -1111,6 +1112,7 @@ export default function Schedules() {
         });
       }
     }
+    console.log('Expanded events:', expanded);
     return expanded;
   };
 
@@ -1277,30 +1279,49 @@ export default function Schedules() {
       return;
     }
     
-    if (dragEvent && originalEvent) {
-      // Simple direct update - just move the event to Friday with A/B day
-      setCreateEvents(prev => {
-        return prev.map(ev => {
-          if (ev.id === draggedEventId) {
-            const updatedEvent = {
-              ...ev,
-              start: start,
-              end: end,
-              abDay: abDay
-            };
-            
-            // Check if the updated event is within teacher availability
-            const isInAvailability = isEventInTeacherAvailability(updatedEvent);
-            updatedEvent.outOfAvailability = !isInAvailability;
-            
-            return updatedEvent;
-          }
-          return ev;
+    if (dragEvent) {
+      const { baseEvent, originalDate, isRecurringInstance } = fridayModal.slotInfo;
+      console.log('Friday drag completed:', dragEvent.id, abDay);
+      
+      // Handle recurring instance vs regular/base events
+      if (isRecurringInstance && baseEvent && originalDate) {
+        // This is a recurring event instance - create an exception
+        const exceptionId = `${baseEvent.id}-exception-${originalDate}`;
+        const exceptionEvent = {
+          ...baseEvent,
+          id: exceptionId,
+          start: start,
+          end: end,
+          recurringDays: [4], // Friday
+          abDay: abDay,
+          dayType: abDay,
+          isException: true,
+          originalDate: originalDate,
+          originalEventId: baseEvent.id
+        };
+        
+        console.log('Creating Friday exception event:', exceptionEvent);
+        setCreateEvents(prev => [...prev, exceptionEvent]);
+      } else {
+        // Regular event or base recurring event being moved to Friday
+        setCreateEvents(prev => {
+          const updatedEvents = prev.map(ev =>
+            ev.id === dragEvent.id
+              ? {
+                  ...ev,
+                  start: start,
+                  end: end,
+                  abDay: abDay,
+                  recurringDays: [4] // Friday is index 4
+                }
+              : ev
+          );
+          console.log('Updated Friday regular/base events:', updatedEvents);
+          return updatedEvents;
         });
-      });
+      }
       
       setDraggingEventId(null);
-      setDragStartPosition(null);
     }
   };
 
@@ -1504,120 +1525,126 @@ export default function Schedules() {
 
   // Handle drag start
   const handleEventDragStart = ({ event }) => {
+    // Don't allow dragging availability blocks or if in delete mode
+    if (event.availability || deleteMode) {
+      return;
+    }
     setDraggingEventId(event.id);
-    setDragStartPosition({
-      start: event.start,
-      end: event.end,
-      day: moment(event.start).day()
-    });
     
-    // Prevent page scrolling during drag
-    document.body.style.overflow = 'hidden';
-    
-    // Add custom CSS for drag operations
-    const style = document.createElement('style');
-    style.id = 'drag-scroll-prevent';
-    style.textContent = `
-      .rbc-addons-dnd-drag-preview {
-        pointer-events: none !important;
-      }
-      .rbc-calendar {
-        overflow: hidden !important;
-      }
-      body {
-        overflow: hidden !important;
-      }
-    `;
-    document.head.appendChild(style);
+    // Prevent auto-scrolling during drag
+    const timeContent = document.querySelector('.rbc-time-content');
+    if (timeContent) {
+      timeContent.style.scrollBehavior = 'auto';
+      timeContent.style.overflowAnchor = 'none';
+    }
   };
 
   // Handle drag end
   const handleDragEnd = () => {
     setDraggingEventId(null);
-    setDragStartPosition(null);
     
-    // Restore page scrolling
-    document.body.style.overflow = '';
-    
-    // Remove drag-specific CSS
-    const dragStyle = document.getElementById('drag-scroll-prevent');
-    if (dragStyle) {
-      dragStyle.remove();
-    }
-    
-    // Clear any pending drag timeouts
-    if (dragTimeout) {
-      clearTimeout(dragTimeout);
-      setDragTimeout(null);
+    // Restore normal scrolling behavior
+    const timeContent = document.querySelector('.rbc-time-content');
+    if (timeContent) {
+      timeContent.style.scrollBehavior = '';
+      timeContent.style.overflowAnchor = '';
     }
   };
 
   // Handle event drop
   const handleEventDrop = ({ event, start, end }) => {
-    if (event.availability) return; // Don't allow dragging availability blocks
+    console.log('Drop event triggered:', { event, start, end });
     
-    // Clear any pending drag timeouts to prevent duplicate operations
-    if (dragTimeout) {
-      clearTimeout(dragTimeout);
-      setDragTimeout(null);
-    }
-    
-    // Check if the event actually moved from its original position
-    if (dragStartPosition) {
-      const startDiff = Math.abs(moment(start).diff(moment(dragStartPosition.start), 'minutes'));
-      const endDiff = Math.abs(moment(end).diff(moment(dragStartPosition.end), 'minutes'));
-      
-      // Only consider it moved if it's moved by more than 5 minutes or to a different day
-      const hasMoved = startDiff > 5 || endDiff > 5 || moment(start).day() !== dragStartPosition.day;
-      
-      if (!hasMoved) {
-        // Event didn't actually move significantly, just reset state
-        setDraggingEventId(null);
-        setDragStartPosition(null);
-        return;
-      }
-    }
-
-    const newDayOfWeek = moment(start).day();
-    
-    // Handle Friday A/B day logic
-    if (newDayOfWeek === 5) {
-      setFridayModal({
-        open: true,
-        slotInfo: {
-          start,
-          end,
-          dragEvent: true,
-          originalEvent: event,
-          draggedEventId: event.id
-        }
-      });
+    // Don't allow dragging availability blocks or if in delete mode
+    if (event.availability || deleteMode) {
+      console.log('Blocking drag - availability or delete mode');
+      setDraggingEventId(null);
       return;
     }
-    
-    // Simple direct update - just move the event to the new position
-    setCreateEvents(prev => {
-      return prev.map(ev => {
-        if (ev.id === event.id) {
-          // Direct update of the dragged event
-          const updatedEvent = {
-            ...ev,
-            start: start,
-            end: end
-          };
-          
-          // Check if the updated event is within teacher availability
-          const isInAvailability = isEventInTeacherAvailability(updatedEvent);
-          updatedEvent.outOfAvailability = !isInAvailability;
-          
-          return updatedEvent;
+
+    // Validate time range (6:30 AM - 4:00 PM)
+    const startMoment = moment(start);
+    const endMoment = moment(end);
+    const minTime = moment(start).set({ hour: 6, minute: 30, second: 0 });
+    const maxTime = moment(start).set({ hour: 16, minute: 0, second: 0 });
+  
+    if (startMoment.isBefore(minTime) || endMoment.isAfter(maxTime)) {
+      alert('Classes can only be scheduled between 6:30 AM and 4:00 PM.');
+      setDraggingEventId(null);
+      return;
+    }
+
+    console.log('About to update event:', event.id);
+
+    // Check if this is a recurring event instance being dragged
+    if (event.id.includes('-recurring-')) {
+      const baseId = event.id.split('-recurring-')[0];
+      const originalDate = event.id.split('-recurring-')[1];
+      const baseEvent = createEvents.find(ev => ev.id === baseId);
+      
+      if (baseEvent) {
+        // Check if moving to Friday requires A/B day selection
+        const isFriday = moment(start).day() === 5;
+        if (isFriday) {
+          setFridayModal({
+            open: true,
+            slotInfo: {
+              start,
+              end,
+              dragEvent: true,
+              originalEvent: event,
+              baseEvent,
+              originalDate,
+              isRecurringInstance: true
+            }
+          });
+          return;
         }
-        return ev;
+
+        // Create an exception for this specific instance
+        const newDayIndex = moment(start).day() - 1; // Convert to 0=Monday, 4=Friday
+        const newRecurringDays = (newDayIndex >= 0 && newDayIndex <= 4) ? [newDayIndex] : [];
+        const exceptionId = `${baseId}-exception-${originalDate}`;
+        
+        const exceptionEvent = {
+          ...baseEvent,
+          id: exceptionId,
+          start: start,
+          end: end,
+          recurringDays: newRecurringDays,
+          isException: true,
+          originalDate: originalDate,
+          originalEventId: baseId,
+          abDay: baseEvent.abDay || getABDay(start)
+        };
+        
+        console.log('Creating exception event:', exceptionEvent);
+        setCreateEvents(prev => [...prev, exceptionEvent]);
+      }
+    } else {
+      // Regular event or base recurring event - move the entire series
+      const newDayIndex = moment(start).day() - 1;
+      const newRecurringDays = (newDayIndex >= 0 && newDayIndex <= 4) ? [newDayIndex] : [];
+      
+      console.log('Updating regular/base event:', event.id);
+      
+      setCreateEvents(prevEvents => {
+        const updatedEvents = prevEvents.map(ev =>
+          ev.id === event.id
+            ? {
+                ...ev,
+                start: start,
+                end: end,
+                recurringDays: newRecurringDays
+              }
+            : ev
+        );
+        console.log('Updated events:', updatedEvents);
+        return updatedEvents;
       });
-    });
-    
+    }
+
     setDraggingEventId(null);
-    setDragStartPosition(null);
   };
 
   // Handle edit event
@@ -1733,37 +1760,39 @@ export default function Schedules() {
             border-radius: 8px !important;
             overflow: hidden !important;
           }
-          /* Slow down auto-scroll during drag */
+          
+          /* Fix drag scrolling issues */
           .rbc-time-content {
-            overflow-y: auto;
-            scroll-behavior: smooth;
-          }
-          
-          /* Reduce auto-scroll sensitivity during drag */
-          .rbc-dnd-dragging .rbc-time-content {
-            scroll-behavior: auto;
-          }
-          
-          /* Override react-big-calendar's auto-scroll behavior */
-          .rbc-time-view .rbc-time-content {
-            scroll-padding-top: 20px;
-            scroll-padding-bottom: 20px;
-          }
-          
-          /* Custom styles for dragging state */
-          .rbc-addons-dnd-drag-preview {
-            opacity: 0.7;
-            transform: rotate(5deg);
+            overflow-y: auto !important;
+            scroll-behavior: auto !important;
           }
           
           /* Prevent auto-scroll during drag operations */
-          .rbc-dnd-dragging {
+          .rbc-addons-dnd-drag-preview {
+            pointer-events: none !important;
+          }
+          
+          .rbc-addons-dnd-drag-row {
+            pointer-events: none !important;
+          }
+          
+          /* Disable smooth scrolling during drag */
+          .rbc-time-view.rbc-addons-dnd-is-dragging {
             scroll-behavior: auto !important;
           }
           
-          .rbc-dnd-dragging .rbc-time-content {
-            overflow: hidden !important;
+          .rbc-time-view.rbc-addons-dnd-is-dragging .rbc-time-content {
             scroll-behavior: auto !important;
+            overflow-anchor: none !important;
+          }
+          
+          /* Prevent calendar from auto-scrolling */
+          .rbc-time-slot {
+            pointer-events: auto !important;
+          }
+          
+          .rbc-addons-dnd-resize-anchor {
+            display: none !important;
           }
         `}</style>
         <DragAndDropCalendar
@@ -1792,7 +1821,6 @@ export default function Schedules() {
           timeslots={6}
           showMultiDayTimes={false}
           scrollToTime={moment().set({ hour: 8, minute: 0 }).toDate()}
-          enableAutoScroll={false}
           onSelectEvent={deleteMode ? (event) => {
             if (event.availability) return;
             
