@@ -315,7 +315,7 @@ const getTeacherColor = (teacherId) => {
     // If this is a drag operation, update the existing event
     if (dragEvent) {
       // Check if this is a recurring event instance being dragged
-      if (dragEvent.id.includes('-recurring-')) {
+      if (typeof dragEvent.id === 'string' && dragEvent.id.includes('-recurring-')) {
         const [originalEventId, , dayIndex] = dragEvent.id.split('-recurring-');
         const newDayOfWeek = moment(start).day(); // 5 for Friday
         const newDayIndex = newDayOfWeek - 1; // 4 for Friday
@@ -560,7 +560,7 @@ const getTeacherColor = (teacherId) => {
     };
 
     // Check if this is a recurring event instance being dragged
-    if (event.id.includes('-recurring-')) {
+    if (typeof event.id === 'string' && event.id.includes('-recurring-')) {
       const [originalEventId, , dayIndex] = event.id.split('-recurring-');
       const newDayOfWeek = moment(start).day(); // 1=Monday, 5=Friday
       const newDayIndex = newDayOfWeek - 1; // Convert to 0=Monday, 4=Friday
@@ -1132,7 +1132,7 @@ const getTeacherColor = (teacherId) => {
   const handleConfirmDelete = () => {
     // Delete events whose base IDs are in selectedToDelete
     setEvents(evts => evts.filter(ev => {
-      const baseId = ev.id.includes('-recurring-') ? ev.id.split('-recurring-')[0] : ev.id;
+      const baseId = (typeof ev.id === 'string' && ev.id.includes('-recurring-')) ? ev.id.split('-recurring-')[0] : ev.id;
       return !selectedToDelete.includes(baseId);
     }));
     setDeleteMode(false);
@@ -1172,8 +1172,8 @@ const getTeacherColor = (teacherId) => {
           
           if (sameTeacher || sameRoom) {
             // Get the original event IDs for highlighting
-            const aId = a.id.includes('-recurring-') ? a.id.split('-recurring-')[0] : a.id;
-            const bId = b.id.includes('-recurring-') ? b.id.split('-recurring-')[0] : b.id;
+            const aId = (typeof a.id === 'string' && a.id.includes('-recurring-')) ? a.id.split('-recurring-')[0] : a.id;
+            const bId = (typeof b.id === 'string' && b.id.includes('-recurring-')) ? b.id.split('-recurring-')[0] : b.id;
             ids.add(aId);
             ids.add(bId);
           }
@@ -1517,7 +1517,7 @@ const getTeacherColor = (teacherId) => {
                 }
                 
                 // Check for overlaps using original event ID
-                const originalId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
+                const originalId = (typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id;
                 const overlappingIds = getOverlappingEventIds();
                 const isOverlapping = overlappingIds.includes(originalId);
                 const isDragging = event.isDragging;
@@ -1568,7 +1568,7 @@ const getTeacherColor = (teacherId) => {
               components={{
                 header: CustomHeader,
                 event: ({ event }) => {
-                  const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
+                  const baseId = (typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id;
                   const isSelected = selectedToDelete && selectedToDelete.includes(baseId);
                   if (event.availability) {
                     return (
@@ -1607,7 +1607,7 @@ const getTeacherColor = (teacherId) => {
                       onClick={() => {
                         if (deleteMode) {
                           // For recurring events, use the base ID
-                          const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
+                          const baseId = (typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id;
                           setSelectedToDelete(sel =>
                             sel.includes(baseId)
                               ? sel.filter(id => id !== baseId)

@@ -18,6 +18,51 @@ const getABDay = (date) => {
   return dayOfYear % 2 === 0 ? 'B' : 'A';
 };
 
+// API helper functions
+const saveScheduleToDatabase = async (scheduleData) => {
+  try {
+    const response = await fetch('http://localhost:3000/api/schedules', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(scheduleData)
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Error saving schedule:', error);
+    throw error;
+  }
+};
+
+const updateScheduleInDatabase = async (id, scheduleData) => {
+  try {
+    const response = await fetch(`http://localhost:3000/api/schedules/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(scheduleData)
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating schedule:', error);
+    throw error;
+  }
+};
+
+const deleteScheduleFromDatabase = async (id) => {
+  try {
+    const response = await fetch(`http://localhost:3000/api/schedules/${id}`, {
+      method: 'DELETE'
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Error deleting schedule:', error);
+    throw error;
+  }
+};
+
 // Custom header component to show A/B day indicators
 const CustomHeader = ({ label, date }) => {
   const abDay = getABDay(date);
@@ -284,20 +329,25 @@ export default function Schedules() {
 
     const fetchMasterSchedule = async () => {
       try {
-        // Fetch all classes and events for master schedule
-        const classRes = await fetch("http://localhost:3000/api/classes");
-        const allClasses = classRes.ok ? await classRes.json() : [];
-        
-        let allEvents = [];
-        allClasses.forEach(cls => {
-          allEvents = allEvents.concat(generateRecurringEvents(cls));
-        });
-
-        setMasterEvents(allEvents);
-        setCreateEvents(allEvents); // Also set for create schedule tab
-      } catch (err) {
-        console.error(err);
+        // Fetch from new schedules API
+        const response = await fetch('http://localhost:3000/api/schedules');
+        const data = await response.json();
+        const events = data.map(schedule => ({
+          id: schedule.idcalendar,
+          title: schedule.event_title,
+          start: new Date(schedule.start_time),
+          end: new Date(schedule.end_time),
+          isClass: true,
+          description: schedule.description,
+          teacherId: schedule.user_id,
+          teacher: schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : 'Unknown Teacher'
+        }));
+        setMasterEvents(events);
+        setCreateEvents(events); // Also set for create schedule tab
+      } catch (error) {
+        console.error('Error fetching master schedule:', error);
         setMasterEvents([]);
+        setCreateEvents([]);
       }
     };
 
@@ -378,17 +428,21 @@ export default function Schedules() {
   // Fetch teacher-specific events
   const fetchTeacherEvents = async (teacherId) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/teachers/${teacherId}/classes`);
-      const classes = res.ok ? await res.json() : [];
-      
-      let events = [];
-      classes.forEach(cls => {
-        events = events.concat(generateRecurringEvents(cls));
-      });
-      
+      const response = await fetch(`http://localhost:3000/api/teachers/${teacherId}/schedules`);
+      const data = await response.json();
+      const events = data.map(schedule => ({
+        id: schedule.idcalendar,
+        title: schedule.event_title,
+        start: new Date(schedule.start_time),
+        end: new Date(schedule.end_time),
+        isClass: true,
+        description: schedule.description,
+        teacherId: schedule.user_id,
+        teacher: schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : 'Unknown Teacher'
+      }));
       setTeacherEvents(events);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error('Error fetching teacher events:', error);
       setTeacherEvents([]);
     }
   };
@@ -1149,8 +1203,8 @@ export default function Schedules() {
           
           if (sameTeacher || sameRoom) {
             // Get the original event IDs for highlighting
-            const aId = a.id.includes('-recurring-') ? a.id.split('-recurring-')[0] : a.id;
-            const bId = b.id.includes('-recurring-') ? b.id.split('-recurring-')[0] : b.id;
+            const aId = (typeof a.id === 'string' && a.id.includes('-recurring-')) ? a.id.split('-recurring-')[0] : a.id;
+            const bId = (typeof b.id === 'string' && b.id.includes('-recurring-')) ? b.id.split('-recurring-')[0] : b.id;
             ids.add(aId);
             ids.add(bId);
           }
@@ -1233,7 +1287,7 @@ export default function Schedules() {
   };
 
   // Handle Friday A/B day selection
-  const handleFridaySelection = (abDay) => {
+  const handleFridaySelection = async (abDay) => {
     const { start, end, dragEvent, originalEvent, draggedEventId, isNewClass } = fridayModal.slotInfo;
     setFridayModal({ open: false, slotInfo: null });
     
@@ -1300,10 +1354,50 @@ export default function Schedules() {
           originalEventId: baseEvent.id
         };
         
+        // Save exception to database
+        try {
+          const scheduleData = {
+            start_time: moment(start).format('YYYY-MM-DD HH:mm:ss'),
+            end_time: moment(end).format('YYYY-MM-DD HH:mm:ss'),
+            class_id: baseEvent.id,
+            event_title: `${baseEvent.subject} - ${baseEvent.grade} (Friday ${abDay} Day)`,
+            user_id: baseEvent.teacherId,
+            description: `Friday ${abDay} Day exception for ${baseEvent.subject}`
+          };
+          
+          const result = await saveScheduleToDatabase(scheduleData);
+          console.log('Friday exception saved to database:', result);
+          exceptionEvent.databaseId = result.insertId;
+        } catch (error) {
+          console.error('Error saving Friday exception to database:', error);
+          console.log('Continuing without database save - Friday drag will still work locally');
+          // Don't return here - allow the drag to continue even if database save fails
+        }
+        
         console.log('Creating Friday exception event:', exceptionEvent);
         setCreateEvents(prev => [...prev, exceptionEvent]);
       } else {
         // Regular event or base recurring event being moved to Friday
+        try {
+          if (dragEvent.databaseId) {
+            const scheduleData = {
+              start_time: moment(start).format('YYYY-MM-DD HH:mm:ss'),
+              end_time: moment(end).format('YYYY-MM-DD HH:mm:ss'),
+              class_id: dragEvent.id,
+              event_title: `${dragEvent.subject} - ${dragEvent.grade} (Friday ${abDay} Day)`,
+              user_id: dragEvent.teacherId,
+              description: `Friday ${abDay} Day - ${dragEvent.subject}`
+            };
+            
+            const result = await updateScheduleInDatabase(dragEvent.databaseId, scheduleData);
+            console.log('Friday event updated in database:', result);
+          }
+        } catch (error) {
+          console.error('Error updating Friday event in database:', error);
+          console.log('Continuing without database update - Friday drag will still work locally');
+          // Don't return here - allow the drag to continue even if database update fails
+        }
+        
         setCreateEvents(prev => {
           const updatedEvents = prev.map(ev =>
             ev.id === dragEvent.id
@@ -1353,7 +1447,7 @@ export default function Schedules() {
   };
 
   // Save event from modal
-  const handleSaveEvent = (e) => {
+  const handleSaveEvent = async (e) => {
     e.preventDefault();
 
     // Validate required fields
@@ -1498,12 +1592,38 @@ export default function Schedules() {
     const isInAvailability = isEventInTeacherAvailability(newEvent);
     newEvent.outOfAvailability = !isInAvailability;
 
-    if (editMode) {
-      setCreateEvents(prev => prev.map(ev => ev.id === editingEventId ? newEvent : ev));
-      setEditMode(false);
-      setEditingEventId(null);
-    } else {
-      setCreateEvents(prev => [...prev, newEvent]);
+    // Save to database
+    try {
+      const scheduleData = {
+        start_time: newStart.format('YYYY-MM-DD HH:mm:ss'),
+        end_time: newEnd.format('YYYY-MM-DD HH:mm:ss'),
+        class_id: null, // You can link this to a classes table if you have one
+        event_title: `${newSubject} - Grade ${newGrade} - Room ${newRoom}`,
+        user_id: newTeacherId,
+        description: `Subject: ${newSubject}, Grade: ${newGrade}, Room: ${newRoom}, Teacher: ${newTeacherName}${newAbDay ? `, A/B Day: ${newAbDay}` : ''}${newRecurringDays.length > 0 ? `, Recurring: ${newRecurringDays.map(d => ["Mon", "Tue", "Wed", "Thu", "Fri"][d]).join(", ")}` : ''}`
+      };
+
+      if (editMode) {
+        await updateScheduleInDatabase(editingEventId, scheduleData);
+        setCreateEvents(prev => prev.map(ev => ev.id === editingEventId ? newEvent : ev));
+        setEditMode(false);
+        setEditingEventId(null);
+        console.log('Schedule updated in database successfully');
+      } else {
+        const result = await saveScheduleToDatabase(scheduleData);
+        if (result.success) {
+          newEvent.id = result.id.toString(); // Use the database ID
+          setCreateEvents(prev => [...prev, newEvent]);
+          console.log('Schedule saved to database successfully');
+        } else {
+          alert('Failed to save schedule to database');
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Database operation failed:', error);
+      alert('Failed to save schedule. Please try again.');
+      return;
     }
 
     // Reset form
@@ -1552,7 +1672,7 @@ export default function Schedules() {
   };
 
   // Handle event drop
-  const handleEventDrop = ({ event, start, end }) => {
+  const handleEventDrop = async ({ event, start, end }) => {
     console.log('Drop event triggered:', { event, start, end });
     
     // Don't allow dragging availability blocks or if in delete mode
@@ -1577,7 +1697,7 @@ export default function Schedules() {
     console.log('About to update event:', event.id);
 
     // Check if this is a recurring event instance being dragged
-    if (event.id.includes('-recurring-')) {
+    if (typeof event.id === 'string' && event.id.includes('-recurring-')) {
       const baseId = event.id.split('-recurring-')[0];
       const originalDate = event.id.split('-recurring-')[1];
       const baseEvent = createEvents.find(ev => ev.id === baseId);
@@ -1619,6 +1739,29 @@ export default function Schedules() {
         };
         
         console.log('Creating exception event:', exceptionEvent);
+        
+        // Save exception to database
+        try {
+          const scheduleData = {
+            start_time: moment(start).format('YYYY-MM-DD HH:mm:ss'),
+            end_time: moment(end).format('YYYY-MM-DD HH:mm:ss'),
+            class_id: baseEvent.id,
+            event_title: `${baseEvent.subject} - ${baseEvent.grade} (Exception)`,
+            user_id: baseEvent.teacherId,
+            description: `Exception for ${baseEvent.subject} on ${moment(start).format('YYYY-MM-DD')}`
+          };
+          
+          const result = await saveScheduleToDatabase(scheduleData);
+          console.log('Exception saved to database:', result);
+          
+          // Add database ID to the exception event
+          exceptionEvent.databaseId = result.insertId;
+        } catch (error) {
+          console.error('Error saving exception to database:', error);
+          console.log('Continuing without database save - drag will still work locally');
+          // Don't return here - allow the drag to continue even if database save fails
+        }
+        
         setCreateEvents(prev => [...prev, exceptionEvent]);
       }
     } else {
@@ -1628,6 +1771,28 @@ export default function Schedules() {
       
       console.log('Updating regular/base event:', event.id);
       
+      // Update in database first
+      try {
+        if (event.databaseId) {
+          const scheduleData = {
+            start_time: moment(start).format('YYYY-MM-DD HH:mm:ss'),
+            end_time: moment(end).format('YYYY-MM-DD HH:mm:ss'),
+            class_id: event.id,
+            event_title: `${event.subject} - ${event.grade}`,
+            user_id: event.teacherId,
+            description: event.subject
+          };
+          
+          const result = await updateScheduleInDatabase(event.databaseId, scheduleData);
+          console.log('Event updated in database:', result);
+        }
+      } catch (error) {
+        console.error('Error updating event in database:', error);
+        console.log('Continuing without database update - drag will still work locally');
+        // Don't return here - allow the drag to continue even if database update fails
+      }
+      
+      // Update local state - this will happen regardless of overlaps
       setCreateEvents(prevEvents => {
         const updatedEvents = prevEvents.map(ev =>
           ev.id === event.id
@@ -1635,7 +1800,8 @@ export default function Schedules() {
                 ...ev,
                 start: start,
                 end: end,
-                recurringDays: newRecurringDays
+                recurringDays: newRecurringDays,
+                abDay: ev.abDay || getABDay(start)
               }
             : ev
         );
@@ -1680,14 +1846,28 @@ export default function Schedules() {
   };
 
   // Confirm delete selected events
-  const handleConfirmDelete = () => {
-    setCreateEvents(evts => evts.filter(ev => {
-      // For all events, check if the base ID is selected
-      const baseId = ev.id.includes('-recurring-') ? ev.id.split('-recurring-')[0] : ev.id;
-      return !selectedToDelete.includes(baseId);
-    }));
-    setDeleteMode(false);
-    setSelectedToDelete([]);
+  const handleConfirmDelete = async () => {
+    try {
+      // Delete from database first
+      for (const eventId of selectedToDelete) {
+        await deleteScheduleFromDatabase(eventId);
+      }
+      
+      // Then remove from local state
+      setCreateEvents(evts => evts.filter(ev => {
+        // For all events, check if the base ID is selected
+        const baseId = (typeof ev.id === 'string' && ev.id.includes('-recurring-')) ? ev.id.split('-recurring-')[0] : ev.id;
+        return !selectedToDelete.includes(baseId);
+      }));
+      
+      console.log('Selected schedules deleted from database successfully');
+    } catch (error) {
+      console.error('Error deleting schedules:', error);
+      alert('Failed to delete some schedules. Please try again.');
+    } finally {
+      setDeleteMode(false);
+      setSelectedToDelete([]);
+    }
   };
 
   // Render Create Calendar with drag and drop functionality
@@ -1825,7 +2005,7 @@ export default function Schedules() {
             if (event.availability) return;
             
             // For exception events, use the exact ID
-            const eventId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
+            const eventId = (typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id;
             
             setSelectedToDelete(prev => 
               prev.includes(eventId) 
@@ -1837,8 +2017,8 @@ export default function Schedules() {
             setEventDetailsModal({ open: true, event });
           }}
           eventPropGetter={event => {
-            const eventId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
-            const baseId = event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id;
+            const eventId = (typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id;
+            const baseId = (typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id;
             const isSelected = selectedToDelete.includes(eventId);
             const hasConflict = overlappingIds.includes(baseId);
             const isBeingDragged = draggingEventId === event.id;
@@ -1932,7 +2112,7 @@ export default function Schedules() {
                     
                     {deleteMode && !event.availability && (
                       <span style={{ fontSize: "10px" }}>
-                        {selectedToDelete.includes(event.id.includes('-recurring-') ? event.id.split('-recurring-')[0] : event.id) ? "✓" : ""}
+                        {selectedToDelete.includes((typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id) ? "✓" : ""}
                       </span>
                     )}
                   </div>
