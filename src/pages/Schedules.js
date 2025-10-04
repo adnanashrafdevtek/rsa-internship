@@ -157,7 +157,7 @@ const CustomHeader = ({ date }) => {
 
 export default function Schedules() {
   // School view state for master schedule
-  const [schoolView, setSchoolView] = useState("elementary");
+  const [schoolView, setSchoolView] = useState("all");
   const { user, logout } = useAuth();
   
   // All useState hooks must come before any conditional returns
