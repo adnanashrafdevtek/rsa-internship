@@ -2327,50 +2327,56 @@ export default function Schedules() {
   };
 
   // Unified Calendar Component
-  const renderCalendar = (events, calendarType) => (
-    <div style={{
-      backgroundColor: "white",
-      borderRadius: "12px",
-      padding: "24px",
-      boxShadow: "0 4px 16px rgba(0,0,0,0.05)"
-    }}>
-      <Calendar
-        localizer={localizer}
-        events={events}
-        startAccessor="start"
-        endAccessor="end"
-        style={{ height: 600 }}
-        views={calendarType === 'master-schedule' ? ['work_week'] : ["month", "week", "day"]}
-        view={calendarType === 'master-schedule' ? 'work_week' : view}
-        onView={calendarType === 'master-schedule' ? undefined : setView}
-        date={date}
-        onNavigate={setDate}
-        eventPropGetter={eventStyleGetter}
-        selectable={false}
-        onSelectEvent={handleEventClick}
-        components={{
-          event: ({ event }) => (
-            <div 
-              style={{ 
-                padding: "4px 6px", 
-                borderRadius: "4px",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                fontSize: "13px",
-                fontWeight: 500,
-                cursor: "pointer",
-                color: "white"
-              }}
-            >
-              <span>{event.title}</span>
-              {event.isClass && <span style={{ fontSize: "10px", opacity: 0.8 }}>📚</span>}
-            </div>
-          ),
-        }}
-      />
-    </div>
-  );
+  const renderCalendar = (events, calendarType) => {
+    // Restrict to Mon-Fri and 6:30am-4:00pm for master, teacher, and student schedules
+    const isRestricted = ["master-schedule", "teacher-schedule", "student-schedule"].includes(calendarType);
+    return (
+      <div style={{
+        backgroundColor: "white",
+        borderRadius: "12px",
+        padding: "24px",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.05)"
+      }}>
+        <Calendar
+          localizer={localizer}
+          events={events}
+          startAccessor="start"
+          endAccessor="end"
+          style={{ height: 600 }}
+          views={isRestricted ? ["work_week"] : ["month", "week", "day"]}
+          view={isRestricted ? "work_week" : view}
+          onView={isRestricted ? undefined : setView}
+          date={date}
+          onNavigate={setDate}
+          eventPropGetter={eventStyleGetter}
+          selectable={false}
+          onSelectEvent={handleEventClick}
+          min={isRestricted ? new Date(1970, 0, 1, 6, 30, 0) : undefined}
+          max={isRestricted ? new Date(1970, 0, 1, 16, 0, 0) : undefined}
+          components={{
+            event: ({ event }) => (
+              <div 
+                style={{ 
+                  padding: "4px 6px", 
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  color: "white"
+                }}
+              >
+                <span>{event.title}</span>
+                {event.isClass && <span style={{ fontSize: "10px", opacity: 0.8 }}>📚</span>}
+              </div>
+            ),
+          }}
+        />
+      </div>
+    );
+  };
 
   // Tab Navigation Component
   const TabNavigation = () => (
