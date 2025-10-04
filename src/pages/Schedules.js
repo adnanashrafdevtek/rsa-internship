@@ -147,41 +147,7 @@ const CustomHeader = ({ label, date }) => {
   );
 };
 
-// Create drag and drop enabled calendar
-const DragAndDropCalendar = withDragAndDrop(Calendar);
-
-function generateRecurringEvents(classObj, weeks = 8) {
-  const daysMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  const events = [];
-  const startDate = new Date(classObj.start_time.slice(0, 10));
-  const startTime = classObj.start_time.slice(11, 16);
-  const endTime = classObj.end_time.slice(11, 16);
-  const recurringDays = classObj.recurring_days.split(",").map(d => d.trim());
-
-  for (let week = 0; week < weeks; week++) {
-    recurringDays.forEach(day => {
-      const dayOfWeek = daysMap[day];
-      const eventDate = new Date(startDate);
-      eventDate.setDate(eventDate.getDate() + (dayOfWeek - eventDate.getDay() + 7 * week));
-      const [sh, sm] = startTime.split(":");
-      const [eh, em] = endTime.split(":");
-      const start = new Date(eventDate);
-      start.setHours(Number(sh), Number(sm), 0, 0);
-      const end = new Date(eventDate);
-      end.setHours(Number(eh), Number(em), 0, 0);
-
-      events.push({
-        id: `class-${classObj.id}-${week}-${day}`,
-        title: classObj.name,
-        start,
-        end,
-        classId: classObj.id,
-        isClass: true,
-      });
-    });
-  }
-  return events;
-}
+// (Removed duplicate DragAndDropCalendar and generateRecurringEvents definitions)
 
 
 
@@ -629,81 +595,7 @@ export default function Schedules() {
     return renderCalendar(masterEvents, 'master-schedule');
   }
 
-  // Tab Navigation Component with Edit/View toggle
-  const TabNavigation = () => (
-    <div style={{
-      backgroundColor: "white",
-      borderRadius: "12px",
-      padding: "8px",
-      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-      marginBottom: "16px",
-      display: "flex",
-      gap: "4px",
-      flexWrap: "wrap",
-      alignItems: "center"
-    }}>
-      {!editModeGlobal && tabs.map(tab => (
-        <button
-          key={tab.id}
-          onClick={() => setActiveTab(tab.id)}
-          style={{
-            padding: "12px 20px",
-            border: "none",
-            borderRadius: "8px",
-            backgroundColor: activeTab === tab.id ? "#3498db" : "transparent",
-            color: activeTab === tab.id ? "white" : "#2c3e50",
-            fontWeight: activeTab === tab.id ? "600" : "500",
-            fontSize: "14px",
-            cursor: "pointer",
-            transition: "all 0.2s ease",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            minWidth: "140px",
-            justifyContent: "center",
-            position: "relative"
-          }}
-        >
-          <span>{tab.icon}</span>
-          <span>{tab.label}</span>
-          {tab.count !== null && tab.count > 0 && (
-            <span style={{
-              backgroundColor: activeTab === tab.id ? "rgba(255,255,255,0.2)" : "#e74c3c",
-              color: activeTab === tab.id ? "white" : "white",
-              fontSize: "11px",
-              fontWeight: "600",
-              padding: "2px 6px",
-              borderRadius: "10px",
-              minWidth: "16px",
-              height: "16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center"
-            }}>
-              {tab.count}
-            </span>
-          )}
-        </button>
-      ))}
-      <button
-        onClick={() => setEditModeGlobal(em => !em)}
-        style={{
-          marginLeft: 16,
-          padding: "12px 20px",
-          border: "none",
-          borderRadius: "8px",
-          backgroundColor: editModeGlobal ? "#95a5a6" : "#27ae60",
-          color: "white",
-          fontWeight: "600",
-          fontSize: "14px",
-          cursor: "pointer",
-          transition: "all 0.2s ease"
-        }}
-      >
-        {editModeGlobal ? "View Mode" : "Edit Mode"}
-      </button>
-    </div>
-  );
+  // (Removed duplicate TabNavigation definition)
   const renderTeacherSchedules = () => (
     <>
       <div style={{ 
