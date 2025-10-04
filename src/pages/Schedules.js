@@ -15,6 +15,16 @@ function getABDay(date) {
   return moment(date).week() % 2 === 0 ? 'A' : 'B';
 }
 
+// Header-specific label logic: Mon/Wed = A, Tue/Thu = B, Friday depends on parity
+function getABLabelForHeader(date) {
+  const m = moment(date);
+  const day = m.day(); // 0=Sun .. 6=Sat
+  if (day === 1 || day === 3) return 'A';       // Mon / Wed
+  if (day === 2 || day === 4) return 'B';       // Tue / Thu
+  if (day === 5) return m.week() % 2 === 0 ? 'A' : 'B'; // Friday parity by week number
+  return '';                                     // Weekend (hidden)
+}
+
 // Turn a class record (with recurring_days, start_time/end_time) into recurring events for the current week
 function generateRecurringEvents(cls) {
   if (!cls) return [];
@@ -96,53 +106,47 @@ async function deleteScheduleFromDatabase(id) {
 const localizer = momentLocalizer(moment);
 const DragAndDropCalendar = withDragAndDrop(Calendar);
 
-// Custom header for calendar
-const CustomHeader = ({ label, date }) => {
-  const abDay = getABDay(date);
+// Unified header for both Create & Master schedule calendars
+const CustomHeader = ({ date }) => {
   const dayName = moment(date).format('dddd');
-  const isFriday = moment(date).day() === 5;
-  
+  const ab = getABLabelForHeader(date); // 'A' | 'B' | ''
+  const isFriday = moment(date).day() === 5 && ab; // only show if we have A/B
+  const bg = isFriday ? '#9b59b6' : (ab === 'A' ? '#3498db' : '#e74c3c');
+  const label = ab ? (isFriday ? 'A/B Day' : `${ab} Day`) : '';
   return (
-    <div style={{ 
-      textAlign: 'center', 
+    <div style={{
+      textAlign: 'center',
       padding: '8px 4px 8px 4px',
-      minHeight: '60px',
-      height: '60px',
+      minHeight: 70,
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: '#ffffff',
+      background: '#fff',
       position: 'relative',
       zIndex: 20,
       borderBottom: '1px solid #ddd',
       boxSizing: 'border-box'
     }}>
-      <div style={{ 
-        fontSize: '14px', 
-        fontWeight: 'bold', 
-        marginBottom: '6px',
-        color: '#2c3e50',
-        textShadow: '0 1px 2px rgba(255,255,255,0.8)',
-        lineHeight: '1.2'
-      }}>
-        {dayName}
-      </div>
       <div style={{
-        fontSize: '10px',
-        padding: '3px 8px',
-        backgroundColor: isFriday ? '#9b59b6' : (abDay === 'A' ? '#3498db' : '#e74c3c'),
-        color: 'white',
-        borderRadius: '10px',
+        fontSize: 14,
         fontWeight: 'bold',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
-        border: '1px solid rgba(255,255,255,0.2)',
-        minWidth: '50px',
-        textAlign: 'center',
-        lineHeight: '1.2'
-      }}>
-        {isFriday ? 'A/B Day' : `${abDay} Day`}
-      </div>
+        marginBottom: 6,
+        color: '#2c3e50'
+      }}>{dayName}</div>
+      {label && (
+        <div style={{
+          fontSize: 11,
+          padding: '6px 14px',
+          backgroundColor: bg,
+          color: '#fff',
+          borderRadius: 18,
+          fontWeight: 600,
+          boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+          lineHeight: 1.1,
+          minWidth: 70
+        }}>{label}</div>
+      )}
     </div>
   );
 };
@@ -214,6 +218,10 @@ export default function Schedules() {
   const [loading, setLoading] = useState(false);
   const [showUnselect, setShowUnselect] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  // Master schedule filters
+  const [filterTeacher, setFilterTeacher] = useState('');
+  const [filterGrade, setFilterGrade] = useState('');
+  const [filterRoom, setFilterRoom] = useState('');
   const [details, setDetails] = useState({
     teacherId: "",
     grade: "",
@@ -257,76 +265,36 @@ export default function Schedules() {
   };
 
   // Tab configuration for admin users
-  const getTabs = () => {
-    return [
-      { 
-        id: "master-schedule", 
-        label: "Master Schedule", 
-        icon: "🗂️",
-        count: masterEvents.length
-      },
-      { 
-        id: "teacher-schedules", 
-        label: "Teacher Schedules", 
-        icon: "👨‍🏫",
-        count: teachers.length
-      },
-      { 
-        id: "student-schedules", 
-        label: "Student Schedules", 
-        icon: "🧑‍🎓",
-        count: students.length
-      },
-      { 
-        id: "create-schedule", 
-        label: "Create Schedule", 
-        icon: "➕",
-        count: null
-      }
-    ];
-  };
+  const getTabs = () => ([
+    { id: 'master-schedule', label: 'Master Schedule', icon: '📘', count: masterEvents.length || null },
+    { id: 'teacher-schedules', label: 'Teacher Schedules', icon: '👨‍🏫', count: teachers.length || null },
+    { id: 'student-schedules', label: 'Student Schedules', icon: '🧑‍🎓', count: students.length || null },
+    { id: 'create-schedule', label: 'Create Schedule', icon: '➕', count: createEvents.length || null },
+  ]);
 
   const tabs = getTabs();
 
-  // Fetch data based on active tab (must be before conditional returns)
-  useEffect(() => {
-    if (!user) return;
-
-    const fetchMyScheduleEvents = async () => {
-      try {
-        let classes = [];
-        if (isStudent) {
-          const classRes = await fetch(`http://localhost:3000/api/students/${user.id}/classes`);
-          classes = classRes.ok ? await classRes.json() : [];
-        } else if (isTeacher) {
-          const classRes = await fetch(`http://localhost:3000/api/teachers/${user.id}/classes`);
-          classes = classRes.ok ? await classRes.json() : [];
-        }
-        let classEvents = [];
-        classes.forEach(cls => {
-          classEvents = classEvents.concat(generateRecurringEvents(cls));
-        });
-
-        // Personal events
-        const res = await fetch(`http://localhost:3000/myCalendar?userId=${user.id}`);
-        const personalEventsRaw = res.ok ? await res.json() : [];
-        const personalEvents = personalEventsRaw.map(event => ({
-          id: Number(event.id),
-          title: event.title || event.event_title || "No Title",
-          start: new Date(event.start_time),
-          end: new Date(event.end_time),
-          description: event.description || "",
-          classId: null,
-          isClass: false,
-          eventType: event.event_type || "event",
-        }));
-
-        setScheduleEvents([...classEvents, ...personalEvents]);
-      } catch (err) {
-        console.error(err);
-        setScheduleEvents([]);
-      }
-    };
+  // Fetch current user's schedule (placeholder since roles other than admin limited now)
+  const fetchMyScheduleEvents = async () => {
+    try {
+      const res = await fetch('http://localhost:3000/api/schedules');
+      const data = await res.json();
+      const personalEvents = Array.isArray(data) ? data.map(event => ({
+        id: event.idcalendar || event.id,
+        title: event.event_title || event.title || 'Event',
+        start: new Date(event.start_time),
+        end: new Date(event.end_time),
+        description: event.description || '',
+        classId: null,
+        isClass: false,
+        eventType: event.event_type || 'event',
+      })) : [];
+      setScheduleEvents(personalEvents);
+    } catch (err) {
+      console.error('fetchMyScheduleEvents error', err);
+      setScheduleEvents([]);
+    }
+  };
 
     const fetchMasterSchedule = async () => {
       try {
@@ -374,7 +342,9 @@ export default function Schedules() {
       }
     };
 
-    const fetchAvailabilities = async () => {
+  // Data fetching effect
+  useEffect(() => {
+  const fetchAvailabilities = async () => {
       try {
         const res = await fetch("http://localhost:3000/api/teacher-availabilities");
         const availData = res.ok ? await res.json() : [];
@@ -590,9 +560,277 @@ export default function Schedules() {
     }
   };
 
-  // Master Schedule renderer (was previously missing and caused lint errors)
+  // Master Schedule renderer (custom: hide Sat/Sun and lock to week view + A/B headers + time window)
   function renderMasterSchedule() {
-    return renderCalendar(masterEvents, 'master-schedule');
+    // Helper to extract a normalized grade from various possible fields/title text
+    const extractGradeValue = (ev) => {
+      // Direct fields first
+      const raw = ev.grade || ev.grade_level || ev.gradeLevel || ev.grade_id || ev.gradeId;
+      if (raw) {
+        const s = raw.toString().trim();
+        if (/^(pre[-\s]?k|pk)$/i.test(s)) return 'PK';
+        if (/^k(ind(er(garten)?)?)?$/i.test(s)) return 'K';
+        // strip words like 'grade', ordinal suffixes
+        const num = s.replace(/grade/i, '').replace(/(st|nd|rd|th)/i, '').trim();
+        if (/^\d{1,2}$/.test(num)) return parseInt(num,10);
+      }
+      // Parse from title if present e.g. "Math - Grade 5 - Room 103" or "5th Grade Math"
+      const title = ev.title || '';
+      // Patterns: Grade 5, 5th Grade, Grade K, Kindergarten, etc.
+      const gradePattern1 = /Grade\s*(K|[0-9]{1,2})/i;
+      const gradePattern2 = /(K|[0-9]{1,2})(st|nd|rd|th)?\s*Grade/i;
+      let match = title.match(gradePattern1) || title.match(gradePattern2);
+      if (match) {
+        const val = match[1];
+        if (/^K$/i.test(val)) return 'K';
+        const n = parseInt(val,10);
+        if (!isNaN(n)) return n;
+      }
+      // Kindergarten keywords
+      if (/Kindergarten|Kinder/i.test(title)) return 'K';
+      if (/Pre[-\s]?K|PK/i.test(title)) return 'PK';
+      return null;
+    };
+
+    // Classify to a school level
+    const classify = (gradeVal) => {
+      if (gradeVal === null || gradeVal === undefined) return null;
+      if (gradeVal === 'PK' || gradeVal === 'K' || (typeof gradeVal === 'number' && gradeVal >= 1 && gradeVal <= 5)) return 'elementary';
+      if (typeof gradeVal === 'number' && gradeVal >= 6 && gradeVal <= 8) return 'middle';
+      if (typeof gradeVal === 'number' && gradeVal >= 9 && gradeVal <= 12) return 'high';
+      return null;
+    };
+
+    let filteredMasterEvents = masterEvents.filter(ev => {
+      if (schoolView === 'all') return true;
+      const g = extractGradeValue(ev);
+      const level = classify(g);
+      return level === schoolView;
+    });
+    // Apply dropdown filters
+    if (filterTeacher) {
+      filteredMasterEvents = filteredMasterEvents.filter(ev => {
+        if (filterTeacher === 'all' || filterTeacher === '') return true;
+        const tId = ev.teacherId || ev.teacher_id || (ev.teacher && ev.teacher.id);
+        return tId && tId.toString() === filterTeacher;
+      });
+    }
+    if (filterGrade) {
+      filteredMasterEvents = filteredMasterEvents.filter(ev => {
+        if (filterGrade === 'all' || filterGrade === '') return true;
+        const g = extractGradeValue(ev);
+        if (g === null || g === undefined) return false;
+        const gStr = (typeof g === 'number') ? g.toString() : g;
+        return gStr === filterGrade;
+      });
+    }
+    if (filterRoom) {
+      filteredMasterEvents = filteredMasterEvents.filter(ev => {
+        if (filterRoom === 'all' || filterRoom === '') return true;
+        return (ev.room || '').toString().trim() === filterRoom;
+      });
+    }
+
+    const MasterToolbar = ({ label }) => (
+      <div className="rbc-toolbar" style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 8, gap: 12 }}>
+        <span className="rbc-btn-group" style={{ display: 'flex', gap: 4 }}>
+          {[
+            { id: 'all', label: 'All' },
+            { id: 'elementary', label: 'Elementary' },
+            { id: 'middle', label: 'Middle' },
+            { id: 'high', label: 'High School' }
+          ].map(btn => (
+            <button
+              key={btn.id}
+              type="button"
+              onClick={() => setSchoolView(btn.id)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 20,
+                border: schoolView === btn.id ? '2px solid #3498db' : '1px solid #d0d7de',
+                background: schoolView === btn.id ? '#3498db' : '#fff',
+                color: schoolView === btn.id ? '#fff' : '#2c3e50',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                minWidth: 90,
+                boxShadow: schoolView === btn.id ? '0 2px 6px rgba(0,0,0,0.15)' : '0 1px 2px rgba(0,0,0,0.08)'
+              }}
+            >
+              {btn.label}
+            </button>
+          ))}
+        </span>
+      </div>
+    );
+
+      const MasterHeader = ({ date }) => {
+        const ab = getABLabelForHeader(date);
+        const isFriday = moment(date).day() === 5;
+        const dayName = moment(date).format('dddd');
+        const colorMap = { A: '#3498db', B: '#e74c3c', F: '#9b59b6' };
+        const pillColor = isFriday ? colorMap.F : colorMap[ab] || '#7f8c8d';
+        const pillText = isFriday ? `${ab} Friday` : (ab ? `${ab} Day` : '');
+        return (
+          <div style={{
+            textAlign: 'center',
+            padding: '8px 4px 8px 4px',
+            minHeight: 130, // Taller header area so pill can sit mid-way "above 6:30"
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-start',
+            alignItems: 'center',
+            background: '#fff',
+            position: 'relative',
+            zIndex: 15,
+            overflow: 'visible'
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4, color: '#2c3e50' }}>{dayName}</div>
+            {pillText && (
+              <div style={{
+                position: 'absolute',
+                top: '60%', // push further down toward middle of header block
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                fontSize: 13,
+                padding: '8px 24px',
+                backgroundColor: pillColor,
+                color: 'white',
+                borderRadius: 30,
+                fontWeight: 600,
+                // Seamless look: remove shadow & border
+                boxShadow: 'none',
+                border: 'none',
+                minWidth: 90,
+                lineHeight: 1.2,
+                zIndex: 20,
+                pointerEvents: 'none' // avoid intercepting clicks on header
+              }}>
+                {pillText}
+              </div>
+            )}
+            <div style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 1,
+              background: '#ddd'
+            }} />
+          </div>
+        );
+      };
+
+    // Build dropdown option sets (teachers from teachers state to ensure actual teacher DB data)
+    const teacherOptions = teachers
+      .filter(t => (t.role ? /teacher/i.test(t.role) : true))
+      .map(t => ({ id: t.id, name: `${t.first_name || t.firstName || ''} ${t.last_name || t.lastName || ''}`.trim() || `Teacher ${t.id}` }));
+
+    // Static PreK-12 grade list
+    const gradeDropdownOptions = ['PK','K','1','2','3','4','5','6','7','8','9','10','11','12'];
+
+    // Unique room list from events
+    const roomOptions = Array.from(new Set(masterEvents.map(e => (e.room||'').toString().trim()).filter(Boolean))).sort();
+
+    return (
+      <div style={{ display:'flex', gap:16, alignItems:'flex-start' }}>
+        <div style={{
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        padding: '24px',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
+        flex:1
+      }}>
+        {/* Ensure calendar headers (A/B day pills) are fully visible and not clipped */}
+        <style>{`
+          .rbc-time-header, .rbc-time-header .rbc-header { overflow: visible !important; }
+          .rbc-time-header { z-index: 60; position: relative; }
+          .rbc-time-content { position: relative; z-index: 1; }
+          .rbc-time-view { overflow: visible !important; }
+        `}</style>
+        <Calendar
+          localizer={localizer}
+          events={filteredMasterEvents}
+          startAccessor="start"
+          endAccessor="end"
+          style={{ height: 600 }}
+          // Force work week (Mon-Fri) only
+          views={['work_week']}
+          view="work_week"
+          // still allow navigation via custom toolbar
+          date={date}
+          onNavigate={setDate}
+          eventPropGetter={eventStyleGetter}
+          selectable={false}
+          onSelectEvent={handleEventClick}
+            // Restrict visible time range 6:30 - 16:00
+            min={new Date(1970, 0, 1, 6, 30, 0)}
+              max={new Date(1970, 0, 1, 16, 0, 0)}
+          step={5}
+          timeslots={6}
+          components={{
+            toolbar: MasterToolbar,
+            header: CustomHeader,
+            event: ({ event }) => (
+              <div
+                style={{
+                  padding: '4px 6px',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  color: 'white'
+                }}
+              >
+                <span>{event.title}</span>
+                {event.isClass && <span style={{ fontSize: '10px', opacity: 0.8 }}>📚</span>}
+              </div>
+            ),
+          }}
+        />
+        </div>
+        {/* Right-side Filters Panel */}
+        <div style={{
+          width:240,
+          backgroundColor:'white',
+          borderRadius:'12px',
+          padding:'16px',
+          boxShadow:'0 4px 16px rgba(0,0,0,0.05)',
+          maxHeight:600,
+          display:'flex',
+          flexDirection:'column',
+          gap:16
+        }}>
+          <h4 style={{margin:0,fontSize:16,fontWeight:700,color:'#2c3e50'}}>Filters</h4>
+          <div>
+            <label style={{display:'block',fontSize:11,fontWeight:600,marginBottom:4,color:'#555'}}>Teacher</label>
+            <select value={filterTeacher} onChange={e=>setFilterTeacher(e.target.value)} style={{width:'100%',padding:'6px 8px',borderRadius:8,border:'1px solid #d0d7de'}}>
+              <option value=''>Any</option>
+              {teacherOptions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{display:'block',fontSize:11,fontWeight:600,marginBottom:4,color:'#555'}}>Grade</label>
+            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} style={{width:'100%',padding:'6px 8px',borderRadius:8,border:'1px solid #d0d7de'}}>
+              <option value=''>Any</option>
+              {gradeDropdownOptions.map(g => <option key={g} value={g}>{g === 'PK' ? 'PreK' : g}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{display:'block',fontSize:11,fontWeight:600,marginBottom:4,color:'#555'}}>Location / Room</label>
+            <select value={filterRoom} onChange={e=>setFilterRoom(e.target.value)} style={{width:'100%',padding:'6px 8px',borderRadius:8,border:'1px solid #d0d7de'}}>
+              <option value=''>Any</option>
+              {roomOptions.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <button onClick={()=>{setFilterTeacher('');setFilterGrade('');setFilterRoom('');}} style={{marginTop:'auto',padding:'8px 10px',fontSize:12,border:'1px solid #ccc',borderRadius:8,background:'#f1f2f4',cursor:'pointer'}}>Reset</button>
+        </div>
+      </div>
+    );
   }
 
   // (Removed duplicate TabNavigation definition)
@@ -2102,9 +2340,9 @@ export default function Schedules() {
         startAccessor="start"
         endAccessor="end"
         style={{ height: 600 }}
-        views={["month", "week", "day"]}
-        view={view}
-        onView={setView}
+        views={calendarType === 'master-schedule' ? ['work_week'] : ["month", "week", "day"]}
+        view={calendarType === 'master-schedule' ? 'work_week' : view}
+        onView={calendarType === 'master-schedule' ? undefined : setView}
         date={date}
         onNavigate={setDate}
         eventPropGetter={eventStyleGetter}
