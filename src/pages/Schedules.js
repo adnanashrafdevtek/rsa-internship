@@ -4,23 +4,71 @@ import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
-import Sidebar from '../components/Sidebar';
-import { useAuth } from '../context/AuthContext';
-// If these are in utils or elsewhere, adjust the import paths accordingly
-import { generateRecurringEvents, getABDay, grades, updateScheduleInDatabase, saveScheduleToDatabase, deleteScheduleFromDatabase } from '../utils/scheduleUtils';
+import Sidebar from "./Sidebar";
+import { useAuth } from "../context/AuthContext";
 
-// If not in utils, define grades here:
-// const grades = ["K", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "Not here?"];
-
-// Calendar localizer and DnD wrapper
 const localizer = momentLocalizer(moment);
-const DragAndDropCalendar = withDragAndDrop(Calendar);
 
-// Custom header for calendar
+// Add grades array for CreateSchedule functionality
+const grades = ["K", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "Not here?"];
+
+// Helper function to determine if a date is an A day or B day
+const getABDay = (date) => {
+  const dayOfYear = moment(date).dayOfYear();
+  return dayOfYear % 2 === 0 ? 'B' : 'A';
+};
+
+// API helper functions
+const saveScheduleToDatabase = async (scheduleData) => {
+  try {
+    const response = await fetch('http://localhost:3000/api/schedules', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(scheduleData)
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Error saving schedule:', error);
+    throw error;
+  }
+};
+
+const updateScheduleInDatabase = async (id, scheduleData) => {
+  try {
+    const response = await fetch(`http://localhost:3000/api/schedules/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(scheduleData)
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating schedule:', error);
+    throw error;
+  }
+};
+
+const deleteScheduleFromDatabase = async (id) => {
+  try {
+    const response = await fetch(`http://localhost:3000/api/schedules/${id}`, {
+      method: 'DELETE'
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Error deleting schedule:', error);
+    throw error;
+  }
+};
+
+// Custom header component to show A/B day indicators
 const CustomHeader = ({ label, date }) => {
   const abDay = getABDay(date);
   const dayName = moment(date).format('dddd');
   const isFriday = moment(date).day() === 5;
+  
   return (
     <div style={{ 
       textAlign: 'center', 
@@ -64,49 +112,53 @@ const CustomHeader = ({ label, date }) => {
       </div>
     </div>
   );
+};
+
+// Create drag and drop enabled calendar
+const DragAndDropCalendar = withDragAndDrop(Calendar);
+
+function generateRecurringEvents(classObj, weeks = 8) {
+  const daysMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const events = [];
+  const startDate = new Date(classObj.start_time.slice(0, 10));
+  const startTime = classObj.start_time.slice(11, 16);
+  const endTime = classObj.end_time.slice(11, 16);
+  const recurringDays = classObj.recurring_days.split(",").map(d => d.trim());
+
+  for (let week = 0; week < weeks; week++) {
+    recurringDays.forEach(day => {
+      const dayOfWeek = daysMap[day];
+      const eventDate = new Date(startDate);
+      eventDate.setDate(eventDate.getDate() + (dayOfWeek - eventDate.getDay() + 7 * week));
+      const [sh, sm] = startTime.split(":");
+      const [eh, em] = endTime.split(":");
+      const start = new Date(eventDate);
+      start.setHours(Number(sh), Number(sm), 0, 0);
+      const end = new Date(eventDate);
+      end.setHours(Number(eh), Number(em), 0, 0);
+
+      events.push({
+        id: `class-${classObj.id}-${week}-${day}`,
+        title: classObj.name,
+        start,
+        end,
+        classId: classObj.id,
+        isClass: true,
+      });
+    });
+  }
+  return events;
 }
 
-export default function Schedules() {
-  // Calendar ref for custom scroll control in Create Schedule
-  const calendarRef = React.useRef();
-  React.useEffect(() => {
-    const cal = calendarRef.current;
-    if (!cal) return;
-    // Find the scrollable container (react-big-calendar)
-    const scrollContainer = cal.querySelector('.rbc-time-content');
-    if (!scrollContainer) return;
 
-    // Patch wheel event for slower scroll
-    const handleWheel = (e) => {
-      if (Math.abs(e.deltaY) > 0) {
-        e.preventDefault();
-        // Slow down scroll speed (default is too fast)
-        const slowFactor = 0.25; // 25% of normal speed
-        let newScrollTop = scrollContainer.scrollTop + e.deltaY * slowFactor;
-        // Calculate max scroll so 3:30pm is the last visible slot
-        const slotEls = scrollContainer.querySelectorAll('.rbc-time-slot');
-        let maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
-        for (let i = 0; i < slotEls.length; ++i) {
-          const slot = slotEls[i];
-          if (slot.innerText && slot.innerText.trim().startsWith('3:30')) {
-            maxScroll = slot.offsetTop;
-            break;
-          }
-        }
-        if (newScrollTop > maxScroll) newScrollTop = maxScroll;
-        if (newScrollTop < 0) newScrollTop = 0;
-        scrollContainer.scrollTop = newScrollTop;
-      }
-    };
-    scrollContainer.addEventListener('wheel', handleWheel, { passive: false });
-    return () => scrollContainer.removeEventListener('wheel', handleWheel);
-  }, []);
+
+export default function Schedules() {
+  // School view state for master schedule
+  const [schoolView, setSchoolView] = useState("elementary");
   const { user, logout } = useAuth();
   
   // All useState hooks must come before any conditional returns
   const [activeTab, setActiveTab] = useState("master-schedule");
-  // View/Edit mode state
-  const [editModeGlobal, setEditModeGlobal] = useState(false);
   const [scheduleEvents, setScheduleEvents] = useState([]);
   const [showCheckboxes, setShowCheckboxes] = useState(false);
   const [selectedEvents, setSelectedEvents] = useState(new Set());
@@ -177,12 +229,6 @@ export default function Schedules() {
   });
   const [dragStartPosition, setDragStartPosition] = useState(null);
   const [dragTimeout, setDragTimeout] = useState(null);
-
-  // Pending changes (unsaved) system for Create Schedule tab
-  // - pendingEdits: map of base event id -> { newStart, newEnd, newRecurringDays, abDay }
-  // - pendingPreviews: array of new/exception preview events not yet committed
-  const [pendingEdits, setPendingEdits] = useState({});
-  const [pendingPreviews, setPendingPreviews] = useState([]); // items shaped like calendar events with pending: true
 
   // Cleanup function to remove any potential duplicate events
   const cleanupDuplicateExceptions = () => {
@@ -524,15 +570,13 @@ export default function Schedules() {
       `}</style>
     </div>
   );
-  // Render content based on active tab and global mode
+
+  // Render content based on active tab
   const renderTabContent = () => {
     if (loading) {
       return <LoadingSpinner />;
     }
-    if (editModeGlobal) {
-      // Only show Create Schedule in edit mode
-      return renderCreateSchedule();
-    }
+
     switch (activeTab) {
       case "master-schedule":
         return renderMasterSchedule();
@@ -547,163 +591,279 @@ export default function Schedules() {
     }
   };
 
-  // Tab Navigation Component with Edit/View toggle
-  const TabNavigation = () => (
-    <div style={{
-      backgroundColor: "white",
-      borderRadius: "12px",
-      padding: "8px",
-      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-      marginBottom: "16px",
-      display: "flex",
-      gap: "4px",
-      flexWrap: "wrap",
-      alignItems: "center"
-    }}>
-      {!editModeGlobal && tabs.map(tab => (
-        <button
-          key={tab.id}
-          onClick={() => setActiveTab(tab.id)}
-          style={{
-            padding: "12px 20px",
-            border: "none",
-            borderRadius: "8px",
-            backgroundColor: activeTab === tab.id ? "#3498db" : "transparent",
-            color: activeTab === tab.id ? "white" : "#2c3e50",
-            fontWeight: activeTab === tab.id ? "600" : "500",
-            fontSize: "14px",
-            cursor: "pointer",
-            transition: "all 0.2s ease",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            minWidth: "140px",
-            justifyContent: "center",
-            position: "relative"
-          }}
-        >
-          <span>{tab.icon}</span>
-          <span>{tab.label}</span>
-          {tab.count !== null && tab.count > 0 && (
-            <span style={{
-              backgroundColor: activeTab === tab.id ? "rgba(255,255,255,0.2)" : "#e74c3c",
-              color: activeTab === tab.id ? "white" : "white",
-              fontSize: "11px",
-              fontWeight: "600",
-              padding: "2px 6px",
-              borderRadius: "10px",
-              minWidth: "16px",
-              height: "16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center"
-            }}>
-              {tab.count}
-            </span>
-          )}
-        </button>
-      ))}
-      <button
-        onClick={() => setEditModeGlobal(em => !em)}
-        style={{
-          marginLeft: 16,
-          padding: "12px 20px",
-          border: "none",
-          borderRadius: "8px",
-          backgroundColor: editModeGlobal ? "#95a5a6" : "#27ae60",
-          color: "white",
-          fontWeight: "600",
-          fontSize: "14px",
-          cursor: "pointer",
-          transition: "all 0.2s ease"
-        }}
-      >
-        {editModeGlobal ? "View Mode" : "Edit Mode"}
-      </button>
-    </div>
-  );
-  const renderTeacherSchedules = () => (
+  // Master Schedule Tab Content
+  const renderMasterSchedule = () => {
+    // Weekdays to display
+    const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    // Hours from 7AM to 6PM
+    const hours = Array.from({ length: 12 }, (_, i) => i + 7); // 7..18
+    return (
     <>
-      {/* Teacher List */}
-      <div style={{
-        width: "300px",
-        backgroundColor: "white",
-        borderRadius: "12px",
-        padding: "16px",
+      <div style={{ 
+        backgroundColor: "white", 
+        borderRadius: "8px", 
+        padding: "12px 16px", 
         boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-        overflowY: "auto"
+        marginBottom: "12px"
       }}>
-        <h3 style={{ margin: "0 0 16px 0", color: "#2c3e50" }}>Select Teacher</h3>
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          {teachers.map(teacher => (
-            <button
-              key={teacher.id}
-              onClick={() => handleTeacherSelect(teacher)}
-              style={{
-                padding: "12px",
-                border: "2px solid #e1e8ed",
-                borderRadius: "8px",
-                backgroundColor: selectedTeacher?.id === teacher.id ? "#3498db" : "white",
-                color: selectedTeacher?.id === teacher.id ? "white" : "#2c3e50",
-                cursor: "pointer",
-                textAlign: "left",
-                fontSize: "14px",
-                fontWeight: "500",
-                transition: "all 0.2s ease"
-              }}
-              onMouseEnter={(e) => {
-                if (selectedTeacher?.id !== teacher.id) {
-                  e.target.style.backgroundColor = "#f8f9fa";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (selectedTeacher?.id !== teacher.id) {
-                  e.target.style.backgroundColor = "white";
-                }
-              }}
-            >
-              <div style={{ fontWeight: "600" }}>
-                {teacher.first_name} {teacher.last_name}
-              </div>
-              <div style={{ fontSize: "12px", opacity: 0.8 }}>
-                ID: {teacher.id}
-              </div>
-            </button>
-          ))}
+        <h1 style={{ 
+          fontSize: 20, 
+          fontWeight: "bold", 
+          margin: 0, 
+          color: "#2c3e50",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px"
+        }}>
+          🗂️ Master Schedule - {schoolView.charAt(0).toUpperCase() + schoolView.slice(1)} School
+        </h1>
+        <p style={{ margin: "8px 0 0 0", color: "#7f8c8d", fontSize: "14px" }}>
+          View all scheduled classes across the entire school
+        </p>
+        <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setSchoolView("elementary")}
+            style={{
+              padding: "6px 16px",
+              borderRadius: 6,
+              border: schoolView === "elementary" ? "2px solid #3498db" : "1px solid #e1e8ed",
+              background: schoolView === "elementary" ? "#eaf6fb" : "white",
+              color: schoolView === "elementary" ? "#3498db" : "#2c3e50",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >Elementary</button>
+          <button
+            onClick={() => setSchoolView("middle")}
+            style={{
+              padding: "6px 16px",
+              borderRadius: 6,
+              border: schoolView === "middle" ? "2px solid #e67e22" : "1px solid #e1e8ed",
+              background: schoolView === "middle" ? "#fdf6ec" : "white",
+              color: schoolView === "middle" ? "#e67e22" : "#2c3e50",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >Middle</button>
+          <button
+            onClick={() => setSchoolView("high")}
+            style={{
+              padding: "6px 16px",
+              borderRadius: 6,
+              border: schoolView === "high" ? "2px solid #8e44ad" : "1px solid #e1e8ed",
+              background: schoolView === "high" ? "#f5eaf7" : "white",
+              color: schoolView === "high" ? "#8e44ad" : "#2c3e50",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >High</button>
         </div>
       </div>
+
+      {/* Placeholder: Show a different message for each view, but same events for now */}
+      <div style={{ marginBottom: 16, color: "#888", fontWeight: 500 }}>
+        {schoolView === "elementary" && "Elementary School View (placeholder)"}
+        {schoolView === "middle" && "Middle School View (placeholder)"}
+        {schoolView === "high" && "High School View (placeholder)"}
+      </div>
+
+      {masterEvents.length > 0 ? (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: `60px repeat(${weekdays.length}, 1fr)`,
+          backgroundColor: "white",
+          borderRadius: "12px",
+          padding: "8px",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.05)"
+        }}>
+          {/* Day headers */}
+          <div></div> {/* Empty top-left corner */}
+          {weekdays.map(day => (
+            <div key={day} style={{
+              textAlign: "center",
+              fontWeight: "bold",
+              padding: "4px 0",
+              borderBottom: "1px solid #e1e8ed"
+            }}>
+              {day}
+            </div>
+          ))}
+
+          {/* Time rows */}
+          {hours.map(hour => (
+            <React.Fragment key={hour}>
+              {/* Hour column */}
+              <div style={{
+                textAlign: "right",
+                padding: "4px 8px",
+                borderRight: "1px solid #e1e8ed",
+                borderBottom: "1px solid #e1e8ed",
+                fontSize: 12,
+                color: "#7f8c8d"
+              }}>
+                {hour}:00
+              </div>
+
+              {/* Event cells */}
+              {weekdays.map((day, idx) => {
+                const cellEvents = masterEvents.filter(ev => {
+                  const evDate = new Date(ev.start);
+                  const evHour = evDate.getHours();
+                  const evDay = evDate.getDay(); // 0=Sun, 1=Mon
+                  return evHour === hour && evDay === idx + 1; // Mon=1
+                });
+
+                return (
+                  <div key={day + hour} style={{
+                    borderBottom: "1px solid #e1e8ed",
+                    borderRight: "1px solid #e1e8ed",
+                    minHeight: "50px",
+                    position: "relative",
+                    padding: "2px"
+                  }}>
+                    {cellEvents.map(ev => (
+                      <div key={ev.id} style={{
+                        backgroundColor: "#26bedd",
+                        color: "white",
+                        fontSize: "12px",
+                        fontWeight: "500",
+                        padding: "2px 4px",
+                        borderRadius: "4px",
+                        marginBottom: "2px",
+                        cursor: "pointer"
+                      }}>
+                        {ev.title || ev.subject}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
+      ) : (
+        <div style={{
+          backgroundColor: "white",
+          borderRadius: "12px",
+          padding: "40px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          textAlign: "center",
+          color: "#7f8c8d"
+        }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>📚</div>
+          <h3 style={{ margin: "0 0 8px 0", color: "#2c3e50" }}>No Classes Scheduled</h3>
+          <p style={{ margin: 0 }}>There are currently no classes in the master schedule</p>
+        </div>
+      )}
+    </>
+  );
+};
+
+  // Teacher Schedules Tab Content
+  const renderTeacherSchedules = () => (
+    <>
+      <div style={{ 
+        backgroundColor: "white", 
+        borderRadius: "8px", 
+        padding: "12px 16px", 
+        boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+        marginBottom: "12px"
+      }}>
+        <h1 style={{ 
+          fontSize: 20, 
+          fontWeight: "bold", 
+          margin: 0, 
+          color: "#2c3e50",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px"
+        }}>
+          👨‍🏫 Teacher Schedules
+        </h1>
+      </div>
       
-      {/* Calendar */}
-      <div style={{ flex: 1 }}>
-        {selectedTeacher ? (
-          <>
+      <div style={{ display: "flex", gap: "16px", height: "calc(100vh - 200px)" }}>
+        {/* Teacher List */}
+        <div style={{
+          width: "300px",
+          backgroundColor: "white",
+          borderRadius: "12px",
+          padding: "16px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          overflowY: "auto"
+        }}>
+          <h3 style={{ margin: "0 0 16px 0", color: "#2c3e50" }}>Select Teacher</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {teachers.map(teacher => (
+              <button
+                key={teacher.id}
+                onClick={() => handleTeacherSelect(teacher)}
+                style={{
+                  padding: "12px",
+                  border: "2px solid #e1e8ed",
+                  borderRadius: "8px",
+                  backgroundColor: selectedTeacher?.id === teacher.id ? "#3498db" : "white",
+                  color: selectedTeacher?.id === teacher.id ? "white" : "#2c3e50",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  transition: "all 0.2s ease"
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedTeacher?.id !== teacher.id) {
+                    e.target.style.backgroundColor = "#f8f9fa";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedTeacher?.id !== teacher.id) {
+                    e.target.style.backgroundColor = "white";
+                  }
+                }}
+              >
+                <div style={{ fontWeight: "600" }}>
+                  {teacher.first_name} {teacher.last_name}
+                </div>
+                <div style={{ fontSize: "12px", opacity: 0.8 }}>
+                  ID: {teacher.id}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        {/* Calendar */}
+        <div style={{ flex: 1 }}>
+          {selectedTeacher ? (
+            <>
+              <div style={{
+                backgroundColor: "white",
+                borderRadius: "8px",
+                padding: "12px 16px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                marginBottom: "12px"
+              }}>
+                <h3 style={{ margin: 0, color: "#2c3e50" }}>
+                  Schedule for {selectedTeacher.first_name} {selectedTeacher.last_name}
+                </h3>
+              </div>
+              {renderCalendar(teacherEvents, "teacher-schedule")}
+            </>
+          ) : (
             <div style={{
               backgroundColor: "white",
-              borderRadius: "8px",
-              padding: "12px 16px",
+              borderRadius: "12px",
+              padding: "40px",
               boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-              marginBottom: "12px"
+              textAlign: "center",
+              color: "#7f8c8d"
             }}>
-              <h3 style={{ margin: 0, color: "#2c3e50" }}>
-                Schedule for {selectedTeacher.first_name} {selectedTeacher.last_name}
-              </h3>
+              <div style={{ fontSize: "48px", marginBottom: "16px" }}>👨‍🏫</div>
+              <h3 style={{ margin: "0 0 8px 0", color: "#2c3e50" }}>Select a Teacher</h3>
+              <p style={{ margin: 0 }}>Choose a teacher from the list to view their schedule</p>
             </div>
-            {renderCalendar(teacherEvents, "teacher-schedule")}
-          </>
-        ) : (
-          <div style={{
-            backgroundColor: "white",
-            borderRadius: "12px",
-            padding: "40px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-            textAlign: "center",
-            color: "#7f8c8d"
-          }}>
-            <div style={{ fontSize: "48px", marginBottom: "16px" }}>👨‍🏫</div>
-            <h3 style={{ margin: "0 0 8px 0", color: "#2c3e50" }}>Select a Teacher</h3>
-            <p style={{ margin: 0 }}>Choose a teacher from the list to view their schedule</p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </>
   );
@@ -903,7 +1063,7 @@ export default function Schedules() {
       <div style={{ display: "flex", gap: "16px", height: "calc(100vh - 240px)" }}>
         {/* Calendar */}
         <div style={{ flex: 1 }}>
-          {renderCreateCalendar(calendarRef)}
+          {renderCreateCalendar()}
         </div>
         
         {/* Teacher sidebar */}
@@ -1111,7 +1271,7 @@ export default function Schedules() {
           const momentDay = recurDay + 1;
           
           // Create new event for this day of the week
-          const weekStart = moment(date).startOf('week');
+          const weekStart = moment().startOf('week');
           const dayStart = weekStart.clone().day(momentDay);
           const instanceStart = dayStart.set({ hour: baseStart.hour(), minute: baseStart.minute(), second: 0 });
           const instanceEnd = instanceStart.clone().add(duration, 'minutes');
@@ -1299,13 +1459,13 @@ export default function Schedules() {
       return;
     }
     
-  if (dragEvent) {
+    if (dragEvent) {
       const { baseEvent, originalDate, isRecurringInstance } = fridayModal.slotInfo;
       console.log('Friday drag completed:', dragEvent.id, abDay);
       
       // Handle recurring instance vs regular/base events
       if (isRecurringInstance && baseEvent && originalDate) {
-        // Stage a pending exception preview (do not save to DB yet)
+        // This is a recurring event instance - create an exception
         const exceptionId = `${baseEvent.id}-exception-${originalDate}`;
         const exceptionEvent = {
           ...baseEvent,
@@ -1317,26 +1477,68 @@ export default function Schedules() {
           dayType: abDay,
           isException: true,
           originalDate: originalDate,
-          originalEventId: baseEvent.id,
-          pending: true
+          originalEventId: baseEvent.id
         };
-        setPendingPreviews(prev => {
-          const withoutSame = prev.filter(ev => ev.id !== exceptionId);
-          return [...withoutSame, exceptionEvent];
-        });
+        
+        // Save exception to database
+        try {
+          const scheduleData = {
+            start_time: moment(start).format('YYYY-MM-DD HH:mm:ss'),
+            end_time: moment(end).format('YYYY-MM-DD HH:mm:ss'),
+            class_id: baseEvent.id,
+            event_title: `${baseEvent.subject} - ${baseEvent.grade} (Friday ${abDay} Day)`,
+            user_id: baseEvent.teacherId,
+            description: `Friday ${abDay} Day exception for ${baseEvent.subject}`
+          };
+          
+          const result = await saveScheduleToDatabase(scheduleData);
+          console.log('Friday exception saved to database:', result);
+          exceptionEvent.databaseId = result.insertId;
+        } catch (error) {
+          console.error('Error saving Friday exception to database:', error);
+          console.log('Continuing without database save - Friday drag will still work locally');
+          // Don't return here - allow the drag to continue even if database save fails
+        }
+        
+        console.log('Creating Friday exception event:', exceptionEvent);
+        setCreateEvents(prev => [...prev, exceptionEvent]);
       } else {
-        // Stage a pending edit for regular/base event
-        const newDayIndex = 4; // Friday
-        const newRecurringDays = [newDayIndex];
-        setPendingEdits(prev => ({
-          ...prev,
-          [dragEvent.id]: {
-            newStart: start,
-            newEnd: end,
-            newRecurringDays,
-            abDay
+        // Regular event or base recurring event being moved to Friday
+        try {
+          if (dragEvent.databaseId) {
+            const scheduleData = {
+              start_time: moment(start).format('YYYY-MM-DD HH:mm:ss'),
+              end_time: moment(end).format('YYYY-MM-DD HH:mm:ss'),
+              class_id: dragEvent.id,
+              event_title: `${dragEvent.subject} - ${dragEvent.grade} (Friday ${abDay} Day)`,
+              user_id: dragEvent.teacherId,
+              description: `Friday ${abDay} Day - ${dragEvent.subject}`
+            };
+            
+            const result = await updateScheduleInDatabase(dragEvent.databaseId, scheduleData);
+            console.log('Friday event updated in database:', result);
           }
-        }));
+        } catch (error) {
+          console.error('Error updating Friday event in database:', error);
+          console.log('Continuing without database update - Friday drag will still work locally');
+          // Don't return here - allow the drag to continue even if database update fails
+        }
+        
+        setCreateEvents(prev => {
+          const updatedEvents = prev.map(ev =>
+            ev.id === dragEvent.id
+              ? {
+                  ...ev,
+                  start: start,
+                  end: end,
+                  abDay: abDay,
+                  recurringDays: [4] // Friday is index 4
+                }
+              : ev
+          );
+          console.log('Updated Friday regular/base events:', updatedEvents);
+          return updatedEvents;
+        });
       }
       
       setDraggingEventId(null);
@@ -1597,8 +1799,11 @@ export default function Schedules() {
 
   // Handle event drop
   const handleEventDrop = async ({ event, start, end }) => {
+    console.log('Drop event triggered:', { event, start, end });
+    
     // Don't allow dragging availability blocks or if in delete mode
     if (event.availability || deleteMode) {
+      console.log('Blocking drag - availability or delete mode');
       setDraggingEventId(null);
       return;
     }
@@ -1608,167 +1813,130 @@ export default function Schedules() {
     const endMoment = moment(end);
     const minTime = moment(start).set({ hour: 6, minute: 30, second: 0 });
     const maxTime = moment(start).set({ hour: 16, minute: 0, second: 0 });
+  
     if (startMoment.isBefore(minTime) || endMoment.isAfter(maxTime)) {
       alert('Classes can only be scheduled between 6:30 AM and 4:00 PM.');
       setDraggingEventId(null);
       return;
     }
 
-    // Find the original event in createEvents
-    const original = createEvents.find(e => String(e.id) === String(event.id));
-    if (!original) {
-      setDraggingEventId(null);
-      return;
-    }
+    console.log('About to update event:', event.id);
 
-    // Copy all details from the original event
-    const movedEvent = {
-      ...original,
-      start,
-      end,
-      // Keep all other details (title, subject, teacher, etc.)
-    };
-
-    // Remove the original event from createEvents
-    setCreateEvents(prev => prev.filter(e => String(e.id) !== String(event.id)));
-
-    // Add the moved event to createEvents
-    setCreateEvents(prev => [...prev, movedEvent]);
-
-    // If the event exists in the DB, delete it and add the new one
-    if (original.databaseId) {
-      try {
-        await deleteScheduleFromDatabase(original.databaseId);
-        // Save the moved event to DB
-        const saved = await saveScheduleToDatabase({
-          ...movedEvent,
-          databaseId: undefined, // Let backend assign new id
-        });
-        // Update the moved event with new databaseId
-        setCreateEvents(prev => prev.map(e => String(e.id) === String(movedEvent.id) ? { ...e, databaseId: saved.insertId } : e));
-      } catch (err) {
-        console.error('Error updating moved event in DB:', err);
-      }
-    }
-    setDraggingEventId(null);
-  };
-
-  // Save all pending changes to DB and commit to local state
-  const handleSavePending = async () => {
-    // 1) Commit pending edits (regular/base events)
-    for (const [eventId, edit] of Object.entries(pendingEdits)) {
-      const baseEvent = createEvents.find(ev => String(ev.id) === String(eventId));
-      if (!baseEvent) continue;
-      const scheduleData = {
-        start_time: moment(edit.newStart).format('YYYY-MM-DD HH:mm:ss'),
-        end_time: moment(edit.newEnd).format('YYYY-MM-DD HH:mm:ss'),
-        class_id: baseEvent.id,
-        event_title: `${baseEvent.subject} - ${baseEvent.grade}`,
-        user_id: baseEvent.teacherId,
-        description: baseEvent.subject
-      };
-      try {
-        if (baseEvent.databaseId) {
-          await updateScheduleInDatabase(baseEvent.databaseId, scheduleData);
-        } else {
-          const result = await saveScheduleToDatabase(scheduleData);
-          baseEvent.databaseId = result.insertId;
-        }
-      } catch (err) {
-        console.error('Failed to save pending edit:', err);
-      }
-      // Commit to local state: update base event to new slot
-      setCreateEvents(prev => prev.map(ev => String(ev.id) === String(eventId) ? {
-        ...ev,
-        start: edit.newStart,
-        end: edit.newEnd,
-        recurringDays: edit.newRecurringDays,
-        abDay: edit.abDay || ev.abDay,
-        databaseId: ev.databaseId || baseEvent.databaseId
-      } : ev));
-    }
-
-    // 2) Commit pending preview exceptions
-    for (const preview of pendingPreviews) {
-      // Save preview as a new schedule row
-      const scheduleData = {
-        start_time: moment(preview.start).format('YYYY-MM-DD HH:mm:ss'),
-        end_time: moment(preview.end).format('YYYY-MM-DD HH:mm:ss'),
-        class_id: preview.originalEventId || preview.id,
-        event_title: `${preview.subject} - ${preview.grade} (Exception)`,
-        user_id: preview.teacherId,
-        description: `Exception for ${preview.subject}`
-      };
-      try {
-        const result = await saveScheduleToDatabase(scheduleData);
-        const insertId = result.insertId;
-        // Add to createEvents and, if possible, remove original day from the base event to avoid duplication
-        const base = createEvents.find(ev => String(ev.id) === String(preview.originalEventId));
-        let shouldDeleteBase = false;
-        let baseDbIdToDelete = null;
-        if (base && typeof preview.originalDate !== 'undefined') {
-          const dayIdx = parseInt(preview.originalDate, 10);
-          const remainingDays = Array.isArray(base.recurringDays) ? base.recurringDays.filter(d => d !== dayIdx) : base.recurringDays;
-          if (Array.isArray(remainingDays) && remainingDays.length === 0) {
-            shouldDeleteBase = true;
-            baseDbIdToDelete = base.databaseId || null;
-          }
-        }
-
-        setCreateEvents(prev => {
-          let next = prev;
-          if (base && typeof preview.originalDate !== 'undefined') {
-            const dayIdx = parseInt(preview.originalDate, 10);
-            if (shouldDeleteBase) {
-              // Remove base event entirely
-              next = next.filter(ev => String(ev.id) !== String(base.id));
-            } else {
-              // Update base event's recurring days
-              next = next.map(ev => {
-                if (String(ev.id) === String(base.id)) {
-                  const newDays = Array.isArray(ev.recurringDays) ? ev.recurringDays.filter(d => d !== dayIdx) : ev.recurringDays;
-                  // If newDays is empty, remove the event
-                  if (Array.isArray(newDays) && newDays.length === 0) {
-                    return null;
-                  }
-                  return { ...ev, recurringDays: newDays };
-                }
-                return ev;
-              }).filter(Boolean);
+    // Check if this is a recurring event instance being dragged
+    if (typeof event.id === 'string' && event.id.includes('-recurring-')) {
+      const baseId = event.id.split('-recurring-')[0];
+      const originalDate = event.id.split('-recurring-')[1];
+      const baseEvent = createEvents.find(ev => ev.id === baseId);
+      
+      if (baseEvent) {
+        // Check if moving to Friday requires A/B day selection
+        const isFriday = moment(start).day() === 5;
+        if (isFriday) {
+          setFridayModal({
+            open: true,
+            slotInfo: {
+              start,
+              end,
+              dragEvent: true,
+              originalEvent: event,
+              baseEvent,
+              originalDate,
+              isRecurringInstance: true
             }
-          }
-          return [...next, { ...preview, pending: false, databaseId: insertId }];
-        });
-
-        // If base event lost all its days, delete its DB row too
-        if (shouldDeleteBase && baseDbIdToDelete) {
-          try {
-            await deleteScheduleFromDatabase(baseDbIdToDelete);
-          } catch (delErr) {
-            console.error('Failed to delete original base event from DB:', delErr);
-          }
+          });
+          return;
         }
-      } catch (err) {
-        console.error('Failed to save pending exception:', err);
+
+        // Create an exception for this specific instance
+        const newDayIndex = moment(start).day() - 1; // Convert to 0=Monday, 4=Friday
+        const newRecurringDays = (newDayIndex >= 0 && newDayIndex <= 4) ? [newDayIndex] : [];
+        const exceptionId = `${baseId}-exception-${originalDate}`;
+        
+        const exceptionEvent = {
+          ...baseEvent,
+          id: exceptionId,
+          start: start,
+          end: end,
+          recurringDays: newRecurringDays,
+          isException: true,
+          originalDate: originalDate,
+          originalEventId: baseId,
+          abDay: baseEvent.abDay || getABDay(start)
+        };
+        
+        console.log('Creating exception event:', exceptionEvent);
+        
+        // Save exception to database
+        try {
+          const scheduleData = {
+            start_time: moment(start).format('YYYY-MM-DD HH:mm:ss'),
+            end_time: moment(end).format('YYYY-MM-DD HH:mm:ss'),
+            class_id: baseEvent.id,
+            event_title: `${baseEvent.subject} - ${baseEvent.grade} (Exception)`,
+            user_id: baseEvent.teacherId,
+            description: `Exception for ${baseEvent.subject} on ${moment(start).format('YYYY-MM-DD')}`
+          };
+          
+          const result = await saveScheduleToDatabase(scheduleData);
+          console.log('Exception saved to database:', result);
+          
+          // Add database ID to the exception event
+          exceptionEvent.databaseId = result.insertId;
+        } catch (error) {
+          console.error('Error saving exception to database:', error);
+          console.log('Continuing without database save - drag will still work locally');
+          // Don't return here - allow the drag to continue even if database save fails
+        }
+        
+        setCreateEvents(prev => [...prev, exceptionEvent]);
       }
+    } else {
+      // Regular event or base recurring event - move the entire series
+      const newDayIndex = moment(start).day() - 1;
+      const newRecurringDays = (newDayIndex >= 0 && newDayIndex <= 4) ? [newDayIndex] : [];
+      
+      console.log('Updating regular/base event:', event.id);
+      
+      // Update in database first
+      try {
+        if (event.databaseId) {
+          const scheduleData = {
+            start_time: moment(start).format('YYYY-MM-DD HH:mm:ss'),
+            end_time: moment(end).format('YYYY-MM-DD HH:mm:ss'),
+            class_id: event.id,
+            event_title: `${event.subject} - ${event.grade}`,
+            user_id: event.teacherId,
+            description: event.subject
+          };
+          
+          const result = await updateScheduleInDatabase(event.databaseId, scheduleData);
+          console.log('Event updated in database:', result);
+        }
+      } catch (error) {
+        console.error('Error updating event in database:', error);
+        console.log('Continuing without database update - drag will still work locally');
+        // Don't return here - allow the drag to continue even if database update fails
+      }
+      
+      // Update local state - this will happen regardless of overlaps
+      setCreateEvents(prevEvents => {
+        const updatedEvents = prevEvents.map(ev =>
+          ev.id === event.id
+            ? {
+                ...ev,
+                start: start,
+                end: end,
+                recurringDays: newRecurringDays,
+                abDay: ev.abDay || getABDay(start)
+              }
+            : ev
+        );
+        console.log('Updated events:', updatedEvents);
+        return updatedEvents;
+      });
     }
 
-    // After all pending changes, filter out any base events with empty recurringDays (UI only)
-    setCreateEvents(prev => prev.filter(ev => {
-      if (Array.isArray(ev.recurringDays) && ev.recurringDays.length === 0) {
-        return false;
-      }
-      return true;
-    }));
-    // Clear pending states
-    setPendingEdits({});
-    setPendingPreviews([]);
-  };
-
-  // Discard all pending changes
-  const handleDiscardPending = () => {
-    setPendingEdits({});
-    setPendingPreviews([]);
+    setDraggingEventId(null);
   };
 
   // Handle edit event
@@ -1829,12 +1997,12 @@ export default function Schedules() {
   };
 
   // Render Create Calendar with drag and drop functionality
-  const renderCreateCalendar = (calendarRef) => {
+  const renderCreateCalendar = () => {
     // Show availabilities for selected teachers
     const selectedAvailabilities = allAvailabilities.filter(av =>
       selectedTeachers.includes(av.teacher_id)
     ).map(av => {
-      const weekStart = moment(date).startOf('week').add(av.day_of_week, 'days');
+      const weekStart = moment().startOf('week').add(av.day_of_week, 'days');
       const [startHour, startMinute] = av.start_time.split(":");
       const [endHour, endMinute] = av.end_time.split(":");
       const start = weekStart.clone().set({ hour: +startHour, minute: +startMinute, second: 0 }).toDate();
@@ -1854,50 +2022,10 @@ export default function Schedules() {
     // Get expanded calendar events (with recurring instances)
     const expandedEvents = getCalendarEvents();
     const overlappingIds = getOverlappingEventIds();
-
-    // When there are pending changes, hide originals so users only see the moved preview until Save
-  const suppressedBaseIds = new Set(Object.keys(pendingEdits));
-    const suppressedInstanceIds = new Set(
-      pendingPreviews
-        .filter(p => p.isException && p.originalEventId && typeof p.originalDate !== 'undefined')
-        .map(p => `${p.originalEventId}-recurring-${p.originalDate}`)
-    );
-    const filteredExpandedEvents = expandedEvents.filter(ev => {
-      // Do not hide availability blocks
-      if (ev.availability) return true;
-      const baseId = (typeof ev.id === 'string' && ev.id.includes('-recurring-'))
-        ? ev.id.split('-recurring-')[0]
-        : ev.id;
-      // If the base event is being edited, hide all its original instances
-      if (suppressedBaseIds.has(String(baseId))) return false;
-      // If there is an exception preview for a specific recurring instance, hide just that instance
-      if (typeof ev.id === 'string' && suppressedInstanceIds.has(ev.id)) return false;
-      return true;
-    });
-    // Build overlay preview events from pending edits
-    const overlayFromEdits = Object.entries(pendingEdits).map(([id, edit]) => {
-      const baseEvent = createEvents.find(ev => String(ev.id) === String(id));
-      if (!baseEvent) return null;
-      return {
-        ...baseEvent,
-        id: `${id}-pending-preview`,
-        start: edit.newStart,
-        end: edit.newEnd,
-        recurringDays: edit.newRecurringDays,
-        abDay: edit.abDay || baseEvent.abDay,
-        pending: true
-      };
-    }).filter(Boolean);
-
-    const allEventsForCreate = [
-      ...filteredExpandedEvents,
-      ...selectedAvailabilities,
-      ...overlayFromEdits,
-      ...pendingPreviews
-    ];
+    const allEventsForCreate = [...expandedEvents, ...selectedAvailabilities];
 
     return (
-      <div ref={calendarRef} style={{
+      <div style={{
         backgroundColor: "white",
         borderRadius: "12px",
         padding: "16px",
@@ -1973,32 +2101,6 @@ export default function Schedules() {
             display: none !important;
           }
         `}</style>
-        {/* Unsaved changes banner */}
-        {(Object.keys(pendingEdits).length > 0 || pendingPreviews.length > 0) && (
-          <div style={{
-            background: '#fff8e1',
-            border: '1px solid #ffe0a3',
-            borderRadius: 8,
-            padding: '8px 12px',
-            marginBottom: 8,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}>
-            <div style={{ color: '#8a6d3b', fontWeight: 600 }}>
-              You have unsaved changes ({Object.keys(pendingEdits).length + pendingPreviews.length}).
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={handleDiscardPending} style={{
-                background: '#95a5a6', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer'
-              }}>Discard</button>
-              <button onClick={handleSavePending} style={{
-                background: '#27ae60', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer'
-              }}>Save changes</button>
-            </div>
-          </div>
-        )}
-
         <DragAndDropCalendar
           localizer={localizer}
           events={allEventsForCreate}
@@ -2018,7 +2120,7 @@ export default function Schedules() {
           onDragStart={handleEventDragStart}
           onDragEnd={handleDragEnd}
           resizable={false}
-          draggableAccessor={(event) => !event.availability && !event.pending}
+          draggableAccessor={(event) => !event.availability}
           dragFromOutsideItem={null}
           onDropFromOutside={null}
           step={5}
@@ -2065,10 +2167,6 @@ export default function Schedules() {
             
             let backgroundColor = "#3498db";
             let border = "none";
-            // Highlight pending preview events
-            if (event.pending) {
-              border = '2px dashed #f39c12';
-            }
             let opacity = isBeingDragged ? 0.6 : 1;
             
             // Check if event is outside teacher availability
@@ -2155,59 +2253,118 @@ export default function Schedules() {
   };
 
   // Unified Calendar Component
-  const renderCalendar = (events, calendarType) => {
-    // Restrict master schedule to Mon-Fri, 6:30am-3:30pm, work_week view only
-    const isMaster = calendarType === "master-schedule";
-    return (
-      <div style={{
-        backgroundColor: "white",
-        borderRadius: "12px",
-        padding: "24px",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.05)"
-      }}>
-        <Calendar
-          localizer={localizer}
-          events={events}
-          startAccessor="start"
-          endAccessor="end"
-          style={{ height: 600 }}
-          views={isMaster ? { work_week: true } : ["month", "week", "day"]}
-          view={isMaster ? "work_week" : view}
-          onView={isMaster ? undefined : setView}
-          date={date}
-          onNavigate={setDate}
-          eventPropGetter={eventStyleGetter}
-          selectable={false}
-          min={isMaster ? moment().startOf('day').set({ hour: 6, minute: 30 }).toDate() : undefined}
-          max={isMaster ? moment().startOf('day').set({ hour: 15, minute: 30 }).toDate() : undefined}
-          daysOfWeek={isMaster ? [1,2,3,4,5] : undefined}
-          onSelectEvent={handleEventClick}
-          components={{
-            event: ({ event }) => (
-              <div 
-                style={{ 
-                  padding: "4px 6px", 
-                  borderRadius: "4px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  color: "white"
-                }}
-              >
-                <span>{event.title}</span>
-                {event.isClass && <span style={{ fontSize: "10px", opacity: 0.8 }}>📚</span>}
-              </div>
-            ),
-          }}
-        />
-      </div>
-    );
-  };
+  const renderCalendar = (events, calendarType) => (
+    <div style={{
+      backgroundColor: "white",
+      borderRadius: "12px",
+      padding: "24px",
+      boxShadow: "0 4px 16px rgba(0,0,0,0.05)"
+    }}>
+      <Calendar
+        localizer={localizer}
+        events={events}
+        startAccessor="start"
+        endAccessor="end"
+        style={{ height: 600 }}
+        views={["month", "week", "day"]}
+        view={view}
+        onView={setView}
+        date={date}
+        onNavigate={setDate}
+        eventPropGetter={eventStyleGetter}
+        selectable={false}
+        onSelectEvent={handleEventClick}
+        components={{
+          event: ({ event }) => (
+            <div 
+              style={{ 
+                padding: "4px 6px", 
+                borderRadius: "4px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "13px",
+                fontWeight: 500,
+                cursor: "pointer",
+                color: "white"
+              }}
+            >
+              <span>{event.title}</span>
+              {event.isClass && <span style={{ fontSize: "10px", opacity: 0.8 }}>📚</span>}
+            </div>
+          ),
+        }}
+      />
+    </div>
+  );
 
-  // ...removed duplicate TabNavigation...
+  // Tab Navigation Component
+  const TabNavigation = () => (
+    <div style={{
+      backgroundColor: "white",
+      borderRadius: "12px",
+      padding: "8px",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+      marginBottom: "16px",
+      display: "flex",
+      gap: "4px",
+      flexWrap: "wrap"
+    }}>
+      {tabs.map(tab => (
+        <button
+          key={tab.id}
+          onClick={() => setActiveTab(tab.id)}
+          style={{
+            padding: "12px 20px",
+            border: "none",
+            borderRadius: "8px",
+            backgroundColor: activeTab === tab.id ? "#3498db" : "transparent",
+            color: activeTab === tab.id ? "white" : "#2c3e50",
+            fontWeight: activeTab === tab.id ? "600" : "500",
+            fontSize: "14px",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            minWidth: "140px",
+            justifyContent: "center",
+            position: "relative"
+          }}
+          onMouseEnter={(e) => {
+            if (activeTab !== tab.id) {
+              e.target.style.backgroundColor = "#f8f9fa";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeTab !== tab.id) {
+              e.target.style.backgroundColor = "transparent";
+            }
+          }}
+        >
+          <span>{tab.icon}</span>
+          <span>{tab.label}</span>
+          {tab.count !== null && tab.count > 0 && (
+            <span style={{
+              backgroundColor: activeTab === tab.id ? "rgba(255,255,255,0.2)" : "#e74c3c",
+              color: activeTab === tab.id ? "white" : "white",
+              fontSize: "11px",
+              fontWeight: "600",
+              padding: "2px 6px",
+              borderRadius: "10px",
+              minWidth: "16px",
+              height: "16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}>
+              {tab.count}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
