@@ -4,13 +4,93 @@ import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
-import Sidebar from '../components/Sidebar';
+import Sidebar from './Sidebar';
 import { useAuth } from '../context/AuthContext';
-// If these are in utils or elsewhere, adjust the import paths accordingly
-import { generateRecurringEvents, getABDay, grades, updateScheduleInDatabase, saveScheduleToDatabase, deleteScheduleFromDatabase } from '../utils/scheduleUtils';
 
-// If not in utils, define grades here:
-// const grades = ["K", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "Not here?"];
+// Inline utilities that were previously imported from a non-existent scheduleUtils
+const grades = ["K","1","2","3","4","5","6","7","8","9","10","11","12","Not here?"];
+
+function getABDay(date) {
+  // Simple alternating week logic (even = A, odd = B) – adjust to real rules as needed
+  return moment(date).week() % 2 === 0 ? 'A' : 'B';
+}
+
+// Turn a class record (with recurring_days, start_time/end_time) into recurring events for the current week
+function generateRecurringEvents(cls) {
+  if (!cls) return [];
+  const recurring = Array.isArray(cls.recurring_days) ? cls.recurring_days : (Array.isArray(cls.recurringDays) ? cls.recurringDays : []);
+  const startTime = cls.start_time || cls.startTime; // expected HH:mm:ss
+  const endTime = cls.end_time || cls.endTime;
+  if (!startTime || !endTime) return [];
+  return recurring.map(dayIdx => {
+    // dayIdx expected 0..4 (Mon..Fri) in our UI; moment weekday: 1..5
+    const weekday = dayIdx + 1; // Monday=1
+    const base = moment().startOf('week').day(weekday);
+    const [sh, sm] = startTime.split(':').map(Number);
+    const [eh, em] = endTime.split(':').map(Number);
+    const start = base.clone().set({ hour: sh, minute: sm || 0, second: 0 });
+    const end = base.clone().set({ hour: eh, minute: em || 0, second: 0 });
+    return {
+      id: `${cls.id || cls.class_id || Date.now()}-${dayIdx}`,
+      title: cls.event_title || cls.subject || 'Class',
+      subject: cls.subject || cls.event_title || 'Class',
+      teacher: cls.teacher || cls.teacher_name || cls.teacher_full_name || '',
+      teacherId: cls.teacher_id || cls.user_id,
+      grade: cls.grade || '',
+      room: cls.room || cls.room_number || '',
+      start: start.toDate(),
+      end: end.toDate(),
+      recurringDays: recurring,
+      abDay: cls.abDay || '',
+      isClass: true,
+      description: cls.description || ''
+    };
+  });
+}
+
+// Backend persistence helpers; adjust endpoints if backend differs
+async function saveScheduleToDatabase(data) {
+  try {
+    const res = await fetch('http://localhost:3000/api/schedules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to save');
+    // Normalize id field
+    return { success: true, id: json.idcalendar || json.id || json.insertId || Date.now(), insertId: json.idcalendar || json.id || json.insertId };
+  } catch (e) {
+    console.error('saveScheduleToDatabase error', e);
+    return { success: false };
+  }
+}
+
+async function updateScheduleInDatabase(id, data) {
+  try {
+    const res = await fetch(`http://localhost:3000/api/schedules/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Update failed');
+    return { success: true };
+  } catch (e) {
+    console.error('updateScheduleInDatabase error', e);
+    return { success: false };
+  }
+}
+
+async function deleteScheduleFromDatabase(id) {
+  try {
+    const res = await fetch(`http://localhost:3000/api/schedules/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Delete failed');
+    return { success: true };
+  } catch (e) {
+    console.error('deleteScheduleFromDatabase error', e);
+    return { success: false };
+  }
+}
 
 // Calendar localizer and DnD wrapper
 const localizer = momentLocalizer(moment);
@@ -546,6 +626,11 @@ export default function Schedules() {
         return renderMasterSchedule();
     }
   };
+
+  // Master Schedule renderer (was previously missing and caused lint errors)
+  function renderMasterSchedule() {
+    return renderCalendar(masterEvents, 'master-schedule');
+  }
 
   // Tab Navigation Component with Edit/View toggle
   const TabNavigation = () => (
