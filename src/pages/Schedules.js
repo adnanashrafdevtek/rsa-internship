@@ -4,7 +4,7 @@ import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
-import Sidebar from './Sidebar';
+import SidebarLayout from '../components/SidebarLayout';
 import { useAuth } from '../context/AuthContext';
 
 // Inline utilities that were previously imported from a non-existent scheduleUtils
@@ -387,12 +387,11 @@ export default function Schedules() {
   // Role check - admin only for full access (after all hooks)
   if (!user || user.role !== "admin") {
     return (
-      <div style={{ display: "flex", height: "100vh" }}>
-        <Sidebar onLogout={logout} />
-        <div style={{ flex: 1, backgroundColor: "#f8f9fa", padding: 40, marginLeft: 300 }}>
+      <SidebarLayout onLogout={handleLogout}>
+        <div style={{ backgroundColor: "#f8f9fa", padding: 40 }}>
           <h2>Only admins can access the unified schedule management. Please log in as admin.</h2>
         </div>
-      </div>
+      </SidebarLayout>
     );
   }
 
@@ -2447,12 +2446,9 @@ export default function Schedules() {
   );
 
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
-      <Sidebar onLogout={handleLogout} />
-      <div style={{ flex: 1, backgroundColor: "#f8f9fa", padding: 16, marginLeft: 300 }}>
+    <SidebarLayout onLogout={handleLogout}>
         <TabNavigation />
         {renderTabContent()}
-      </div>
 
       {/* Create Event Modal */}
       {modalOpen && (
@@ -3155,6 +3151,6 @@ export default function Schedules() {
           </div>
         </div>
       )}
-    </div>
+    </SidebarLayout>
   );
 }

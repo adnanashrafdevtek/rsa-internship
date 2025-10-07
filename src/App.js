@@ -12,6 +12,7 @@ import AddUserPage from "./pages/AddUserPage";
 import ActivationForm from "./pages/ActivationForm";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
+import { SidebarProvider } from "./context/SidebarContext";
 import './App.css';
 
 import MySchedule from "./pages/MySchedule";
@@ -23,7 +24,8 @@ import TeacherAvailability from "./pages/TeacherAvailability";
 function App() {
   return (
     <AuthProvider>
-      <Router>
+      <SidebarProvider>
+        <Router>
         <Routes>
           <Route path="/" element={<Login />} />
           <Route
@@ -111,6 +113,7 @@ function App() {
           <Route path="/availability" element={<TeacherAvailability />} />
         </Routes>
       </Router>
+      </SidebarProvider>
     </AuthProvider>
   );
 }

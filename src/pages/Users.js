@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import Sidebar from "./Sidebar";
+import SidebarLayout from "../components/SidebarLayout";
+import { useNavigate } from "react-router-dom";
 
 export default function Users() {
   const {
@@ -8,11 +9,35 @@ export default function Users() {
     users: usersFromContext = [],
     changeUserPassword,
     toggleUserActiveStatus,
+    logout
   } = useAuth();
+  const navigate = useNavigate();
+  
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
   const [newPasswords, setNewPasswords] = useState({});
   const [message, setMessage] = useState("");
 
   const { users, usersLoading, usersError } = useAuth();
+
+  // Add the handler for password change
+  const handlePasswordChange = async (username) => {
+    const newPassword = newPasswords[username];
+    if (!newPassword) {
+      setMessage("Please enter a new password.");
+      return;
+    }
+    try {
+      await changeUserPassword(username, newPassword);
+      setMessage(`Password changed for ${username}`);
+      setNewPasswords((prev) => ({ ...prev, [username]: "" }));
+    } catch (error) {
+      console.error("Error changing password:", error);
+      setMessage("Error changing password. Please try again.");
+    }
+  };
 
   if (!user || user.role !== "admin") {
     return (
@@ -62,9 +87,8 @@ export default function Users() {
 
   const safeUsers2 = Array.isArray(users) ? users : [];
   return (
-    <div style={{ display: "flex" }}>
-      <Sidebar />
-      <div style={{ padding: "40px", flex: 1, marginLeft: 300 }}>
+    <SidebarLayout onLogout={handleLogout}>
+      <div style={{ padding: "40px" }}>
         <h1>All Users</h1>
         {message && <p style={{ color: "green" }}>{message}</p>}
 
@@ -172,24 +196,8 @@ export default function Users() {
         </table>
         {content}
       </div>
-    </div>
+    </SidebarLayout>
   );
-
-  // Add the missing handler for password change
-  const handlePasswordChange = async (username) => {
-    const newPassword = newPasswords[username];
-    if (!newPassword) {
-      setMessage("Please enter a new password.");
-      return;
-    }
-    try {
-      await changeUserPassword(username, newPassword);
-      setMessage(`Password changed for ${username}`);
-      setNewPasswords((prev) => ({ ...prev, [username]: "" }));
-    } catch (err) {
-      setMessage("Failed to change password.");
-    }
-  };
 }
 
 const thStyle = {

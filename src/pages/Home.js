@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import Sidebar from "./Sidebar";
+import SidebarLayout from "../components/SidebarLayout";
 import "../App.css";
 import { Calendar, momentLocalizer, Views } from 'react-big-calendar';
 import moment from 'moment';
@@ -154,9 +154,8 @@ export default function Home() {
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
-      <Sidebar onLogout={handleLogout} />
-      <div style={{ flex: 1, backgroundColor: "white", padding: "40px", marginLeft: 300, overflowY: "auto" }}>
+    <SidebarLayout onLogout={handleLogout}>
+      <div style={{ backgroundColor: "white", padding: "40px", overflowY: "auto", height: "100%" }}>
         <h1 style={{ fontSize: "40px", fontWeight: "bold", marginBottom: "24px" }}>
           Welcome, <span style={{ color: "#26bedd" }}>{capitalizeFirst(user?.username)}</span>
         </h1>
@@ -313,7 +312,7 @@ export default function Home() {
           </>
         )}
       </div>
-    </div>
+    </SidebarLayout>
   );
 }
 
