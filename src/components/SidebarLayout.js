@@ -3,8 +3,8 @@ import { useSidebar } from '../context/SidebarContext';
 import Sidebar from '../pages/Sidebar';
 
 const SidebarLayout = ({ children, onLogout }) => {
-  const { sidebarWidth, isCollapsed } = useSidebar();
-  const effectiveWidth = isCollapsed ? 70 : sidebarWidth;
+  const { getEffectiveWidth } = useSidebar();
+  const effectiveWidth = getEffectiveWidth();
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>

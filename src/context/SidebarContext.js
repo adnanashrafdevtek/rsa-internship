@@ -22,8 +22,19 @@ export const SidebarProvider = ({ children }) => {
     setIsCollapsed(!isCollapsed);
   };
 
+  // Helper to get effective width based on collapsed state
+  const getEffectiveWidth = () => {
+    return isCollapsed ? 60 : sidebarWidth;
+  };
+
   return (
-    <SidebarContext.Provider value={{ sidebarWidth, updateSidebarWidth, isCollapsed, toggleCollapse }}>
+    <SidebarContext.Provider value={{ 
+      sidebarWidth, 
+      updateSidebarWidth, 
+      isCollapsed,
+      toggleCollapse, 
+      getEffectiveWidth
+    }}>
       {children}
     </SidebarContext.Provider>
   );

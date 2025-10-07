@@ -5,7 +5,7 @@ import { useNavigate, Link } from "react-router-dom";
 
 export default function Sidebar({ onWidthChange }) {
   const { user, logout } = useAuth();
-  const { sidebarWidth, updateSidebarWidth, isCollapsed, toggleCollapse } = useSidebar();
+  const { sidebarWidth, updateSidebarWidth, isCollapsed, toggleCollapse, getEffectiveWidth } = useSidebar();
   const navigate = useNavigate();
   const [hoveringSchedule, setHoveringSchedule] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -31,8 +31,8 @@ export default function Sidebar({ onWidthChange }) {
       if (!isResizing.current || isCollapsed) return;
       
       const newWidth = e.clientX;
-      const minWidth = 200;
-      const maxWidth = 400;
+      const minWidth = 150; // Allow smaller minimum for more flexibility
+      const maxWidth = 600; // Keep increased maximum width
       
       if (newWidth >= minWidth && newWidth <= maxWidth) {
         updateSidebarWidth(newWidth);
@@ -83,7 +83,7 @@ export default function Sidebar({ onWidthChange }) {
   const isStudent = user.role === "student";
   const isTeacher = user.role === "teacher";
 
-  const effectiveWidth = isCollapsed ? 70 : sidebarWidth;
+  const effectiveWidth = getEffectiveWidth();
 
   return (
     <div
@@ -185,8 +185,8 @@ export default function Sidebar({ onWidthChange }) {
         {isAdmin && (
           <>
             <SidebarLink to="/student">Users</SidebarLink>
-            <SidebarLink to="/add-user" style={{ backgroundColor: "#16a085" }}>
-              ➕ Add User
+            <SidebarLink to="/add-user" style={{ backgroundColor: "#16a085" }} iconOverride="➕">
+              Add User
             </SidebarLink>
           </>
         )}
@@ -222,7 +222,7 @@ export default function Sidebar({ onWidthChange }) {
         {!isCollapsed && " Logout"}
       </button>
       
-      {/* Resize handle - hidden when collapsed */}
+      {/* Resize handle - only visible when expanded */}
       {!isCollapsed && (
         <div
           onMouseDown={handleMouseDown}
