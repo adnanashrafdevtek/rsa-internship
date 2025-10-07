@@ -116,13 +116,13 @@ const CustomHeader = ({ date }) => {
   return (
     <div style={{
       textAlign: 'center',
-      padding: '8px 4px 8px 4px',
-      minHeight: 70,
+      padding: '8px 4px 32px 4px',
+      minHeight: 130,
       display: 'flex',
       flexDirection: 'column',
-      justifyContent: 'center',
+      justifyContent: 'flex-start',
       alignItems: 'center',
-      background: '#fff',
+      background: 'transparent',
       position: 'relative',
       zIndex: 20,
       borderBottom: '1px solid #ddd',
@@ -131,8 +131,9 @@ const CustomHeader = ({ date }) => {
       <div style={{
         fontSize: 14,
         fontWeight: 'bold',
-        marginBottom: 6,
-        color: '#2c3e50'
+        color: '#2c3e50',
+        marginTop: '4px',
+        marginBottom: '30px'
       }}>{dayName}</div>
       {label && (
         <div style={{
@@ -144,7 +145,9 @@ const CustomHeader = ({ date }) => {
           fontWeight: 600,
           boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
           lineHeight: 1.1,
-          minWidth: 70
+          minWidth: 70,
+          position: 'absolute',
+          bottom: '4px'
         }}>{label}</div>
       )}
     </div>
