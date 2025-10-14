@@ -222,7 +222,6 @@ export default function Schedules() {
   const [showUnselect, setShowUnselect] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   // Master schedule filters
-  const [filterTeacher, setFilterTeacher] = useState('');
   const [filterGrade, setFilterGrade] = useState('');
   const [filterRoom, setFilterRoom] = useState('');
   const [details, setDetails] = useState({
@@ -301,7 +300,7 @@ export default function Schedules() {
 
     const fetchMasterSchedule = async () => {
       try {
-        // Fetch from new schedules API
+        // Connect to the actual backend running on port 3000
         const response = await fetch('http://localhost:3000/api/schedules');
         const data = await response.json();
         const events = data.map(schedule => ({
@@ -316,8 +315,9 @@ export default function Schedules() {
         }));
         setMasterEvents(events);
         setCreateEvents(events); // Also set for create schedule tab
+        console.log('Master schedule loaded from backend:', events.length, 'events');
       } catch (error) {
-        console.error('Error fetching master schedule:', error);
+        console.error('Error fetching master schedule from backend:', error);
         setMasterEvents([]);
         setCreateEvents([]);
       }
@@ -328,20 +328,31 @@ export default function Schedules() {
         const res = await fetch("http://localhost:3000/api/teachers");
         const teachersData = res.ok ? await res.json() : [];
         setTeachers(teachersData);
+        console.log('Teachers loaded from backend:', teachersData.length, 'teachers');
       } catch (err) {
-        console.error(err);
+        console.error('Error fetching teachers from backend:', err);
         setTeachers([]);
       }
     };
 
     const fetchStudents = async () => {
       try {
-        const res = await fetch("http://localhost:3000/api/students");
+        const res = await fetch("http://localhost:5000/api/students");
         const studentsData = res.ok ? await res.json() : [];
         setStudents(studentsData);
+        console.log('Students loaded:', studentsData.length, 'students');
       } catch (err) {
-        console.error(err);
-        setStudents([]);
+        console.error('Error fetching students - trying backup port:', err);
+        // Try backup port 3001
+        try {
+          const res = await fetch("http://localhost:3001/api/students");
+          const studentsData = res.ok ? await res.json() : [];
+          setStudents(studentsData);
+          console.log('Students loaded from backup port:', studentsData.length, 'students');
+        } catch (backupErr) {
+          console.error('Backup port failed for students:', backupErr);
+          setStudents([]);
+        }
       }
     };
 
@@ -352,8 +363,9 @@ export default function Schedules() {
         const res = await fetch("http://localhost:3000/api/teacher-availabilities");
         const availData = res.ok ? await res.json() : [];
         setAllAvailabilities(availData);
+        console.log('Teacher availability loaded from backend:', availData.length, 'records');
       } catch (err) {
-        console.error(err);
+        console.error('Error fetching teacher availability from backend:', err);
         setAllAvailabilities([]);
       }
     };
@@ -373,9 +385,13 @@ export default function Schedules() {
         } else if (activeTab === "create-schedule") {
           await Promise.all([fetchTeachers(), fetchAvailabilities(), fetchMasterSchedule()]);
         }
+      } catch (error) {
+        console.error('Data fetching error:', error);
       } finally {
         setLoading(false);
       }
+      
+      // Real backend should now be connected
     };
 
     fetchData();
@@ -510,6 +526,17 @@ export default function Schedules() {
   };
 
   const handleEventClick = (event) => {
+    // If in delete mode, toggle event selection
+    if (deleteMode) {
+      if (selectedToDelete.includes(event.id)) {
+        setSelectedToDelete(prev => prev.filter(id => id !== event.id));
+      } else {
+        setSelectedToDelete(prev => [...prev, event.id]);
+      }
+      return;
+    }
+    
+    // Normal event click - show details
     setSelectedEventDetails(event);
     setShowEventModal(true);
   };
@@ -564,6 +591,29 @@ export default function Schedules() {
 
   // Master Schedule renderer (custom: hide Sat/Sun and lock to week view + A/B headers + time window)
   function renderMasterSchedule() {
+    // Handle delete mode for master schedule
+    const handleMasterDeleteMode = () => {
+      setDeleteMode(!deleteMode);
+      setSelectedToDelete([]);
+    };
+
+    // Confirm delete selected events for master schedule
+    const handleMasterConfirmDelete = async () => {
+      try {
+        for (const eventId of selectedToDelete) {
+          await deleteScheduleFromDatabase(eventId);
+        }
+        // Remove from both master and create events
+        setMasterEvents(prev => prev.filter(ev => !selectedToDelete.includes(ev.id)));
+        setCreateEvents(prev => prev.filter(ev => !selectedToDelete.includes(ev.id)));
+        setSelectedToDelete([]);
+        setDeleteMode(false);
+        console.log('Events deleted successfully');
+      } catch (error) {
+        console.error('Error deleting events:', error);
+        alert('Failed to delete some events. Please try again.');
+      }
+    };
     // Helper to extract a normalized grade from various possible fields/title text
     const extractGradeValue = (ev) => {
       // Direct fields first
@@ -609,12 +659,11 @@ export default function Schedules() {
       const level = classify(g);
       return level === schoolView;
     });
-    // Apply dropdown filters
-    if (filterTeacher) {
+    // Apply teacher selection filter
+    if (selectedTeachers.length > 0) {
       filteredMasterEvents = filteredMasterEvents.filter(ev => {
-        if (filterTeacher === 'all' || filterTeacher === '') return true;
         const tId = ev.teacherId || ev.teacher_id || (ev.teacher && ev.teacher.id);
-        return tId && tId.toString() === filterTeacher;
+        return tId && selectedTeachers.includes(parseInt(tId));
       });
     }
     if (filterGrade) {
@@ -632,6 +681,180 @@ export default function Schedules() {
         return (ev.room || '').toString().trim() === filterRoom;
       });
     }
+
+    // Get overlapping event IDs for styling
+    const getMasterOverlappingEventIds = () => {
+      const ids = new Set();
+      const events = filteredMasterEvents;
+      
+      for (let i = 0; i < events.length; i++) {
+        for (let j = i + 1; j < events.length; j++) {
+          const event1 = events[i];
+          const event2 = events[j];
+          
+          // Check if events overlap in time
+          const start1 = moment(event1.start);
+          const end1 = moment(event1.end);
+          const start2 = moment(event2.start);
+          const end2 = moment(event2.end);
+          
+          const timeOverlap = start1.isBefore(end2) && start2.isBefore(end1);
+          
+          if (timeOverlap) {
+            // Check for same teacher or same room conflicts
+            const sameTeacher = event1.teacherId && event2.teacherId && 
+              event1.teacherId.toString() === event2.teacherId.toString();
+            const sameRoom = event1.room && event2.room && 
+              event1.room.toString().trim().toLowerCase() === event2.room.toString().trim().toLowerCase();
+            
+            if (sameTeacher || sameRoom) {
+              ids.add(event1.id);
+              ids.add(event2.id);
+            }
+          }
+        }
+      }
+      return Array.from(ids);
+    };
+
+    const overlappingEventIds = getMasterOverlappingEventIds();
+
+    // Enhanced event style getter for master schedule
+    const masterEventStyleGetter = (event) => {
+      let backgroundColor;
+      
+      if (event.isClass) {
+        backgroundColor = "#27ae60";
+      } else {
+        const colors = ["#3498db", "#9b59b6", "#f39c12", "#e74c3c", "#1abc9c"];
+        const colorIndex = event.id ? String(event.id).length % colors.length : 0;
+        backgroundColor = colors[colorIndex];
+      }
+
+      // Highlight conflicts
+      if (overlappingEventIds.includes(event.id)) {
+        backgroundColor = "#e74c3c";
+      }
+
+      // Highlight selected events in delete mode
+      if (deleteMode && selectedToDelete.includes(event.id)) {
+        backgroundColor = "#8e44ad";
+      }
+      
+      return {
+        style: {
+          backgroundColor,
+          color: "white",
+          borderRadius: 4,
+          border: overlappingEventIds.includes(event.id) ? "2px solid #c0392b" : 
+                 (deleteMode && selectedToDelete.includes(event.id) ? "3px solid #9b59b6" : "none"),
+          fontSize: "13px",
+          fontWeight: 500,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          cursor: deleteMode ? "pointer" : "default",
+        },
+      };
+    };
+
+    // Handle slot selection for master schedule
+    const handleMasterSelectSlot = ({ start, end }) => {
+      const isFriday = moment(start).day() === 5;
+      
+      if (isFriday) {
+        setFridayModal({ 
+          open: true, 
+          slotInfo: { start, end, isNewClass: true } 
+        });
+        return;
+      }
+      
+      const abDay = getABDay(start);
+      
+      // Find overlapping teacher availabilities
+      const overlappingAvailabilities = allAvailabilities.filter(av => {
+        const avDay = typeof av.day_of_week === 'number' ? av.day_of_week : moment().day(av.day_of_week).day();
+        const slotDay = moment(start).day();
+        
+        if (avDay !== slotDay) return false;
+        
+        const slotStart = moment(start);
+        const slotEnd = moment(end);
+        const avStart = moment(av.start_time, 'HH:mm:ss');
+        const avEnd = moment(av.end_time, 'HH:mm:ss');
+        
+        return slotStart.format('HH:mm') >= avStart.format('HH:mm') && 
+               slotEnd.format('HH:mm') <= avEnd.format('HH:mm');
+      });
+      
+      // Auto-select teacher if exactly one availability matches
+      let preSelectedTeacherId = "";
+      if (overlappingAvailabilities.length === 1) {
+        preSelectedTeacherId = overlappingAvailabilities[0].teacher_id.toString();
+      }
+      
+      // Pre-select recurring day for the day being added
+      const dayIdx = moment(start).day() - 1; // 0=Monday, ... 4=Friday
+      const recurringDays = (dayIdx >= 0 && dayIdx <= 4) ? [dayIdx] : [];
+      
+      setSelectedSlot({ start, end });
+      setDetails(d => ({ 
+        ...d, 
+        teacherId: preSelectedTeacherId,
+        startTime: moment(start).format("h:mm A"), 
+        endTime: moment(end).format("h:mm A"),
+        abDay: abDay || "",
+        dayType: abDay || "",
+        recurringDays
+      }));
+      setModalOpen(true);
+    };
+
+    // Handle event drop for master schedule
+    const handleMasterEventDrop = async ({ event, start, end }) => {
+      const isFriday = moment(start).day() === 5;
+      
+      if (isFriday && !event.abDay) {
+        setFridayModal({ 
+          open: true, 
+          slotInfo: { 
+            start, 
+            end, 
+            dragEvent: event, 
+            originalEvent: event,
+            draggedEventId: event.id 
+          } 
+        });
+        return;
+      }
+      
+      try {
+        // Update the event with new times
+        const updatedEvent = {
+          ...event,
+          start,
+          end,
+          startTime: moment(start).format("HH:mm:ss"),
+          endTime: moment(end).format("HH:mm:ss")
+        };
+        
+        // Update in database
+        const updateResult = await updateScheduleInDatabase(event.id, {
+          start_time: moment(start).format("HH:mm:ss"),
+          end_time: moment(end).format("HH:mm:ss")
+        });
+        
+        if (updateResult.success) {
+          // Update master events state
+          setMasterEvents(prev => prev.map(ev => 
+            ev.id === event.id ? updatedEvent : ev
+          ));
+        } else {
+          console.error('Failed to update event in database');
+        }
+      } catch (error) {
+        console.error('Error updating event:', error);
+      }
+    };
 
     const MasterToolbar = ({ label }) => (
       <div className="rbc-toolbar" style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 8, gap: 12 }}>
@@ -736,24 +959,128 @@ export default function Schedules() {
     const roomOptions = Array.from(new Set(masterEvents.map(e => (e.room||'').toString().trim()).filter(Boolean))).sort();
 
     return (
-      <div style={{ display:'flex', gap:16, alignItems:'flex-start' }}>
-        <div style={{
-        backgroundColor: 'white',
-        borderRadius: '12px',
-        padding: '24px',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
-        flex:1
-      }}>
-        {/* Ensure calendar headers (A/B day pills) are fully visible and not clipped */}
-        <style>{`
-          .rbc-time-header, .rbc-time-header .rbc-header { overflow: visible !important; }
-          .rbc-time-header { z-index: 60; position: relative; }
-          .rbc-time-content { position: relative; z-index: 1; }
-          .rbc-time-view { overflow: visible !important; }
-        `}</style>
-        <Calendar
+      <>
+        {/* Master Schedule Header */}
+        <div style={{ 
+          backgroundColor: "white", 
+          borderRadius: "8px", 
+          padding: "12px 16px", 
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          marginBottom: "12px"
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <h1 style={{ 
+                fontSize: 20, 
+                fontWeight: "bold", 
+                margin: 0, 
+                color: "#2c3e50",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px"
+              }}>
+                📘 Master Schedule
+              </h1>
+              <p style={{ margin: "8px 0 0 0", color: "#7f8c8d", fontSize: "14px" }}>
+                View and manage all class schedules. Drag to create new classes or move existing ones.
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              {deleteMode ? (
+                <>
+                  <button
+                    onClick={handleMasterConfirmDelete}
+                    disabled={selectedToDelete.length === 0}
+                    style={{
+                      padding: "8px 16px",
+                      backgroundColor: selectedToDelete.length > 0 ? "#e74c3c" : "#bdc3c7",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: selectedToDelete.length > 0 ? "pointer" : "not-allowed",
+                      fontSize: "14px",
+                      fontWeight: "500"
+                    }}
+                  >
+                    Delete Selected ({selectedToDelete.length})
+                  </button>
+                  <button
+                    onClick={handleMasterDeleteMode}
+                    style={{
+                      padding: "8px 16px",
+                      backgroundColor: "#95a5a6",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "14px",
+                      fontWeight: "500"
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleMasterDeleteMode}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#e74c3c",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    fontWeight: "500"
+                  }}
+                >
+                  🗑️ Delete Mode
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <div style={{ display:'flex', gap:16, alignItems:'flex-start' }}>
+          <div style={{
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          padding: '24px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
+          flex:1
+        }}>
+          {/* Ensure calendar headers (A/B day pills) are fully visible and not clipped */}
+          <style>{`
+            .rbc-time-header, .rbc-time-header .rbc-header { overflow: visible !important; }
+            .rbc-time-header { z-index: 60; position: relative; }
+            .rbc-time-content { position: relative; z-index: 1; }
+            .rbc-time-view { overflow: visible !important; }
+          `}</style>
+        <DragAndDropCalendar
           localizer={localizer}
-          events={filteredMasterEvents}
+          events={[
+            ...filteredMasterEvents,
+            // Add availability events for selected teachers
+            ...allAvailabilities
+              .filter(av => selectedTeachers.includes(av.teacher_id))
+              .map(av => {
+                const weekStart = moment().startOf('week').add(av.day_of_week, 'days');
+                const [startHour, startMinute] = av.start_time.split(":");
+                const [endHour, endMinute] = av.end_time.split(":");
+                const start = weekStart.clone().set({ hour: +startHour, minute: +startMinute, second: 0 }).toDate();
+                const end = weekStart.clone().set({ hour: +endHour, minute: +endMinute, second: 0 }).toDate();
+                return {
+                  id: `avail-${av.teacher_id}-${av.id}`,
+                  start,
+                  end,
+                  availability: true,
+                  color: getTeacherColor(av.teacher_id),
+                  teacher_id: av.teacher_id,
+                  teacher_first_name: av.teacher_first_name,
+                  teacher_last_name: av.teacher_last_name
+                };
+              })
+          ]}
           startAccessor="start"
           endAccessor="end"
           style={{ height: 600 }}
@@ -763,12 +1090,16 @@ export default function Schedules() {
           // still allow navigation via custom toolbar
           date={date}
           onNavigate={setDate}
-          eventPropGetter={eventStyleGetter}
-          selectable={false}
+          eventPropGetter={masterEventStyleGetter}
+          selectable={true}
+          onSelectSlot={handleMasterSelectSlot}
           onSelectEvent={handleEventClick}
-            // Restrict visible time range 6:30 - 16:00
-            min={new Date(1970, 0, 1, 6, 30, 0)}
-              max={new Date(1970, 0, 1, 16, 0, 0)}
+          onEventDrop={handleMasterEventDrop}
+          onEventResize={handleMasterEventDrop}
+          resizable={true}
+          // Restrict visible time range 6:30 - 16:00
+          min={new Date(1970, 0, 1, 6, 30, 0)}
+          max={new Date(1970, 0, 1, 16, 0, 0)}
           step={5}
           timeslots={6}
           components={{
@@ -795,43 +1126,208 @@ export default function Schedules() {
           }}
         />
         </div>
-        {/* Right-side Filters Panel */}
+        {/* Enhanced Teacher Filter Sidebar */}
         <div style={{
-          width:240,
-          backgroundColor:'white',
-          borderRadius:'12px',
-          padding:'16px',
-          boxShadow:'0 4px 16px rgba(0,0,0,0.05)',
-          maxHeight:600,
-          display:'flex',
-          flexDirection:'column',
-          gap:16
+          width: 280,
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          padding: '20px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
+          maxHeight: 600,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16
         }}>
-          <h4 style={{margin:0,fontSize:16,fontWeight:700,color:'#2c3e50'}}>Filters</h4>
-          <div>
-            <label style={{display:'block',fontSize:11,fontWeight:600,marginBottom:4,color:'#555'}}>Teacher</label>
-            <select value={filterTeacher} onChange={e=>setFilterTeacher(e.target.value)} style={{width:'100%',padding:'6px 8px',borderRadius:8,border:'1px solid #d0d7de'}}>
-              <option value=''>Any</option>
-              {teacherOptions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <h4 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#2c3e50' }}>Teachers & Availability</h4>
+            {selectedTeachers.length > 0 && (
+              <button
+                onClick={() => setSelectedTeachers([])}
+                style={{
+                  padding: "4px 8px",
+                  backgroundColor: "#e74c3c",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontSize: "11px",
+                  fontWeight: "500"
+                }}
+              >
+                Clear All
+              </button>
+            )}
           </div>
+          
+          {/* Search bar */}
+          <input
+            type="text"
+            placeholder="Search teachers..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "2px solid #e1e8ed",
+              fontSize: 14,
+              boxSizing: "border-box"
+            }}
+          />
+          
+          {/* Grade Filter */}
           <div>
-            <label style={{display:'block',fontSize:11,fontWeight:600,marginBottom:4,color:'#555'}}>Grade</label>
-            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} style={{width:'100%',padding:'6px 8px',borderRadius:8,border:'1px solid #d0d7de'}}>
-              <option value=''>Any</option>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#555' }}>Filter by Grade</label>
+            <select 
+              value={filterGrade} 
+              onChange={e => setFilterGrade(e.target.value)} 
+              style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #d0d7de', fontSize: 13 }}
+            >
+              <option value=''>All Grades</option>
               {gradeDropdownOptions.map(g => <option key={g} value={g}>{g === 'PK' ? 'PreK' : g}</option>)}
             </select>
           </div>
+          
+          {/* Room Filter */}
           <div>
-            <label style={{display:'block',fontSize:11,fontWeight:600,marginBottom:4,color:'#555'}}>Location / Room</label>
-            <select value={filterRoom} onChange={e=>setFilterRoom(e.target.value)} style={{width:'100%',padding:'6px 8px',borderRadius:8,border:'1px solid #d0d7de'}}>
-              <option value=''>Any</option>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#555' }}>Filter by Room</label>
+            <select 
+              value={filterRoom} 
+              onChange={e => setFilterRoom(e.target.value)} 
+              style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #d0d7de', fontSize: 13 }}
+            >
+              <option value=''>All Rooms</option>
               {roomOptions.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
-          <button onClick={()=>{setFilterTeacher('');setFilterGrade('');setFilterRoom('');}} style={{marginTop:'auto',padding:'8px 10px',fontSize:12,border:'1px solid #ccc',borderRadius:8,background:'#f1f2f4',cursor:'pointer'}}>Reset</button>
+          
+          {/* Teacher list with custom checkboxes */}
+          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 4 }}>
+              Select Teachers ({selectedTeachers.length} selected)
+            </label>
+            {teachers
+              .filter(t =>
+                searchTerm.trim() === "" ||
+                `${t.first_name} ${t.last_name}`.toLowerCase().includes(searchTerm.trim().toLowerCase())
+              )
+              .map((t) => {
+                const teacherAvailabilities = allAvailabilities.filter(av => av.teacher_id === t.id);
+                const isSelected = selectedTeachers.includes(t.id);
+                const teacherColor = getTeacherColor(t.id);
+                
+                return (
+                  <div key={t.id} style={{ 
+                    border: `2px solid ${isSelected ? teacherColor : '#e1e8ed'}`,
+                    borderRadius: 8,
+                    padding: 10,
+                    backgroundColor: isSelected ? `${teacherColor}20` : '#f8f9fa',
+                    transition: 'all 0.2s ease',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => {
+                    if (isSelected) {
+                      setSelectedTeachers(prev => prev.filter(id => id !== t.id));
+                    } else {
+                      setSelectedTeachers(prev => [...prev, t.id]);
+                    }
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                      <div style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 4,
+                        border: `2px solid ${teacherColor}`,
+                        backgroundColor: isSelected ? teacherColor : 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontSize: 12,
+                        fontWeight: 'bold'
+                      }}>
+                        {isSelected ? '✓' : ''}
+                      </div>
+                      <div style={{ 
+                        width: 12, 
+                        height: 12, 
+                        backgroundColor: teacherColor, 
+                        borderRadius: 2,
+                        border: "1px solid #ccc"
+                      }}></div>
+                      <span style={{ 
+                        fontSize: 14, 
+                        fontWeight: isSelected ? 600 : 500,
+                        color: '#2c3e50'
+                      }}>
+                        {t.first_name} {t.last_name}
+                      </span>
+                    </div>
+                    
+                    {/* Show availability info when selected or hovered */}
+                    {(isSelected || teacherAvailabilities.length > 0) && (
+                      <div style={{ marginLeft: 40, display: "flex", flexDirection: "column", gap: 3 }}>
+                        {teacherAvailabilities.length > 0 ? (
+                          teacherAvailabilities.slice(0, 3).map((av, idx) => (
+                            <div key={av.id || idx} style={{ 
+                              fontSize: 11, 
+                              color: "#666", 
+                              background: "rgba(255,255,255,0.7)", 
+                              borderRadius: 3, 
+                              padding: "2px 6px",
+                              borderLeft: `3px solid ${teacherColor}`
+                            }}>
+                              {typeof av.day_of_week === 'number' ? 
+                                moment().day(av.day_of_week).format('ddd') : 
+                                av.day_of_week.slice(0,3)
+                              } {av.start_time?.slice(0,5)} - {av.end_time?.slice(0,5)}
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ 
+                            fontSize: 11, 
+                            color: "#999", 
+                            fontStyle: "italic", 
+                            padding: "2px 6px" 
+                          }}>
+                            No availability set
+                          </div>
+                        )}
+                        {teacherAvailabilities.length > 3 && (
+                          <div style={{ fontSize: 10, color: '#999', padding: '2px 6px' }}>
+                            +{teacherAvailabilities.length - 3} more...
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+          
+          <button 
+            onClick={() => {
+              setFilterGrade(''); 
+              setFilterRoom(''); 
+              setSelectedTeachers([]);
+            }} 
+            style={{
+              marginTop: 'auto', 
+              padding: '8px 12px', 
+              fontSize: 12, 
+              border: '1px solid #ccc', 
+              borderRadius: 6, 
+              background: '#f1f2f4', 
+              cursor: 'pointer',
+              fontWeight: 500
+            }}
+          >
+            Reset All Filters
+          </button>
         </div>
+
       </div>
+      </>
     );
   }
 
@@ -1276,15 +1772,31 @@ export default function Schedules() {
     </>
   );
 
-  // Teacher colors for availability blocks
+  // Teacher colors for availability blocks - generates unique colors for each teacher
   const getTeacherColor = (teacherId) => {
     const teacherColors = [
-      "#27ae60", "#f39c12", "#8e44ad", "#e67e22", "#d35400", 
-      "#16a085", "#2980b9", "#2c3e50", "#c0392b", "#7f8c8d"
+      "#3498db", // Blue
+      "#e74c3c", // Red  
+      "#f39c12", // Orange
+      "#27ae60", // Green
+      "#8e44ad", // Purple
+      "#e67e22", // Dark Orange
+      "#16a085", // Teal
+      "#2c3e50", // Dark Blue
+      "#c0392b", // Dark Red
+      "#d35400", // Burnt Orange
+      "#9b59b6", // Light Purple
+      "#1abc9c", // Turquoise
+      "#34495e", // Dark Gray
+      "#f1c40f", // Yellow
+      "#e8950f"  // Amber
     ];
-    const idx = teachers.findIndex(t => t.id === teacherId);
-    if (idx === -1) return "#000000";
-    return teacherColors[idx % teacherColors.length];
+    
+    // Use teacherId directly for consistent color assignment
+    const colorIndex = parseInt(teacherId) % teacherColors.length;
+    const color = teacherColors[colorIndex];
+    console.log(`Teacher ID: ${teacherId}, Color Index: ${colorIndex}, Color: ${color}`);
+    return color;
   };
 
   // Helper function to check if an event is within teacher availability
@@ -1717,8 +2229,9 @@ export default function Schedules() {
           }
         }
 
-        // Check conflicts with existing events
-        const otherEvents = editMode ? createEvents.filter(ev => ev.id !== editingEventId) : createEvents;
+        // Check conflicts with existing events (both create and master events)
+        const allEvents = [...createEvents, ...masterEvents];
+        const otherEvents = editMode ? allEvents.filter(ev => ev.id !== editingEventId) : allEvents;
         for (const otherEvent of otherEvents) {
           let otherInstances = [];
           if (Array.isArray(otherEvent.recurringDays) && otherEvent.recurringDays.length > 0) {
@@ -1808,6 +2321,8 @@ export default function Schedules() {
       if (editMode) {
         await updateScheduleInDatabase(editingEventId, scheduleData);
         setCreateEvents(prev => prev.map(ev => ev.id === editingEventId ? newEvent : ev));
+        // Also update master events if applicable
+        setMasterEvents(prev => prev.map(ev => ev.id === editingEventId ? newEvent : ev));
         setEditMode(false);
         setEditingEventId(null);
         console.log('Schedule updated in database successfully');
@@ -1816,6 +2331,8 @@ export default function Schedules() {
         if (result.success) {
           newEvent.id = result.id.toString(); // Use the database ID
           setCreateEvents(prev => [...prev, newEvent]);
+          // Also add to master events
+          setMasterEvents(prev => [...prev, newEvent]);
           console.log('Schedule saved to database successfully');
         } else {
           alert('Failed to save schedule to database');
