@@ -222,8 +222,13 @@ export default function Schedules() {
   const [showUnselect, setShowUnselect] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   // Master schedule filters
-  const [filterGrade, setFilterGrade] = useState('');
-  const [filterRoom, setFilterRoom] = useState('');
+  const [selectedGrades, setSelectedGrades] = useState([]);
+  const [selectedRooms, setSelectedRooms] = useState([]);
+  const [availableRooms, setAvailableRooms] = useState([]);
+  // Collapsible filter states
+  const [teacherFilterExpanded, setTeacherFilterExpanded] = useState(true);
+  const [gradeFilterExpanded, setGradeFilterExpanded] = useState(true);
+  const [roomFilterExpanded, setRoomFilterExpanded] = useState(true);
   const [details, setDetails] = useState({
     teacherId: "",
     grade: "",
@@ -311,7 +316,10 @@ export default function Schedules() {
           isClass: true,
           description: schedule.description,
           teacherId: schedule.user_id,
-          teacher: schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : 'Unknown Teacher'
+          teacher: schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : 'Unknown Teacher',
+          room: schedule.room || schedule.room_number || '',
+          grade: schedule.grade || '',
+          subject: schedule.subject || schedule.event_title || 'Class'
         }));
         setMasterEvents(events);
         setCreateEvents(events); // Also set for create schedule tab
@@ -325,10 +333,21 @@ export default function Schedules() {
 
     const fetchTeachers = async () => {
       try {
+        console.log('Fetching teachers from http://localhost:3000/api/teachers');
         const res = await fetch("http://localhost:3000/api/teachers");
-        const teachersData = res.ok ? await res.json() : [];
-        setTeachers(teachersData);
-        console.log('Teachers loaded from backend:', teachersData.length, 'teachers');
+        console.log('Teachers API response status:', res.status, res.statusText);
+        
+        if (!res.ok) {
+          console.error('Teachers API failed:', res.status, res.statusText);
+          const errorText = await res.text();
+          console.error('Error response:', errorText);
+          setTeachers([]);
+          return;
+        }
+        
+        const teachersData = await res.json();
+        console.log('Teachers loaded from backend:', teachersData.length, 'teachers', teachersData);
+        setTeachers(teachersData || []);
       } catch (err) {
         console.error('Error fetching teachers from backend:', err);
         setTeachers([]);
@@ -337,7 +356,7 @@ export default function Schedules() {
 
     const fetchStudents = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/students");
+        const res = await fetch("http://localhost:3000/api/students");
         const studentsData = res.ok ? await res.json() : [];
         setStudents(studentsData);
         console.log('Students loaded:', studentsData.length, 'students');
@@ -353,6 +372,57 @@ export default function Schedules() {
           console.error('Backup port failed for students:', backupErr);
           setStudents([]);
         }
+      }
+    };
+
+    const fetchRooms = async () => {
+      try {
+        // Get rooms from existing schedules
+        const response = await fetch('http://localhost:3000/api/schedules');
+        if (!response.ok) {
+          throw new Error(`API responded with status: ${response.status}`);
+        }
+        
+        const schedules = await response.json();
+        console.log('Fetched schedules for room extraction:', schedules);
+        
+        // Extract unique rooms, handling different possible field names and data types
+        const rooms = Array.from(new Set(
+          schedules
+            .map(schedule => {
+              // Handle both 'room' and 'room_number' fields
+              const roomValue = schedule.room || schedule.room_number || '';
+              return roomValue ? roomValue.toString().trim() : '';
+            })
+            .filter(room => room !== '')
+        )).sort();
+        
+        console.log('Extracted unique rooms from database:', rooms);
+        
+        // Enhanced fallback rooms if none exist in database
+        const fallbackRooms = [
+          '101', '102', '103', '104', '105', 
+          '201', '202', '203', '204', '205',
+          'Art Room', 'Music Room', 'Science Lab', 
+          'Computer Lab', 'Library', 'Gym', 
+          'Cafeteria', 'Auditorium'
+        ];
+        
+        const finalRooms = rooms.length > 0 ? rooms : fallbackRooms;
+        setAvailableRooms(finalRooms);
+        console.log('Final rooms set for filtering:', finalRooms);
+        
+      } catch (err) {
+        console.error('Error fetching rooms from schedules API:', err);
+        // Enhanced fallback to test rooms if API fails
+        const fallbackRooms = [
+          '101', '102', '103', '104', '105', 
+          '201', '202', '203', '204', '205',
+          'Art Room', 'Music Room', 'Science Lab', 
+          'Computer Lab', 'Library', 'Gym'
+        ];
+        setAvailableRooms(fallbackRooms);
+        console.log('Using fallback rooms due to API error:', fallbackRooms);
       }
     };
 
@@ -377,7 +447,7 @@ export default function Schedules() {
         if (activeTab === "my-schedule") {
           await fetchMyScheduleEvents();
         } else if (activeTab === "master-schedule") {
-          await fetchMasterSchedule();
+          await Promise.all([fetchMasterSchedule(), fetchTeachers(), fetchAvailabilities(), fetchRooms()]);
         } else if (activeTab === "teacher-schedules") {
           await fetchTeachers();
         } else if (activeTab === "student-schedules") {
@@ -537,8 +607,7 @@ export default function Schedules() {
     }
     
     // Normal event click - show details
-    setSelectedEventDetails(event);
-    setShowEventModal(true);
+      setEventDetailsModal({ open: true, event });
   };
 
   // Loading Component
@@ -659,26 +728,20 @@ export default function Schedules() {
       const level = classify(g);
       return level === schoolView;
     });
-    // Apply teacher selection filter
-    if (selectedTeachers.length > 0) {
+    
+    // Note: Teacher filtering is handled in the calendar events array to show all when none selected
+    if (selectedGrades.length > 0) {
       filteredMasterEvents = filteredMasterEvents.filter(ev => {
-        const tId = ev.teacherId || ev.teacher_id || (ev.teacher && ev.teacher.id);
-        return tId && selectedTeachers.includes(parseInt(tId));
-      });
-    }
-    if (filterGrade) {
-      filteredMasterEvents = filteredMasterEvents.filter(ev => {
-        if (filterGrade === 'all' || filterGrade === '') return true;
         const g = extractGradeValue(ev);
         if (g === null || g === undefined) return false;
         const gStr = (typeof g === 'number') ? g.toString() : g;
-        return gStr === filterGrade;
+        return selectedGrades.includes(gStr);
       });
     }
-    if (filterRoom) {
+    if (selectedRooms.length > 0) {
       filteredMasterEvents = filteredMasterEvents.filter(ev => {
-        if (filterRoom === 'all' || filterRoom === '') return true;
-        return (ev.room || '').toString().trim() === filterRoom;
+        const room = (ev.room || '').toString().trim();
+        return selectedRooms.includes(room);
       });
     }
 
@@ -722,10 +785,17 @@ export default function Schedules() {
     // Enhanced event style getter for master schedule
     const masterEventStyleGetter = (event) => {
       let backgroundColor;
+      let opacity = 1;
       
-      if (event.isClass) {
-        backgroundColor = "#27ae60";
+      if (event.availability) {
+        // Availability events - use teacher color with transparency
+        backgroundColor = event.color || getTeacherColor(event.teacher_id);
+        opacity = 0.3; // Make availability transparent
+      } else if (event.isClass) {
+        // All class events use the same color for consistency
+        backgroundColor = "#3498db"; // Blue color for all classes
       } else {
+        // Other events
         const colors = ["#3498db", "#9b59b6", "#f39c12", "#e74c3c", "#1abc9c"];
         const colorIndex = event.id ? String(event.id).length % colors.length : 0;
         backgroundColor = colors[colorIndex];
@@ -734,24 +804,33 @@ export default function Schedules() {
       // Highlight conflicts
       if (overlappingEventIds.includes(event.id)) {
         backgroundColor = "#e74c3c";
+        opacity = 1;
       }
 
       // Highlight selected events in delete mode
       if (deleteMode && selectedToDelete.includes(event.id)) {
         backgroundColor = "#8e44ad";
+        opacity = 1;
       }
       
       return {
         style: {
           backgroundColor,
+          opacity,
           color: "white",
           borderRadius: 4,
-          border: overlappingEventIds.includes(event.id) ? "2px solid #c0392b" : 
-                 (deleteMode && selectedToDelete.includes(event.id) ? "3px solid #9b59b6" : "none"),
+          border: event.availability 
+            ? `2px dashed ${backgroundColor}` // Dashed border for availability
+            : (overlappingEventIds.includes(event.id) ? "2px solid #c0392b" : 
+               (deleteMode && selectedToDelete.includes(event.id) ? "3px solid #9b59b6" : "none")),
           fontSize: "13px",
           fontWeight: 500,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-          cursor: deleteMode ? "pointer" : "default",
+          boxShadow: event.availability 
+            ? "0 1px 2px rgba(0,0,0,0.1)" 
+            : "0 1px 3px rgba(0,0,0,0.1)",
+          cursor: event.availability ? "default" : (deleteMode ? "pointer" : "move"),
+          zIndex: event.availability ? 1 : 10, // Availability blocks stay in background
+          pointerEvents: event.availability ? 'none' : 'auto', // Allow clicking through availability blocks
         },
       };
     };
@@ -811,6 +890,11 @@ export default function Schedules() {
 
     // Handle event drop for master schedule
     const handleMasterEventDrop = async ({ event, start, end }) => {
+      // Prevent dragging availability events
+      if (event.availability) {
+        return; // Don't allow dropping availability events
+      }
+      
       const isFriday = moment(start).day() === 5;
       
       if (isFriday && !event.abDay) {
@@ -955,8 +1039,8 @@ export default function Schedules() {
     // Static PreK-12 grade list
     const gradeDropdownOptions = ['PK','K','1','2','3','4','5','6','7','8','9','10','11','12'];
 
-    // Unique room list from events
-    const roomOptions = Array.from(new Set(masterEvents.map(e => (e.room||'').toString().trim()).filter(Boolean))).sort();
+    // Use rooms from state (fetched from database)
+    const roomOptions = availableRooms;
 
     return (
       <>
@@ -1059,21 +1143,36 @@ export default function Schedules() {
         <DragAndDropCalendar
           localizer={localizer}
           events={[
-            ...filteredMasterEvents,
-            // Add availability events for selected teachers
+            // Show filtered classes based on selection
+            ...(selectedTeachers.length > 0 
+              ? filteredMasterEvents.filter(ev => {
+                  const tId = ev.teacherId || ev.teacher_id || (ev.teacher && ev.teacher.id);
+                  return tId && selectedTeachers.includes(parseInt(tId));
+                })
+              : filteredMasterEvents
+            ),
+            // Add availability events for selected teachers with transparency
             ...allAvailabilities
               .filter(av => selectedTeachers.includes(av.teacher_id))
               .map(av => {
-                const weekStart = moment().startOf('week').add(av.day_of_week, 'days');
+                const dayOfWeek = typeof av.day_of_week === 'string' 
+                  ? ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].indexOf(av.day_of_week.toLowerCase()) + 1
+                  : av.day_of_week;
+                
+                const weekStart = moment().startOf('week').day(dayOfWeek);
                 const [startHour, startMinute] = av.start_time.split(":");
                 const [endHour, endMinute] = av.end_time.split(":");
                 const start = weekStart.clone().set({ hour: +startHour, minute: +startMinute, second: 0 }).toDate();
                 const end = weekStart.clone().set({ hour: +endHour, minute: +endMinute, second: 0 }).toDate();
+                
                 return {
                   id: `avail-${av.teacher_id}-${av.id}`,
+                  title: `${av.teacher_first_name || ''} ${av.teacher_last_name || ''} - Available`.trim(),
                   start,
                   end,
                   availability: true,
+                  isDraggable: false, // Make availability non-draggable
+                  resizable: false, // Make availability non-resizable
                   color: getTeacherColor(av.teacher_id),
                   teacher_id: av.teacher_id,
                   teacher_first_name: av.teacher_first_name,
@@ -1092,11 +1191,14 @@ export default function Schedules() {
           onNavigate={setDate}
           eventPropGetter={masterEventStyleGetter}
           selectable={true}
+          selectOverlap={true} // Allow selecting slots even when there are overlapping events (like availability blocks)
           onSelectSlot={handleMasterSelectSlot}
           onSelectEvent={handleEventClick}
           onEventDrop={handleMasterEventDrop}
           onEventResize={handleMasterEventDrop}
           resizable={true}
+          draggableAccessor={(event) => !event.availability} // Only allow dragging non-availability events
+          resizableAccessor={(event) => !event.availability} // Only allow resizing non-availability events
           // Restrict visible time range 6:30 - 16:00
           min={new Date(1970, 0, 1, 6, 30, 0)}
           max={new Date(1970, 0, 1, 16, 0, 0)}
@@ -1113,14 +1215,15 @@ export default function Schedules() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  fontSize: '13px',
-                  fontWeight: 500,
+                  fontSize: event.availability ? '11px' : '13px',
+                  fontWeight: event.availability ? 400 : 500,
                   cursor: 'pointer',
                   color: 'white'
                 }}
               >
-                <span>{event.title}</span>
+                <span>{event.title || event.subject || 'Event'}</span>
                 {event.isClass && <span style={{ fontSize: '10px', opacity: 0.8 }}>📚</span>}
+                {event.availability && <span style={{ fontSize: '10px', opacity: 0.9 }}>⏰</span>}
               </div>
             ),
           }}
@@ -1177,41 +1280,237 @@ export default function Schedules() {
           
           {/* Grade Filter */}
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#555' }}>Filter by Grade</label>
-            <select 
-              value={filterGrade} 
-              onChange={e => setFilterGrade(e.target.value)} 
-              style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #d0d7de', fontSize: 13 }}
+            <div 
+              onClick={() => setGradeFilterExpanded(!gradeFilterExpanded)}
+              style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: 6,
+                cursor: 'pointer',
+                padding: '8px 4px',
+                borderRadius: '6px',
+                backgroundColor: '#f8f9fa',
+                border: '1px solid #e1e8ed',
+                transition: 'all 0.2s ease'
+              }}
             >
-              <option value=''>All Grades</option>
-              {gradeDropdownOptions.map(g => <option key={g} value={g}>{g === 'PK' ? 'PreK' : g}</option>)}
-            </select>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '12px', color: '#666', transition: 'transform 0.2s ease', transform: gradeFilterExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#555', cursor: 'pointer' }}>
+                  Filter by Grade
+                </label>
+              </div>
+              {selectedGrades.length > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedGrades([]);
+                  }}
+                  style={{
+                    padding: "2px 6px",
+                    backgroundColor: "#e74c3c",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "3px",
+                    cursor: "pointer",
+                    fontSize: "10px",
+                    fontWeight: "500"
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {gradeFilterExpanded && (
+              <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {gradeDropdownOptions.map(grade => {
+                const isSelected = selectedGrades.includes(grade);
+                const gradeColor = grade === 'PK' ? '#9b59b6' : '#3498db';
+                return (
+                  <div
+                    key={grade}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedGrades(prev => prev.filter(g => g !== grade));
+                      } else {
+                        setSelectedGrades(prev => [...prev, grade]);
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                      border: `2px solid ${isSelected ? gradeColor : '#e1e8ed'}`,
+                      backgroundColor: isSelected ? hexToRgba(gradeColor, 0.15) : '#f8f9fa',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 3,
+                      border: `2px solid ${gradeColor}`,
+                      backgroundColor: isSelected ? gradeColor : 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: 10,
+                      fontWeight: 'bold',
+                      flexShrink: 0
+                    }}>
+                      {isSelected ? '✓' : ''}
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: isSelected ? 600 : 500 }}>
+                      {grade === 'PK' ? 'PreK' : grade}
+                    </span>
+                  </div>
+                );
+              })}
+              </div>
+            )}
           </div>
           
           {/* Room Filter */}
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#555' }}>Filter by Room</label>
-            <select 
-              value={filterRoom} 
-              onChange={e => setFilterRoom(e.target.value)} 
-              style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #d0d7de', fontSize: 13 }}
+            <div 
+              onClick={() => setRoomFilterExpanded(!roomFilterExpanded)}
+              style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: 6,
+                cursor: 'pointer',
+                padding: '8px 4px',
+                borderRadius: '6px',
+                backgroundColor: '#f8f9fa',
+                border: '1px solid #e1e8ed',
+                transition: 'all 0.2s ease'
+              }}
             >
-              <option value=''>All Rooms</option>
-              {roomOptions.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '12px', color: '#666', transition: 'transform 0.2s ease', transform: roomFilterExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#555', cursor: 'pointer' }}>
+                  Filter by Room
+                </label>
+              </div>
+              {selectedRooms.length > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedRooms([]);
+                  }}
+                  style={{
+                    padding: "2px 6px",
+                    backgroundColor: "#e74c3c",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "3px",
+                    cursor: "pointer",
+                    fontSize: "10px",
+                    fontWeight: "500"
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {roomFilterExpanded && (
+              <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {roomOptions.map(room => {
+                const isSelected = selectedRooms.includes(room);
+                const roomColor = '#f39c12';
+                return (
+                  <div
+                    key={room}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedRooms(prev => prev.filter(r => r !== room));
+                      } else {
+                        setSelectedRooms(prev => [...prev, room]);
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                      border: `2px solid ${isSelected ? roomColor : '#e1e8ed'}`,
+                      backgroundColor: isSelected ? hexToRgba(roomColor, 0.15) : '#f8f9fa',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 3,
+                      border: `2px solid ${roomColor}`,
+                      backgroundColor: isSelected ? roomColor : 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: 10,
+                      fontWeight: 'bold',
+                      flexShrink: 0
+                    }}>
+                      {isSelected ? '✓' : ''}
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: isSelected ? 600 : 500 }}>
+                      Room {room}
+                    </span>
+                  </div>
+                );
+              })}
+              </div>
+            )}
           </div>
           
           {/* Teacher list with custom checkboxes */}
           <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 4 }}>
-              Select Teachers ({selectedTeachers.length} selected)
-            </label>
-            {teachers
-              .filter(t =>
-                searchTerm.trim() === "" ||
-                `${t.first_name} ${t.last_name}`.toLowerCase().includes(searchTerm.trim().toLowerCase())
-              )
-              .map((t) => {
+            <div 
+              onClick={() => setTeacherFilterExpanded(!teacherFilterExpanded)}
+              style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: 6,
+                cursor: 'pointer',
+                padding: '8px 4px',
+                borderRadius: '6px',
+                backgroundColor: '#f8f9fa',
+                border: '1px solid #e1e8ed',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '12px', color: '#666', transition: 'transform 0.2s ease', transform: teacherFilterExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#555', cursor: 'pointer' }}>
+                  Select Teachers
+                </label>
+              </div>
+            </div>
+            {teacherFilterExpanded && (
+              <>
+                {teachers && teachers.length > 0 ? (
+                  teachers
+                    .filter(t =>
+                      searchTerm.trim() === "" ||
+                      `${t.first_name || ''} ${t.last_name || ''}`.toLowerCase().includes(searchTerm.trim().toLowerCase())
+                    )
+                    .map((t) => {
                 const teacherAvailabilities = allAvailabilities.filter(av => av.teacher_id === t.id);
                 const isSelected = selectedTeachers.includes(t.id);
                 const teacherColor = getTeacherColor(t.id);
@@ -1221,7 +1520,7 @@ export default function Schedules() {
                     border: `2px solid ${isSelected ? teacherColor : '#e1e8ed'}`,
                     borderRadius: 8,
                     padding: 10,
-                    backgroundColor: isSelected ? `${teacherColor}20` : '#f8f9fa',
+                    backgroundColor: isSelected ? hexToRgba(teacherColor, 0.15) : '#f8f9fa',
                     transition: 'all 0.2s ease',
                     cursor: 'pointer'
                   }}
@@ -1233,32 +1532,40 @@ export default function Schedules() {
                     }
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                      {/* Custom checkbox */}
                       <div style={{
-                        width: 18,
-                        height: 18,
+                        width: 20,
+                        height: 20,
                         borderRadius: 4,
-                        border: `2px solid ${teacherColor}`,
+                        border: `3px solid ${teacherColor}`,
                         backgroundColor: isSelected ? teacherColor : 'white',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         color: 'white',
-                        fontSize: 12,
-                        fontWeight: 'bold'
+                        fontSize: 14,
+                        fontWeight: 'bold',
+                        flexShrink: 0,
+                        boxShadow: isSelected ? '0 2px 4px rgba(0,0,0,0.2)' : '0 1px 2px rgba(0,0,0,0.1)'
                       }}>
                         {isSelected ? '✓' : ''}
                       </div>
+                      {/* Color indicator */}
                       <div style={{ 
-                        width: 12, 
-                        height: 12, 
+                        width: 16, 
+                        height: 16, 
                         backgroundColor: teacherColor, 
-                        borderRadius: 2,
-                        border: "1px solid #ccc"
+                        borderRadius: 3,
+                        border: "2px solid white",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                        flexShrink: 0
                       }}></div>
+                      {/* Teacher name */}
                       <span style={{ 
                         fontSize: 14, 
                         fontWeight: isSelected ? 600 : 500,
-                        color: '#2c3e50'
+                        color: '#2c3e50',
+                        flex: 1
                       }}>
                         {t.first_name} {t.last_name}
                       </span>
@@ -1302,28 +1609,22 @@ export default function Schedules() {
                     )}
                   </div>
                 );
-              })}
+              })
+                ) : (
+                  <div style={{ 
+                    padding: 20,
+                    textAlign: 'center',
+                    color: '#666',
+                    fontSize: 14
+                  }}>
+                    {teachers === null || teachers === undefined ? 'Loading teachers...' : 'No teachers found'}
+                  </div>
+                )}
+              </>
+            )}
           </div>
           
-          <button 
-            onClick={() => {
-              setFilterGrade(''); 
-              setFilterRoom(''); 
-              setSelectedTeachers([]);
-            }} 
-            style={{
-              marginTop: 'auto', 
-              padding: '8px 12px', 
-              fontSize: 12, 
-              border: '1px solid #ccc', 
-              borderRadius: 6, 
-              background: '#f1f2f4', 
-              cursor: 'pointer',
-              fontWeight: 500
-            }}
-          >
-            Reset All Filters
-          </button>
+
         </div>
 
       </div>
@@ -1792,11 +2093,20 @@ export default function Schedules() {
       "#e8950f"  // Amber
     ];
     
-    // Use teacherId directly for consistent color assignment
-    const colorIndex = parseInt(teacherId) % teacherColors.length;
+    // Ensure teacherId is a number for consistent color assignment
+    const numericId = parseInt(teacherId) || 0;
+    const colorIndex = numericId % teacherColors.length;
     const color = teacherColors[colorIndex];
-    console.log(`Teacher ID: ${teacherId}, Color Index: ${colorIndex}, Color: ${color}`);
+    console.log(`Teacher ID: ${teacherId}, Numeric ID: ${numericId}, Color Index: ${colorIndex}, Color: ${color}`);
     return color;
+  };
+
+  // Helper function to convert hex color to rgba with opacity
+  const hexToRgba = (hex, opacity) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
   };
 
   // Helper function to check if an event is within teacher availability
@@ -2076,6 +2386,7 @@ export default function Schedules() {
             class_id: baseEvent.id,
             event_title: `${baseEvent.subject} - ${baseEvent.grade} (Friday ${abDay} Day)`,
             user_id: baseEvent.teacherId,
+              room: baseEvent.room, // Add room field to database
             description: `Friday ${abDay} Day exception for ${baseEvent.subject}`
           };
           
@@ -2100,6 +2411,7 @@ export default function Schedules() {
               class_id: dragEvent.id,
               event_title: `${dragEvent.subject} - ${dragEvent.grade} (Friday ${abDay} Day)`,
               user_id: dragEvent.teacherId,
+                room: dragEvent.room, // Add room field to database
               description: `Friday ${abDay} Day - ${dragEvent.subject}`
             };
             
@@ -2315,6 +2627,7 @@ export default function Schedules() {
         class_id: null, // You can link this to a classes table if you have one
         event_title: `${newSubject} - Grade ${newGrade} - Room ${newRoom}`,
         user_id: newTeacherId,
+          room: newRoom, // Add room field to database
         description: `Subject: ${newSubject}, Grade: ${newGrade}, Room: ${newRoom}, Teacher: ${newTeacherName}${newAbDay ? `, A/B Day: ${newAbDay}` : ''}${newRecurringDays.length > 0 ? `, Recurring: ${newRecurringDays.map(d => ["Mon", "Tue", "Wed", "Thu", "Fri"][d]).join(", ")}` : ''}`
       };
 
@@ -2467,6 +2780,7 @@ export default function Schedules() {
             class_id: baseEvent.id,
             event_title: `${baseEvent.subject} - ${baseEvent.grade} (Exception)`,
             user_id: baseEvent.teacherId,
+              room: baseEvent.room, // Add room field to database
             description: `Exception for ${baseEvent.subject} on ${moment(start).format('YYYY-MM-DD')}`
           };
           
@@ -2499,6 +2813,7 @@ export default function Schedules() {
             class_id: event.id,
             event_title: `${event.subject} - ${event.grade}`,
             user_id: event.teacherId,
+              room: event.room, // Add room field to database
             description: event.subject
           };
           
