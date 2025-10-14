@@ -113,43 +113,62 @@ const CustomHeader = ({ date }) => {
   const isFriday = moment(date).day() === 5 && ab; // only show if we have A/B
   const bg = isFriday ? '#9b59b6' : (ab === 'A' ? '#3498db' : '#e74c3c');
   const label = ab ? (isFriday ? 'A/B Day' : `${ab} Day`) : '';
+  
   return (
     <div style={{
       textAlign: 'center',
-      padding: '8px 4px 32px 4px',
-      minHeight: 130,
+      padding: '8px 4px',
+      minHeight: 80,
+      height: 80,
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'flex-start',
       alignItems: 'center',
-      background: 'transparent',
-      position: 'relative',
-      zIndex: 20,
+      background: 'transparent !important',
       borderBottom: '1px solid #ddd',
-      boxSizing: 'border-box'
+      boxSizing: 'border-box',
+      position: 'relative',
+      zIndex: 10
     }}>
+      {/* Day name in top section */}
       <div style={{
         fontSize: 14,
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginTop: '4px',
-        marginBottom: '30px'
+        marginTop: '8px',
+        marginBottom: '8px',
+        whiteSpace: 'nowrap',
+        zIndex: 11
       }}>{dayName}</div>
-      {label && (
-        <div style={{
-          fontSize: 11,
-          padding: '6px 14px',
-          backgroundColor: bg,
-          color: '#fff',
-          borderRadius: 18,
-          fontWeight: 600,
-          boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
-          lineHeight: 1.1,
-          minWidth: 70,
-          position: 'absolute',
-          bottom: '4px'
-        }}>{label}</div>
-      )}
+      
+      {/* A/B Day label in bottom section */}
+      <div style={{
+        position: 'absolute',
+        bottom: '8px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '100%',
+        display: 'flex',
+        justifyContent: 'center',
+        zIndex: 12
+      }}>
+        {label && (
+          <div style={{
+            fontSize: 11,
+            padding: '4px 12px',
+            backgroundColor: bg,
+            color: '#fff',
+            borderRadius: 12,
+            fontWeight: 600,
+            lineHeight: 1,
+            whiteSpace: 'nowrap',
+            textAlign: 'center',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            zIndex: 13
+          }}>{label}</div>
+        )}
+      </div>
     </div>
   );
 };
@@ -276,7 +295,6 @@ export default function Schedules() {
     { id: 'master-schedule', label: 'Master Schedule', icon: '📘', count: masterEvents.length || null },
     { id: 'teacher-schedules', label: 'Teacher Schedules', icon: '👨‍🏫', count: teachers.length || null },
     { id: 'student-schedules', label: 'Student Schedules', icon: '🧑‍🎓', count: students.length || null },
-    { id: 'create-schedule', label: 'Create Schedule', icon: '➕', count: createEvents.length || null },
   ]);
 
   const tabs = getTabs();
@@ -651,8 +669,6 @@ export default function Schedules() {
         return renderTeacherSchedules();
       case "student-schedules":
         return renderStudentSchedules();
-      case "create-schedule":
-        return renderCreateSchedule();
       default:
         return renderMasterSchedule();
     }
@@ -1143,14 +1159,8 @@ export default function Schedules() {
         <DragAndDropCalendar
           localizer={localizer}
           events={[
-            // Show filtered classes based on selection
-            ...(selectedTeachers.length > 0 
-              ? filteredMasterEvents.filter(ev => {
-                  const tId = ev.teacherId || ev.teacher_id || (ev.teacher && ev.teacher.id);
-                  return tId && selectedTeachers.includes(parseInt(tId));
-                })
-              : filteredMasterEvents
-            ),
+            // Show filtered master schedule events
+            ...filteredMasterEvents,
             // Add availability events for selected teachers with transparency
             ...allAvailabilities
               .filter(av => selectedTeachers.includes(av.teacher_id))
@@ -1851,228 +1861,6 @@ export default function Schedules() {
   );
 
   // Create Schedule Tab Content (Full implementation like CreateSchedule.js)
-  const renderCreateSchedule = () => (
-    <>
-      <div style={{ 
-        backgroundColor: "white", 
-        borderRadius: "8px", 
-        padding: "12px 16px", 
-        boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-        marginBottom: "12px"
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h1 style={{ 
-              fontSize: 20, 
-              fontWeight: "bold", 
-              margin: 0, 
-              color: "#2c3e50",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px"
-            }}>
-              ➕ Create Schedule
-            </h1>
-            <p style={{ margin: "8px 0 0 0", color: "#7f8c8d", fontSize: "14px" }}>
-              Drag on the calendar to create new class schedules. Select teachers to view their availability.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "8px" }}>
-            {deleteMode ? (
-              <>
-                <button
-                  onClick={handleConfirmDelete}
-                  disabled={selectedToDelete.length === 0}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: selectedToDelete.length > 0 ? "#e74c3c" : "#bdc3c7",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: selectedToDelete.length > 0 ? "pointer" : "not-allowed",
-                    fontSize: "14px",
-                    fontWeight: "500"
-                  }}
-                >
-                  Delete Selected ({selectedToDelete.length})
-                </button>
-                <button
-                  onClick={handleDeleteMode}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#95a5a6",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: "500"
-                  }}
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={handleDeleteMode}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#e74c3c",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                  fontWeight: "500"
-                }}
-              >
-                🗑️ Delete Mode
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-      
-      <div style={{ display: "flex", gap: "16px", height: "calc(100vh - 240px)" }}>
-        {/* Calendar */}
-        <div style={{ flex: 1 }}>
-          {renderCreateCalendar()}
-        </div>
-        
-        {/* Teacher sidebar */}
-        <div style={{ 
-          width: 260, 
-          backgroundColor: "#f8f9fa", 
-          borderRadius: 16, 
-          padding: 24, 
-          boxShadow: "0 2px 8px rgba(0,0,0,0.07)", 
-          maxHeight: "100%", 
-          display: "flex", 
-          flexDirection: "column" 
-        }}>
-          <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 18 }}>Teacher Availability</h3>
-          
-          {/* Controls */}
-          <div style={{ marginBottom: 16 }}>
-            {selectedTeachers.length > 0 && (
-              <button
-                onClick={() => setSelectedTeachers([])}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#e74c3c",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "12px",
-                  fontWeight: "500",
-                  marginBottom: "8px",
-                  width: "100%"
-                }}
-              >
-                Unselect All
-              </button>
-            )}
-          </div>
-          
-          {/* Search bar */}
-          <input
-            type="text"
-            placeholder="Search teachers..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "8px 12px",
-              borderRadius: 8,
-              border: "2px solid #e1e8ed",
-              marginBottom: 16,
-              fontSize: 14,
-              boxSizing: "border-box"
-            }}
-          />
-          
-          {/* Teacher list */}
-          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-            {teachers
-              .filter(t =>
-                searchTerm.trim() === "" ||
-                `${t.first_name} ${t.last_name}`.toLowerCase().includes(searchTerm.trim().toLowerCase())
-              )
-              .map((t) => {
-                const teacherAvailabilities = allAvailabilities.filter(av => av.teacher_id === t.id);
-                const isSelected = selectedTeachers.includes(t.id);
-                
-                return (
-                  <div key={t.id} style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 2 }}>
-                    <label style={{ 
-                      display: "flex", 
-                      alignItems: "center", 
-                      gap: 10, 
-                      fontSize: 16, 
-                      fontWeight: 500, 
-                      borderRadius: 8, 
-                      padding: "6px 8px", 
-                      backgroundColor: isSelected ? "#e3f2fd" : "transparent",
-                      transition: "background 0.2s",
-                      cursor: "pointer"
-                    }}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedTeachers(prev => [...prev, t.id]);
-                          } else {
-                            setSelectedTeachers(prev => prev.filter(id => id !== t.id));
-                          }
-                        }}
-                        style={{ 
-                          width: 16, 
-                          height: 16, 
-                          accentColor: "#2196f3", 
-                          cursor: "pointer"
-                        }}
-                      />
-                      <div style={{ 
-                        width: 12, 
-                        height: 12, 
-                        backgroundColor: getTeacherColor(t.id), 
-                        borderRadius: 2, 
-                        border: "1px solid #ccc"
-                      }}></div>
-                      <span>{t.first_name} {t.last_name}</span>
-                    </label>
-                    
-                    <div style={{ marginLeft: 34, display: "flex", flexDirection: "column", gap: 2 }}>
-                      {teacherAvailabilities.length > 0 ? (
-                        teacherAvailabilities.map(av => (
-                          <div key={av.id} style={{ 
-                            fontSize: 13, 
-                            color: "#555", 
-                            background: "#eaf6fb", 
-                            borderRadius: 4, 
-                            padding: "2px 8px", 
-                            borderLeft: `4px solid ${getTeacherColor(t.id)}`
-                          }}>
-                            {typeof av.day_of_week === 'number' ? moment().day(av.day_of_week).format('dddd') : av.day_of_week}, {av.start_time} - {av.end_time}
-                          </div>
-                        ))
-                      ) : (
-                        <div style={{ fontSize: 13, color: "#bbb", fontStyle: "italic", padding: "2px 8px" }}>
-                          No availability set
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      </div>
-    </>
-  );
-
   // Teacher colors for availability blocks - generates unique colors for each teacher
   const getTeacherColor = (teacherId) => {
     const teacherColors = [
@@ -2905,262 +2693,6 @@ export default function Schedules() {
   };
 
   // Render Create Calendar with drag and drop functionality
-  const renderCreateCalendar = () => {
-    // Show availabilities for selected teachers
-    const selectedAvailabilities = allAvailabilities.filter(av =>
-      selectedTeachers.includes(av.teacher_id)
-    ).map(av => {
-      const weekStart = moment().startOf('week').add(av.day_of_week, 'days');
-      const [startHour, startMinute] = av.start_time.split(":");
-      const [endHour, endMinute] = av.end_time.split(":");
-      const start = weekStart.clone().set({ hour: +startHour, minute: +startMinute, second: 0 }).toDate();
-      const end = weekStart.clone().set({ hour: +endHour, minute: +endMinute, second: 0 }).toDate();
-      return {
-        id: `avail-${av.teacher_id}-${av.id}`,
-        start,
-        end,
-        availability: true,
-        color: getTeacherColor(av.teacher_id),
-        teacher_id: av.teacher_id,
-        teacher_first_name: av.teacher_first_name,
-        teacher_last_name: av.teacher_last_name
-      };
-    });
-
-    // Get expanded calendar events (with recurring instances)
-    const expandedEvents = getCalendarEvents();
-    const overlappingIds = getOverlappingEventIds();
-    const allEventsForCreate = [...expandedEvents, ...selectedAvailabilities];
-
-    return (
-      <div style={{
-        backgroundColor: "white",
-        borderRadius: "12px",
-        padding: "16px",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
-        height: "100%",
-        position: "relative",
-        display: "flex",
-        flexDirection: "column"
-      }}>
-        <style>{`
-          .rbc-header {
-            z-index: 15 !important;
-            position: relative !important;
-            background: white !important;
-            border-bottom: 1px solid #ddd !important;
-          }
-          .rbc-time-view .rbc-header {
-            z-index: 15 !important;
-            background: white !important;
-            min-height: 60px !important;
-          }
-          .rbc-time-header {
-            z-index: 14 !important;
-            background: white !important;
-          }
-          .rbc-time-header-content {
-            z-index: 13 !important;
-            background: white !important;
-          }
-          .rbc-time-content {
-            border-top: none !important;
-          }
-          .rbc-calendar {
-            height: 100% !important;
-          }
-          .rbc-time-view {
-            border: 1px solid #ddd !important;
-            border-radius: 8px !important;
-            overflow: hidden !important;
-          }
-          
-          /* Fix drag scrolling issues */
-          .rbc-time-content {
-            overflow-y: auto !important;
-            scroll-behavior: auto !important;
-          }
-          
-          /* Prevent auto-scroll during drag operations */
-          .rbc-addons-dnd-drag-preview {
-            pointer-events: none !important;
-          }
-          
-          .rbc-addons-dnd-drag-row {
-            pointer-events: none !important;
-          }
-          
-          /* Disable smooth scrolling during drag */
-          .rbc-time-view.rbc-addons-dnd-is-dragging {
-            scroll-behavior: auto !important;
-          }
-          
-          .rbc-time-view.rbc-addons-dnd-is-dragging .rbc-time-content {
-            scroll-behavior: auto !important;
-            overflow-anchor: none !important;
-          }
-          
-          /* Prevent calendar from auto-scrolling */
-          .rbc-time-slot {
-            pointer-events: auto !important;
-          }
-          
-          .rbc-addons-dnd-resize-anchor {
-            display: none !important;
-          }
-        `}</style>
-        <DragAndDropCalendar
-          localizer={localizer}
-          events={allEventsForCreate}
-          startAccessor="start"
-          endAccessor="end"
-          style={{ height: "calc(100% - 20px)" }}
-          views={{ work_week: true }}
-          defaultView="work_week"
-          toolbar={false}
-          popup={false}
-          min={moment().startOf('day').set({ hour: 6, minute: 30 }).toDate()}
-          max={moment().startOf('day').set({ hour: 16, minute: 0 }).toDate()}
-          daysOfWeek={[1,2,3,4,5]}
-          selectable={true}
-          onSelectSlot={handleSelectSlot}
-          onEventDrop={handleEventDrop}
-          onDragStart={handleEventDragStart}
-          onDragEnd={handleDragEnd}
-          resizable={false}
-          draggableAccessor={(event) => !event.availability}
-          dragFromOutsideItem={null}
-          onDropFromOutside={null}
-          step={5}
-          timeslots={6}
-          showMultiDayTimes={false}
-          scrollToTime={moment().set({ hour: 8, minute: 0 }).toDate()}
-          onSelectEvent={deleteMode ? (event) => {
-            if (event.availability) return;
-            
-            // For exception events, use the exact ID
-            const eventId = (typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id;
-            
-            setSelectedToDelete(prev => 
-              prev.includes(eventId) 
-                ? prev.filter(id => id !== eventId)
-                : [...prev, eventId]
-            );
-          } : (event) => {
-            if (event.availability) return;
-            setEventDetailsModal({ open: true, event });
-          }}
-          eventPropGetter={event => {
-            const eventId = (typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id;
-            const baseId = (typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id;
-            const isSelected = selectedToDelete.includes(eventId);
-            const hasConflict = overlappingIds.includes(baseId);
-            const isBeingDragged = draggingEventId === event.id;
-            
-            if (event.availability) {
-              return {
-                style: {
-                  backgroundColor: event.color,
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  fontSize: "10px",
-                  fontWeight: "400",
-                  opacity: 0.7,
-                  cursor: "default",
-                  pointerEvents: "none"
-                }
-              };
-            }
-            
-            let backgroundColor = "#3498db";
-            let border = "none";
-            let opacity = isBeingDragged ? 0.6 : 1;
-            
-            // Check if event is outside teacher availability
-            const isOutOfAvailability = event.outOfAvailability || (!event.availability && !isEventInTeacherAvailability(event));
-            
-            if (deleteMode && isSelected) {
-              backgroundColor = "#e74c3c";
-              border = "2px solid #c0392b";
-            } else if (hasConflict) {
-              border = "2px solid #e74c3c";
-            } else if (isOutOfAvailability && !event.availability) {
-              backgroundColor = "#ff9800"; // Orange for availability warning
-              border = "2px dashed #f57c00";
-            }
-            
-            return {
-              style: {
-                backgroundColor,
-                color: "white",
-                border,
-                borderRadius: "4px",
-                fontSize: "12px",
-                fontWeight: "500",
-                opacity,
-                cursor: deleteMode ? "pointer" : (isBeingDragged ? "grabbing" : "grab"),
-                position: "relative"
-              }
-            };
-          }}
-          components={{
-            event: ({ event }) => {
-              const isOutOfAvailability = event.outOfAvailability || (!event.availability && !isEventInTeacherAvailability(event));
-              
-              return (
-                <div style={{ 
-                  padding: "2px 4px", 
-                  fontSize: event.availability ? "10px" : "12px",
-                  fontWeight: event.availability ? 400 : 500,
-                  opacity: event.availability ? 0.8 : 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between"
-                }}>
-                  <span>
-                    {event.availability 
-                      ? `${event.teacher_first_name} ${event.teacher_last_name}`
-                      : (event.title || event.subject)
-                    }
-                  </span>
-                  
-                  <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
-
-                    
-                    {!event.availability && isOutOfAvailability && (
-                      <span 
-                        style={{ 
-                          fontSize: "10px", 
-                          color: "#fff",
-                          backgroundColor: "rgba(255,152,0,0.8)",
-                          borderRadius: "2px",
-                          padding: "1px 3px",
-                          fontWeight: "bold"
-                        }}
-                        title="Outside teacher availability"
-                      >
-                        ⚠
-                      </span>
-                    )}
-                    
-                    {deleteMode && !event.availability && (
-                      <span style={{ fontSize: "10px" }}>
-                        {selectedToDelete.includes((typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id) ? "✓" : ""}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            },
-            header: CustomHeader
-          }}
-        />
-      </div>
-    );
-  };
-
-  // Unified Calendar Component
   const renderCalendar = (events, calendarType) => {
     // Restrict to Mon-Fri and 6:30am-4:00pm for master, teacher, and student schedules
     const isRestricted = ["master-schedule", "teacher-schedule", "student-schedule"].includes(calendarType);
