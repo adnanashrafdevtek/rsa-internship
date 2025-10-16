@@ -13,6 +13,7 @@ import {
 import enUS from "date-fns/locale/en-US";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import { useAuth } from "../context/AuthContext";
+import SidebarLayout from "../components/SidebarLayout";
 
 const localizer = dateFnsLocalizer({
   format,
@@ -23,7 +24,7 @@ const localizer = dateFnsLocalizer({
 });
 
 export default function TeacherAvailability() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const urlUserId = new URLSearchParams(window.location.search).get("user_id");
   const userId = urlUserId || user?.id;
 
@@ -32,6 +33,10 @@ export default function TeacherAvailability() {
   const [message, setMessage] = useState("");
   const [calendarView, setCalendarView] = useState("week");
   const [showModal, setShowModal] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+  };
 
   // Helper: convert day + time string → Date object (current week)
   const timeStringToDate = (dayOfWeek, timeStr) => {
@@ -131,9 +136,10 @@ export default function TeacherAvailability() {
   }
 };
 
-  if (loading) return <p>Loading...</p>;
+  if (loading) return <SidebarLayout onLogout={handleLogout}><p>Loading...</p></SidebarLayout>;
 
   return (
+    <SidebarLayout onLogout={handleLogout}>
     <div style={{ padding: 20 }}>
       <div
         style={{
@@ -252,5 +258,6 @@ export default function TeacherAvailability() {
         </div>
       )}
     </div>
+    </SidebarLayout>
   );
 }
