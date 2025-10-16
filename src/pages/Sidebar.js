@@ -166,30 +166,30 @@ export default function Sidebar({ onWidthChange }) {
         gap: "12px", 
         marginBottom: "20px"
       }}>
-        <SidebarLink to="/home">Home</SidebarLink>
-        <SidebarLink to="/class">Classes</SidebarLink>
-
         {isAdmin ? (
+          <>
+            <SidebarLink to="/home">Home</SidebarLink>
+            <SidebarLink to="/class">Classes</SidebarLink>
             <SidebarLink to="/schedules" iconOverride="📅">Schedule</SidebarLink>
-        ) : (
-          <>
-            {isTeacher && (
-              <SidebarLink to="/availability" iconOverride="⏰">Availability</SidebarLink>
-            )}
-            {isStudent && (
-              <SidebarLink to="/student/schedule" iconOverride="📅">Schedule</SidebarLink>
-            )}
-          </>
-        )}
-
-        {isAdmin && (
-          <>
             <SidebarLink to="/student">Users</SidebarLink>
             <SidebarLink to="/add-user" style={{ backgroundColor: "#16a085" }} iconOverride="➕">
               Add User
             </SidebarLink>
           </>
-        )}
+        ) : isTeacher ? (
+          <>
+            <SidebarLink to="/teacher-dashboard" iconOverride="🏠">Home</SidebarLink>
+            <SidebarLink to="/teacher-schedule" iconOverride="📅">Schedule</SidebarLink>
+            <SidebarLink to="/class" iconOverride="📚">Classes</SidebarLink>
+            <SidebarLink to="/availability" iconOverride="⏰">Availability</SidebarLink>
+          </>
+        ) : isStudent ? (
+          <>
+            <SidebarLink to="/student-dashboard" iconOverride="🏠">Home</SidebarLink>
+            <SidebarLink to="/student-schedule" iconOverride="📅">Schedule</SidebarLink>
+            <SidebarLink to="/class" iconOverride="📚">Classes</SidebarLink>
+          </>
+        ) : null}
       </nav>
 
       <div style={{ flexGrow: 1 }}></div>

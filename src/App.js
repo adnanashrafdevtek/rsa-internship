@@ -20,6 +20,10 @@ import MySchedule from "./pages/MySchedule";
 import Schedules from "./pages/Schedules";
 import CreateSchedule from "./pages/CreateSchedule";
 import TeacherAvailability from "./pages/TeacherAvailability";
+import TeacherHome from "./pages/TeacherHome";
+import StudentHome from "./pages/StudentHome";
+import TeacherSchedule from "./pages/TeacherSchedule";
+import StudentSchedule from "./pages/StudentSchedule";
 
 
 function App() {
@@ -107,6 +111,38 @@ function App() {
             element={
               <ProtectedRoute>
                 <MySchedule />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher-dashboard"
+            element={
+              <ProtectedRoute>
+                <TeacherHome />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student-dashboard"
+            element={
+              <ProtectedRoute>
+                <StudentHome />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher-schedule"
+            element={
+              <ProtectedRoute>
+                <TeacherSchedule />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student-schedule"
+            element={
+              <ProtectedRoute>
+                <StudentSchedule />
               </ProtectedRoute>
             }
           />

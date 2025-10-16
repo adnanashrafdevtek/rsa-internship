@@ -93,6 +93,15 @@ export default function Home() {
   const navigate = useNavigate();
   const [time, setTime] = useState(new Date());
 
+  // Redirect teachers to their dashboard
+  useEffect(() => {
+    if (user && user.role === "teacher") {
+      navigate("/teacher-dashboard");
+    } else if (user && user.role === "student") {
+      navigate("/student-dashboard");
+    }
+  }, [user, navigate]);
+
   // Admin data
   // const [pendingTasks, setPendingTasks] = useState(null); // Removed unused state
   const [quickStats, setQuickStats] = useState({ students: 0, teachers: 0, classes: 0 });
