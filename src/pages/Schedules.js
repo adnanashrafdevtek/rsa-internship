@@ -78,16 +78,22 @@ async function saveScheduleToDatabase(data) {
 
 async function updateScheduleInDatabase(id, data) {
   try {
+    console.log('Updating schedule in database:', { id, data });
     const res = await fetch(`http://localhost:3000/api/schedules/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    if (!res.ok) throw new Error('Update failed');
-    return { success: true };
+    const responseText = await res.text();
+    console.log('Update response:', responseText);
+    if (!res.ok) {
+      console.error('Update failed with status:', res.status, responseText);
+      throw new Error(`Update failed: ${responseText}`);
+    }
+    return { success: true, response: responseText };
   } catch (e) {
     console.error('updateScheduleInDatabase error', e);
-    return { success: false };
+    return { success: false, error: e.message };
   }
 }
 
@@ -184,25 +190,8 @@ export default function Schedules() {
   
   // All useState hooks must come before any conditional returns
   const [activeTab, setActiveTab] = useState("master-schedule");
-  const [scheduleEvents, setScheduleEvents] = useState([]);
-  const [showCheckboxes, setShowCheckboxes] = useState(false);
-  const [selectedEvents, setSelectedEvents] = useState(new Set());
-  const [showAddEventModal, setShowAddEventModal] = useState(false);
-  const [newEvent, setNewEvent] = useState({
-    title: "",
-    startDate: moment().format("YYYY-MM-DD"),
-    startTime: moment().format("HH:mm"),
-    endDate: moment().format("YYYY-MM-DD"),
-    endTime: moment().add(1, 'hour').format("HH:mm"),
-    recurringDays: [],
-    description: "",
-    eventType: "event",
-  });
   const [date, setDate] = useState(new Date());
   const [view, setView] = useState(Views.WEEK);
-  const [deleting, setDeleting] = useState(false);
-  const [selectedEventDetails, setSelectedEventDetails] = useState(null);
-  const [showEventModal, setShowEventModal] = useState(false);
   const [masterEvents, setMasterEvents] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [selectedTeacher, setSelectedTeacher] = useState(null);
@@ -212,34 +201,23 @@ export default function Schedules() {
   const [studentEvents, setStudentEvents] = useState([]);
   const [createEvents, setCreateEvents] = useState([]);
   const [allAvailabilities, setAllAvailabilities] = useState([]);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [createDetails, setCreateDetails] = useState({
-    teacherId: "",
-    grade: "",
-    customGrade: "",
-    subject: "",
-    room: "",
-    startTime: "",
-    endTime: "",
-    recurringDays: [],
-    dayType: ""
-  });
-  const [showCustomGrade, setShowCustomGrade] = useState(false);
   const [conflictModal, setConflictModal] = useState({ open: false, messages: [], pendingEvent: null });
   const [selectedTeachers, setSelectedTeachers] = useState([]);
   const [deleteMode, setDeleteMode] = useState(false);
   const [selectedToDelete, setSelectedToDelete] = useState([]);
   const [editMode, setEditMode] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [fridayModal, setFridayModal] = useState({ open: false, slotInfo: null });
-  const [draggingEventId, setDraggingEventId] = useState(null);
   const [teacherDropdownOpen, setTeacherDropdownOpen] = useState(false);
   const [eventDetailsModal, setEventDetailsModal] = useState({ open: false, event: null });
   const [loading, setLoading] = useState(false);
-  const [showUnselect, setShowUnselect] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [scheduleEvents, setScheduleEvents] = useState([]);
+  const [draggingEventId, setDraggingEventId] = useState(null);
   // Master schedule filters
   const [selectedGrades, setSelectedGrades] = useState([]);
   const [selectedRooms, setSelectedRooms] = useState([]);
@@ -260,8 +238,6 @@ export default function Schedules() {
     abDay: "",
     dayType: ""
   });
-  const [dragStartPosition, setDragStartPosition] = useState(null);
-  const [dragTimeout, setDragTimeout] = useState(null);
   // Sidebar resize states
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -288,7 +264,6 @@ export default function Schedules() {
   const getRole = u => (u && u.role ? u.role.trim().toLowerCase() : "");
   const isStudent = getRole(user) === "student";
   const isTeacher = getRole(user) === "teacher";
-  const isAdmin = getRole(user) === "admin";
 
   const handleLogout = () => {
     logout();
@@ -330,22 +305,27 @@ export default function Schedules() {
         // Connect to the actual backend running on port 3000
         const response = await fetch('http://localhost:3000/api/schedules');
         const data = await response.json();
+        console.log('Raw data from backend:', data[0]); // Debug log
+        
         const events = data.map(schedule => ({
           id: schedule.idcalendar,
-          title: schedule.event_title,
+          title: schedule.subject || schedule.event_title || 'Class',
           start: new Date(schedule.start_time),
           end: new Date(schedule.end_time),
           isClass: true,
           description: schedule.description,
           teacherId: schedule.user_id,
           teacher: schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : 'Unknown Teacher',
-          room: schedule.room || schedule.room_number || '',
+          room: schedule.room || '',
           grade: schedule.grade || '',
-          subject: schedule.subject || schedule.event_title || 'Class'
+          subject: schedule.subject || schedule.event_title || 'Class',
+          // Store original database ID for updates
+          databaseId: schedule.idcalendar
         }));
         setMasterEvents(events);
         setCreateEvents(events); // Also set for create schedule tab
         console.log('Master schedule loaded from backend:', events.length, 'events');
+        console.log('Sample event structure:', events[0]);
       } catch (error) {
         console.error('Error fetching master schedule from backend:', error);
         setMasterEvents([]);
@@ -528,6 +508,23 @@ export default function Schedules() {
     };
   }, [isResizing]);
 
+  // Warn user before leaving page with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (pendingChanges.length > 0) {
+        e.preventDefault();
+        e.returnValue = ''; // Chrome requires returnValue to be set
+        return 'You have unsaved changes. Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [pendingChanges]);
+
   // Role check - admin only for full access (after all hooks)
   if (!user || user.role !== "admin") {
     return (
@@ -591,50 +588,13 @@ export default function Schedules() {
     fetchStudentEvents(student.id);
   };
 
-  // Check for overlapping events
-  const checkEventOverlaps = (events) => {
-    const overlaps = [];
-    for (let i = 0; i < events.length; i++) {
-      for (let j = i + 1; j < events.length; j++) {
-        const event1 = events[i];
-        const event2 = events[j];
-        const start1 = new Date(event1.start);
-        const end1 = new Date(event1.end);
-        const start2 = new Date(event2.start);
-        const end2 = new Date(event2.end);
-        const date1 = moment(start1).format("YYYY-MM-DD");
-        const date2 = moment(start2).format("YYYY-MM-DD");
-        if (date1 === date2 && start1.getTime() < end2.getTime() && start2.getTime() < end1.getTime()) {
-          const overlapStart = new Date(Math.max(start1.getTime(), start2.getTime()));
-          const overlapEnd = new Date(Math.min(end1.getTime(), end2.getTime()));
-          overlaps.push({
-            event1: event1.title,
-            event2: event2.title,
-            overlapStart: moment(overlapStart).format("MMM Do, h:mm A"),
-            overlapEnd: moment(overlapEnd).format("MMM Do, h:mm A"),
-            duration: moment.duration(overlapEnd - overlapStart).humanize()
-          });
-        }
-      }
-    }
-    return overlaps;
-  };
-
   const eventStyleGetter = (event) => {
-    let backgroundColor;
+    // All classes same color - blue
+    let backgroundColor = "#3498db";
     
-    if (event.isClass) {
-      backgroundColor = "#3498db"; // Blue for classes
-    } else if (event.eventType === "personal") {
-      backgroundColor = "#9b59b6"; // Purple for personal events
-    } else if (event.eventType === "meeting") {
-      backgroundColor = "#e74c3c"; // Red for meetings
-    } else if (event.eventType === "appointment") {
-      backgroundColor = "#f39c12"; // Orange for appointments
-    } else if (event.eventType === "reminder") {
-      backgroundColor = "#95a5a6"; // Gray for reminders
-    } else {
-      backgroundColor = "#27ae60"; // Green for regular events
+    // Check if event has conflicts
+    if (event.hasConflict) {
+      backgroundColor = "#e74c3c"; // Red for conflicts
     }
     
     return {
@@ -713,8 +673,11 @@ export default function Schedules() {
 
   // Master Schedule renderer (custom: hide Sat/Sun and lock to week view + A/B headers + time window)
   function renderMasterSchedule() {
-    // Handle delete mode for master schedule
+    // Handle delete mode for master schedule (only allowed in edit mode)
     const handleMasterDeleteMode = () => {
+      if (!isEditMode) {
+        return;
+      }
       setDeleteMode(!deleteMode);
       setSelectedToDelete([]);
     };
@@ -890,6 +853,15 @@ export default function Schedules() {
 
     // Handle slot selection for master schedule
     const handleMasterSelectSlot = ({ start, end }) => {
+      // Only allow creating new events in edit mode
+      if (!isEditMode) {
+        return;
+      }
+
+      if (deleteMode) {
+        return;
+      }
+
       const isFriday = moment(start).day() === 5;
       
       if (isFriday) {
@@ -943,6 +915,11 @@ export default function Schedules() {
 
     // Handle event drop for master schedule
     const handleMasterEventDrop = async ({ event, start, end }) => {
+      // Only allow dragging in edit mode
+      if (!isEditMode) {
+        return;
+      }
+      
       // Prevent dragging availability events
       if (event.availability) {
         return; // Don't allow dropping availability events
@@ -964,37 +941,46 @@ export default function Schedules() {
         return;
       }
       
-      try {
-        // Update the event with new times
-        const updatedEvent = {
-          ...event,
-          start,
-          end,
-          startTime: moment(start).format("HH:mm:ss"),
-          endTime: moment(end).format("HH:mm:ss")
-        };
-        
-        // Update in database
-        const updateResult = await updateScheduleInDatabase(event.id, {
-          start_time: moment(start).format("HH:mm:ss"),
-          end_time: moment(end).format("HH:mm:ss")
-        });
-        
-        if (updateResult.success) {
-          // Update master events state
-          setMasterEvents(prev => prev.map(ev => 
-            ev.id === event.id ? updatedEvent : ev
-          ));
-        } else {
-          console.error('Failed to update event in database');
-        }
-      } catch (error) {
-        console.error('Error updating event:', error);
-      }
+      // Update the event with new times - PRESERVE ALL ORIGINAL EVENT DATA
+      const updatedEvent = {
+        // Spread all original properties first to preserve everything
+        ...event,
+        // Only update time-related fields
+        start,
+        end,
+        startTime: moment(start).format("HH:mm:ss"),
+        endTime: moment(end).format("HH:mm:ss"),
+        // Explicitly preserve critical fields to ensure they don't get lost
+        id: event.id,
+        title: event.title || event.subject,
+        subject: event.subject,
+        teacher: event.teacher,
+        teacherId: event.teacherId,
+        grade: event.grade,
+        room: event.room,
+        description: event.description,
+        databaseId: event.databaseId || event.id
+      };
+      
+      console.log('🔄 Dragged event - Original:', event);
+      console.log('✅ Dragged event - Updated:', updatedEvent);
+      
+      // Update master events immediately for UI
+      setMasterEvents(prev => prev.map(ev => 
+        ev.id === event.id ? updatedEvent : ev
+      ));
+      
+      // Track change for batch save
+      setPendingChanges(prev => {
+        // Remove any existing change for this event
+        const filtered = prev.filter(change => change.id !== event.id);
+        // Add the new change
+        return [...filtered, updatedEvent];
+      });
     };
 
     const MasterToolbar = ({ label }) => (
-      <div className="rbc-toolbar" style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 8, gap: 12 }}>
+      <div className="rbc-toolbar" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, gap: 12 }}>
         <span className="rbc-btn-group" style={{ display: 'flex', gap: 4 }}>
           {[
             { id: 'all', label: 'All' },
@@ -1024,8 +1010,67 @@ export default function Schedules() {
             </button>
           ))}
         </span>
+        
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* View/Edit Mode Toggle Buttons - Same style as school level filters */}
+          <span className="rbc-btn-group" style={{ display: 'flex', gap: 4 }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (isEditMode && pendingChanges.length > 0) {
+                  if (window.confirm('You have unsaved changes. Discard them?')) {
+                    setIsEditMode(false);
+                    setPendingChanges([]);
+                    fetchMasterSchedule(); // Reload to discard changes
+                  }
+                } else {
+                  setIsEditMode(false);
+                }
+              }}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 20,
+                border: !isEditMode ? '2px solid #3498db' : '1px solid #d0d7de',
+                background: !isEditMode ? '#3498db' : '#fff',
+                color: !isEditMode ? '#fff' : '#2c3e50',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                minWidth: 90,
+                boxShadow: !isEditMode ? '0 2px 6px rgba(0,0,0,0.15)' : '0 1px 2px rgba(0,0,0,0.08)'
+              }}
+            >
+              👁️ View
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsEditMode(true);
+              }}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 20,
+                border: isEditMode ? '2px solid #3498db' : '1px solid #d0d7de',
+                background: isEditMode ? '#3498db' : '#fff',
+                color: isEditMode ? '#fff' : '#2c3e50',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                minWidth: 90,
+                boxShadow: isEditMode ? '0 2px 6px rgba(0,0,0,0.15)' : '0 1px 2px rgba(0,0,0,0.08)'
+              }}
+            >
+              ✏️ Edit
+            </button>
+          </span>
+        </div>
       </div>
     );
+
+    // Static PreK-12 grade list
+    const gradeDropdownOptions = ['PK','K','1','2','3','4','5','6','7','8','9','10','11','12'];
 
       const MasterHeader = ({ date }) => {
         const ab = getABLabelForHeader(date);
@@ -1084,14 +1129,6 @@ export default function Schedules() {
         );
       };
 
-    // Build dropdown option sets (teachers from teachers state to ensure actual teacher DB data)
-    const teacherOptions = teachers
-      .filter(t => (t.role ? /teacher/i.test(t.role) : true))
-      .map(t => ({ id: t.id, name: `${t.first_name || t.firstName || ''} ${t.last_name || t.lastName || ''}`.trim() || `Teacher ${t.id}` }));
-
-    // Static PreK-12 grade list
-    const gradeDropdownOptions = ['PK','K','1','2','3','4','5','6','7','8','9','10','11','12'];
-
     // Use rooms from state (fetched from database)
     const roomOptions = availableRooms;
 
@@ -1122,57 +1159,129 @@ export default function Schedules() {
                 View and manage all class schedules. Drag to create new classes or move existing ones.
               </p>
             </div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              {deleteMode ? (
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              {isEditMode && (
                 <>
-                  <button
-                    onClick={handleMasterConfirmDelete}
-                    disabled={selectedToDelete.length === 0}
-                    style={{
-                      padding: "8px 16px",
-                      backgroundColor: selectedToDelete.length > 0 ? "#e74c3c" : "#bdc3c7",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: selectedToDelete.length > 0 ? "pointer" : "not-allowed",
-                      fontSize: "14px",
-                      fontWeight: "500"
-                    }}
-                  >
-                    Delete Selected ({selectedToDelete.length})
-                  </button>
-                  <button
-                    onClick={handleMasterDeleteMode}
-                    style={{
-                      padding: "8px 16px",
-                      backgroundColor: "#95a5a6",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "14px",
-                      fontWeight: "500"
-                    }}
-                  >
-                    Cancel
-                  </button>
+                  {/* Save Changes Button - shown when there are pending changes */}
+                  {pendingChanges.length > 0 && (
+                    <>
+                      <span style={{ fontSize: 14, color: '#e67e22', fontWeight: 600, marginRight: 8 }}>
+                        {pendingChanges.length} unsaved change{pendingChanges.length !== 1 ? 's' : ''}
+                      </span>
+                      <button
+                        onClick={async () => {
+                          // Save all pending changes to database
+                          setLoading(true);
+                          try {
+                            console.log('💾 Saving pending changes:', pendingChanges);
+                            
+                            for (const change of pendingChanges) {
+                              // Use databaseId if available, otherwise use id
+                              const dbId = change.databaseId || change.id;
+                              
+                              // Send complete schedule data including all fields
+                              const scheduleData = {
+                                start_time: moment(change.start).format('YYYY-MM-DD HH:mm:ss'),
+                                end_time: moment(change.end).format('YYYY-MM-DD HH:mm:ss'),
+                                event_title: change.title || change.subject || 'Class',
+                                user_id: change.teacherId,
+                                room: change.room || '',
+                                grade: change.grade || '',
+                                subject: change.subject || change.title || 'Class',
+                                description: change.description || `${change.subject || 'Class'} - Grade ${change.grade || 'N/A'}`,
+                                class_id: change.class_id || null
+                              };
+                              
+                              console.log('📤 Updating schedule ID:', dbId, 'with data:', scheduleData);
+                              const result = await updateScheduleInDatabase(dbId, scheduleData);
+                              
+                              if (!result.success) {
+                                console.error('❌ Failed to update schedule:', dbId, result.error);
+                                throw new Error(`Failed to update schedule ${dbId}: ${result.error || 'Unknown error'}`);
+                              }
+                              console.log('✅ Successfully updated schedule:', dbId);
+                            }
+                            
+                            setPendingChanges([]);
+                            alert('✅ All changes saved successfully!');
+                            
+                            // Refresh to ensure we have latest data from backend
+                            await fetchMasterSchedule();
+                          } catch (error) {
+                            console.error('❌ Error saving changes:', error);
+                            alert(`Error saving changes: ${error.message}\n\nPlease check the console for details.`);
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                        style={{
+                          padding: "8px 16px",
+                          backgroundColor: "#27ae60",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                          fontWeight: "500",
+                          marginRight: 8
+                        }}
+                      >
+                        💾 Save Changes
+                      </button>
+                    </>
+                  )}
+                  {deleteMode ? (
+                    <>
+                      <button
+                        onClick={handleMasterConfirmDelete}
+                        disabled={selectedToDelete.length === 0}
+                        style={{
+                          padding: "8px 16px",
+                          backgroundColor: selectedToDelete.length > 0 ? "#e74c3c" : "#bdc3c7",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: selectedToDelete.length > 0 ? "pointer" : "not-allowed",
+                          fontSize: "14px",
+                          fontWeight: "500"
+                        }}
+                      >
+                        Delete Selected ({selectedToDelete.length})
+                      </button>
+                      <button
+                        onClick={handleMasterDeleteMode}
+                        style={{
+                          padding: "8px 16px",
+                          backgroundColor: "#95a5a6",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                          fontWeight: "500"
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleMasterDeleteMode}
+                      style={{
+                        padding: "8px 16px",
+                        backgroundColor: "#e74c3c",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        fontWeight: "500"
+                      }}
+                    >
+                      🗑️ Delete Mode
+                    </button>
+                  )}
                 </>
-              ) : (
-                <button
-                  onClick={handleMasterDeleteMode}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#e74c3c",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: "500"
-                  }}
-                >
-                  🗑️ Delete Mode
-                </button>
               )}
             </div>
           </div>
@@ -1246,9 +1355,9 @@ export default function Schedules() {
           onSelectEvent={handleEventClick}
           onEventDrop={handleMasterEventDrop}
           onEventResize={handleMasterEventDrop}
-          resizable={true}
-          draggableAccessor={(event) => !event.availability} // Only allow dragging non-availability events
-          resizableAccessor={(event) => !event.availability} // Only allow resizing non-availability events
+          resizable={isEditMode}
+          draggableAccessor={(event) => isEditMode && !event.availability} // Only allow dragging in edit mode and non-availability events
+          resizableAccessor={(event) => isEditMode && !event.availability} // Only allow resizing in edit mode and non-availability events
           // Restrict visible time range 6:30 - 16:00
           min={new Date(1970, 0, 1, 6, 30, 0)}
           max={new Date(1970, 0, 1, 16, 0, 0)}
@@ -1383,205 +1492,7 @@ export default function Schedules() {
             }}
           />
           
-          {/* Grade Filter */}
-          <div>
-            <div 
-              onClick={() => setGradeFilterExpanded(!gradeFilterExpanded)}
-              style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                marginBottom: 6,
-                cursor: 'pointer',
-                padding: '8px 4px',
-                borderRadius: '6px',
-                backgroundColor: '#f8f9fa',
-                border: '1px solid #e1e8ed',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: '12px', color: '#666', transition: 'transform 0.2s ease', transform: gradeFilterExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
-                  ▶
-                </span>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#555', cursor: 'pointer' }}>
-                  Filter by Grade
-                </label>
-              </div>
-              {selectedGrades.length > 0 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedGrades([]);
-                  }}
-                  style={{
-                    padding: "2px 6px",
-                    backgroundColor: "#e74c3c",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "3px",
-                    cursor: "pointer",
-                    fontSize: "10px",
-                    fontWeight: "500"
-                  }}
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-            {gradeFilterExpanded && (
-              <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {gradeDropdownOptions.map(grade => {
-                const isSelected = selectedGrades.includes(grade);
-                const gradeColor = grade === 'PK' ? '#9b59b6' : '#3498db';
-                return (
-                  <div
-                    key={grade}
-                    onClick={() => {
-                      if (isSelected) {
-                        setSelectedGrades(prev => prev.filter(g => g !== grade));
-                      } else {
-                        setSelectedGrades(prev => [...prev, grade]);
-                      }
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '4px 8px',
-                      borderRadius: 4,
-                      border: `2px solid ${isSelected ? gradeColor : '#e1e8ed'}`,
-                      backgroundColor: isSelected ? hexToRgba(gradeColor, 0.15) : '#f8f9fa',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <div style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 3,
-                      border: `2px solid ${gradeColor}`,
-                      backgroundColor: isSelected ? gradeColor : 'white',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'white',
-                      fontSize: 10,
-                      fontWeight: 'bold',
-                      flexShrink: 0
-                    }}>
-                      {isSelected ? '✓' : ''}
-                    </div>
-                    <span style={{ fontSize: 12, fontWeight: isSelected ? 600 : 500 }}>
-                      {grade === 'PK' ? 'PreK' : grade}
-                    </span>
-                  </div>
-                );
-              })}
-              </div>
-            )}
-          </div>
-          
-          {/* Room Filter */}
-          <div>
-            <div 
-              onClick={() => setRoomFilterExpanded(!roomFilterExpanded)}
-              style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                marginBottom: 6,
-                cursor: 'pointer',
-                padding: '8px 4px',
-                borderRadius: '6px',
-                backgroundColor: '#f8f9fa',
-                border: '1px solid #e1e8ed',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: '12px', color: '#666', transition: 'transform 0.2s ease', transform: roomFilterExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
-                  ▶
-                </span>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#555', cursor: 'pointer' }}>
-                  Filter by Room
-                </label>
-              </div>
-              {selectedRooms.length > 0 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedRooms([]);
-                  }}
-                  style={{
-                    padding: "2px 6px",
-                    backgroundColor: "#e74c3c",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "3px",
-                    cursor: "pointer",
-                    fontSize: "10px",
-                    fontWeight: "500"
-                  }}
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-            {roomFilterExpanded && (
-              <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {roomOptions.map(room => {
-                const isSelected = selectedRooms.includes(room);
-                const roomColor = '#f39c12';
-                return (
-                  <div
-                    key={room}
-                    onClick={() => {
-                      if (isSelected) {
-                        setSelectedRooms(prev => prev.filter(r => r !== room));
-                      } else {
-                        setSelectedRooms(prev => [...prev, room]);
-                      }
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '4px 8px',
-                      borderRadius: 4,
-                      border: `2px solid ${isSelected ? roomColor : '#e1e8ed'}`,
-                      backgroundColor: isSelected ? hexToRgba(roomColor, 0.15) : '#f8f9fa',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <div style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 3,
-                      border: `2px solid ${roomColor}`,
-                      backgroundColor: isSelected ? roomColor : 'white',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'white',
-                      fontSize: 10,
-                      fontWeight: 'bold',
-                      flexShrink: 0
-                    }}>
-                      {isSelected ? '✓' : ''}
-                    </div>
-                    <span style={{ fontSize: 12, fontWeight: isSelected ? 600 : 500 }}>
-                      Room {room}
-                    </span>
-                  </div>
-                );
-              })}
-              </div>
-            )}
-          </div>
-          
-          {/* Teacher list with custom checkboxes */}
+          {/* Teacher list with custom checkboxes - MOVED TO TOP */}
           <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
             <div 
               onClick={() => setTeacherFilterExpanded(!teacherFilterExpanded)}
@@ -1729,6 +1640,203 @@ export default function Schedules() {
             )}
           </div>
           
+          {/* Grade Filter - MOVED TO MIDDLE */}
+          <div>
+            <div 
+              onClick={() => setGradeFilterExpanded(!gradeFilterExpanded)}
+              style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: 6,
+                cursor: 'pointer',
+                padding: '8px 4px',
+                borderRadius: '6px',
+                backgroundColor: '#f8f9fa',
+                border: '1px solid #e1e8ed',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '12px', color: '#666', transition: 'transform 0.2s ease', transform: gradeFilterExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#555', cursor: 'pointer' }}>
+                  Filter by Grade
+                </label>
+              </div>
+              {selectedGrades.length > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedGrades([]);
+                  }}
+                  style={{
+                    padding: "2px 6px",
+                    backgroundColor: "#e74c3c",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "3px",
+                    cursor: "pointer",
+                    fontSize: "10px",
+                    fontWeight: "500"
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {gradeFilterExpanded && (
+              <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {gradeDropdownOptions.map(grade => {
+                const isSelected = selectedGrades.includes(grade);
+                const gradeColor = grade === 'PK' ? '#9b59b6' : '#3498db';
+                return (
+                  <div
+                    key={grade}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedGrades(prev => prev.filter(g => g !== grade));
+                      } else {
+                        setSelectedGrades(prev => [...prev, grade]);
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                      border: `2px solid ${isSelected ? gradeColor : '#e1e8ed'}`,
+                      backgroundColor: isSelected ? hexToRgba(gradeColor, 0.15) : '#f8f9fa',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 3,
+                      border: `2px solid ${gradeColor}`,
+                      backgroundColor: isSelected ? gradeColor : 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: 10,
+                      fontWeight: 'bold',
+                      flexShrink: 0
+                    }}>
+                      {isSelected ? '✓' : ''}
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: isSelected ? 600 : 500 }}>
+                      {grade === 'PK' ? 'PreK' : grade}
+                    </span>
+                  </div>
+                );
+              })}
+              </div>
+            )}
+          </div>
+          
+          {/* Room Filter - MOVED TO BOTTOM */}
+          <div>
+            <div 
+              onClick={() => setRoomFilterExpanded(!roomFilterExpanded)}
+              style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: 6,
+                cursor: 'pointer',
+                padding: '8px 4px',
+                borderRadius: '6px',
+                backgroundColor: '#f8f9fa',
+                border: '1px solid #e1e8ed',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '12px', color: '#666', transition: 'transform 0.2s ease', transform: roomFilterExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#555', cursor: 'pointer' }}>
+                  Filter by Room
+                </label>
+              </div>
+              {selectedRooms.length > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedRooms([]);
+                  }}
+                  style={{
+                    padding: "2px 6px",
+                    backgroundColor: "#e74c3c",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "3px",
+                    cursor: "pointer",
+                    fontSize: "10px",
+                    fontWeight: "500"
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {roomFilterExpanded && (
+              <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {roomOptions.map(room => {
+                const isSelected = selectedRooms.includes(room);
+                const roomColor = '#f39c12';
+                return (
+                  <div
+                    key={room}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedRooms(prev => prev.filter(r => r !== room));
+                      } else {
+                        setSelectedRooms(prev => [...prev, room]);
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                      border: `2px solid ${isSelected ? roomColor : '#e1e8ed'}`,
+                      backgroundColor: isSelected ? hexToRgba(roomColor, 0.15) : '#f8f9fa',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 3,
+                      border: `2px solid ${roomColor}`,
+                      backgroundColor: isSelected ? roomColor : 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: 10,
+                      fontWeight: 'bold',
+                      flexShrink: 0
+                    }}>
+                      {isSelected ? '✓' : ''}
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: isSelected ? 600 : 500 }}>
+                      Room {room}
+                    </span>
+                  </div>
+                );
+              })}
+              </div>
+            )}
+          </div>
 
         </div>
         )}
@@ -2110,50 +2218,6 @@ export default function Schedules() {
     }
     console.log('Expanded events:', expanded);
     return expanded;
-  };
-
-  // Overlap detection (returns array of event ids that overlap for same teacher or same room)
-  const getOverlappingEventIds = () => {
-    const ids = new Set();
-    const expandedEvents = getCalendarEvents();
-    
-    for (let i = 0; i < expandedEvents.length; i++) {
-      for (let j = i + 1; j < expandedEvents.length; j++) {
-        const a = expandedEvents[i], b = expandedEvents[j];
-        
-        // Skip if either is an availability block
-        if (a.availability || b.availability) continue;
-        
-        // Check if they are on the same day
-        const aStart = moment(a.start);
-        const aEnd = moment(a.end);
-        const bStart = moment(b.start);
-        const bEnd = moment(b.end);
-        const sameDay = aStart.format('YYYY-MM-DD') === bStart.format('YYYY-MM-DD');
-        
-        if (!sameDay) continue;
-        
-        // Check for any time overlap (even 1 minute)
-        const hasTimeOverlap = aStart.isBefore(bEnd) && bStart.isBefore(aEnd);
-        
-        if (hasTimeOverlap) {
-          // Flag for same teacher conflicts
-          const sameTeacher = a.teacher && b.teacher && a.teacher === b.teacher;
-          
-          // Flag for same room conflicts
-          const sameRoom = a.room && b.room && a.room === b.room;
-          
-          if (sameTeacher || sameRoom) {
-            // Get the original event IDs for highlighting
-            const aId = (typeof a.id === 'string' && a.id.includes('-recurring-')) ? a.id.split('-recurring-')[0] : a.id;
-            const bId = (typeof b.id === 'string' && b.id.includes('-recurring-')) ? b.id.split('-recurring-')[0] : b.id;
-            ids.add(aId);
-            ids.add(bId);
-          }
-        }
-      }
-    }
-    return Array.from(ids);
   };
 
   // Generate time options for dropdown (6:30 AM - 4:00 PM in 5-minute intervals)
@@ -2543,27 +2607,103 @@ export default function Schedules() {
         start_time: newStart.format('YYYY-MM-DD HH:mm:ss'),
         end_time: newEnd.format('YYYY-MM-DD HH:mm:ss'),
         class_id: null, // You can link this to a classes table if you have one
-        event_title: `${newSubject} - Grade ${newGrade} - Room ${newRoom}`,
+        event_title: `${newSubject} - Grade ${newGrade}`,
         user_id: newTeacherId,
-          room: newRoom, // Add room field to database
+        room: newRoom,
+        grade: newGrade, // Add grade field
+        subject: newSubject, // Add subject field
         description: `Subject: ${newSubject}, Grade: ${newGrade}, Room: ${newRoom}, Teacher: ${newTeacherName}${newAbDay ? `, A/B Day: ${newAbDay}` : ''}${newRecurringDays.length > 0 ? `, Recurring: ${newRecurringDays.map(d => ["Mon", "Tue", "Wed", "Thu", "Fri"][d]).join(", ")}` : ''}`
       };
 
       if (editMode) {
+        // When editing, generate new recurring events for all selected days
+        const baseId = editingEventId;
+        const newRecurringEvents = newRecurringDays.map(dayIdx => {
+          const weekday = dayIdx + 1; // Monday=1
+          const base = moment().startOf('week').day(weekday);
+          const duration = newEnd.diff(newStart, 'minutes');
+          const start = base.clone().set({ hour: newStart.hour(), minute: newStart.minute(), second: 0 });
+          const end = start.clone().add(duration, 'minutes');
+          
+          return {
+            id: `${baseId}-recurring-${dayIdx}`,
+            title: `${newSubject} - ${newGrade}`,
+            subject: newSubject,
+            teacher: newTeacherName,
+            teacherId: newTeacherId,
+            grade: newGrade,
+            room: newRoom,
+            start: start.toDate(),
+            end: end.toDate(),
+            recurringDays: [dayIdx],
+            abDay: newAbDay || getABDay(start.toDate()),
+            isClass: true,
+            description: newSubject,
+            hasConflicts: false,
+            outOfAvailability: !isEventInTeacherAvailability(newEvent)
+          };
+        });
+
         await updateScheduleInDatabase(editingEventId, scheduleData);
-        setCreateEvents(prev => prev.map(ev => ev.id === editingEventId ? newEvent : ev));
-        // Also update master events if applicable
-        setMasterEvents(prev => prev.map(ev => ev.id === editingEventId ? newEvent : ev));
+        
+        // Remove old recurring events and add new ones
+        setCreateEvents(prev => {
+          const filtered = prev.filter(ev => 
+            !ev.id.toString().startsWith(editingEventId.toString())
+          );
+          return [...filtered, ...newRecurringEvents];
+        });
+        
+        // Also update master events
+        setMasterEvents(prev => {
+          const filtered = prev.filter(ev => 
+            !ev.id.toString().startsWith(editingEventId.toString())
+          );
+          return [...filtered, ...newRecurringEvents];
+        });
+        
         setEditMode(false);
         setEditingEventId(null);
         console.log('Schedule updated in database successfully');
       } else {
+        // Creating new event - generate recurring events for all selected days
         const result = await saveScheduleToDatabase(scheduleData);
         if (result.success) {
-          newEvent.id = result.id.toString(); // Use the database ID
-          setCreateEvents(prev => [...prev, newEvent]);
+          const baseId = result.id;
+          const newRecurringEvents = newRecurringDays.map(dayIdx => {
+            const weekday = dayIdx + 1; // Monday=1
+            const base = moment().startOf('week').day(weekday);
+            const duration = newEnd.diff(newStart, 'minutes');
+            const start = base.clone().set({ hour: newStart.hour(), minute: newStart.minute(), second: 0 });
+            const end = start.clone().add(duration, 'minutes');
+            
+            return {
+              id: `${baseId}-recurring-${dayIdx}`,
+              title: `${newSubject} - ${newGrade}`,
+              subject: newSubject,
+              teacher: newTeacherName,
+              teacherId: newTeacherId,
+              grade: newGrade,
+              room: newRoom,
+              start: start.toDate(),
+              end: end.toDate(),
+              recurringDays: [dayIdx],
+              abDay: newAbDay || getABDay(start.toDate()),
+              isClass: true,
+              description: newSubject,
+              hasConflicts: false,
+              outOfAvailability: !isEventInTeacherAvailability(newEvent),
+              databaseId: baseId
+            };
+          });
+          
+          setCreateEvents(prev => [...prev, ...newRecurringEvents]);
           // Also add to master events
-          setMasterEvents(prev => [...prev, newEvent]);
+          setMasterEvents(prev => [...prev, ...newRecurringEvents]);
+          
+          // Refresh rooms list to include the new room
+          await fetchRooms();
+          
           console.log('Schedule saved to database successfully');
         } else {
           alert('Failed to save schedule to database');
@@ -2593,36 +2733,8 @@ export default function Schedules() {
     setSelectedSlot(null);
   };
 
-  // Handle drag start
-  const handleEventDragStart = ({ event }) => {
-    // Don't allow dragging availability blocks or if in delete mode
-    if (event.availability || deleteMode) {
-      return;
-    }
-    setDraggingEventId(event.id);
-    
-    // Prevent auto-scrolling during drag
-    const timeContent = document.querySelector('.rbc-time-content');
-    if (timeContent) {
-      timeContent.style.scrollBehavior = 'auto';
-      timeContent.style.overflowAnchor = 'none';
-    }
-  };
-
-  // Handle drag end
-  const handleDragEnd = () => {
-    setDraggingEventId(null);
-    
-    // Restore normal scrolling behavior
-    const timeContent = document.querySelector('.rbc-time-content');
-    if (timeContent) {
-      timeContent.style.scrollBehavior = '';
-      timeContent.style.overflowAnchor = '';
-    }
-  };
-
-  // Handle event drop
-  const handleEventDrop = async ({ event, start, end }) => {
+  // Handle event drop (unused in current implementation but kept for reference)
+  /* const handleEventDrop = async ({ event, start, end }) => {
     console.log('Drop event triggered:', { event, start, end });
     
     // Don't allow dragging availability blocks or if in delete mode
@@ -2763,7 +2875,7 @@ export default function Schedules() {
     }
 
     setDraggingEventId(null);
-  };
+  }; */
 
   // Handle edit event
   const handleEditEvent = (event) => {
@@ -2789,37 +2901,6 @@ export default function Schedules() {
     });
     setModalOpen(true);
     setEventDetailsModal({ open: false, event: null });
-  };
-
-  // Toggle delete mode
-  const handleDeleteMode = () => {
-    setDeleteMode(dm => !dm);
-    setSelectedToDelete([]);
-  };
-
-  // Confirm delete selected events
-  const handleConfirmDelete = async () => {
-    try {
-      // Delete from database first
-      for (const eventId of selectedToDelete) {
-        await deleteScheduleFromDatabase(eventId);
-      }
-      
-      // Then remove from local state
-      setCreateEvents(evts => evts.filter(ev => {
-        // For all events, check if the base ID is selected
-        const baseId = (typeof ev.id === 'string' && ev.id.includes('-recurring-')) ? ev.id.split('-recurring-')[0] : ev.id;
-        return !selectedToDelete.includes(baseId);
-      }));
-      
-      console.log('Selected schedules deleted from database successfully');
-    } catch (error) {
-      console.error('Error deleting schedules:', error);
-      alert('Failed to delete some schedules. Please try again.');
-    } finally {
-      setDeleteMode(false);
-      setSelectedToDelete([]);
-    }
   };
 
   // Render Create Calendar with drag and drop functionality
@@ -3498,20 +3579,22 @@ export default function Schedules() {
               >
                 Close
               </button>
-              <button
-                onClick={() => handleEditEvent(eventDetailsModal.event)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#3498db",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "14px"
-                }}
-              >
-                Edit
-              </button>
+              {isEditMode && (
+                <button
+                  onClick={() => handleEditEvent(eventDetailsModal.event)}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#3498db",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "14px"
+                  }}
+                >
+                  Edit
+                </button>
+              )}
             </div>
           </div>
         </div>

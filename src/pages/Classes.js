@@ -38,7 +38,6 @@ export default function Classes() {
   const [showAllStudents, setShowAllStudents] = useState(false);
 
   const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const TIMEZONE = 'America/Chicago'; // CST/CDT
   const navigate = useNavigate();
 
   // Role-based fetch: admin sees all, teacher sees their classes, student sees their classes
@@ -97,6 +96,7 @@ export default function Classes() {
     fetchTeachers();
     fetchAllStudents();
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [user]);
 
   const startEditing = (cls) => {
@@ -345,7 +345,6 @@ export default function Classes() {
   // Role helpers (robust to whitespace/case)
   const getRole = u => (u && u.role ? u.role.trim().toLowerCase() : "");
   const isStudent = getRole(user) === "student";
-  const isTeacher = getRole(user) === "teacher";
   const isAdmin = getRole(user) === "admin";
 
   if (!user) {

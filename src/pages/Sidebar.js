@@ -5,9 +5,8 @@ import { useNavigate, Link } from "react-router-dom";
 
 export default function Sidebar({ onWidthChange }) {
   const { user, logout } = useAuth();
-  const { sidebarWidth, updateSidebarWidth, isCollapsed, toggleCollapse, getEffectiveWidth } = useSidebar();
+  const { updateSidebarWidth, isCollapsed, toggleCollapse, getEffectiveWidth } = useSidebar();
   const navigate = useNavigate();
-  const [hoveringSchedule, setHoveringSchedule] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const sidebarRef = useRef(null);
   const isResizing = useRef(false);
@@ -73,9 +72,6 @@ export default function Sidebar({ onWidthChange }) {
     logout();
     navigate("/");
   };
-
-  const capitalizeFirst = (str) =>
-    str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
 
   if (!user) return null;
 
@@ -304,13 +300,6 @@ const linkStyle = {
   fontWeight: 500,
   display: "flex",
   alignItems: "center"
-};
-
-const hoverableLinkStyle = {
-  ...linkStyle,
-  transition: "all 0.2s ease",
-  cursor: "pointer",
-  position: "relative"
 };
 
 const submenuLinkStyle = {
