@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import Sidebar from './Sidebar';
+import SidebarLayout from '../components/SidebarLayout';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from "../context/AuthContext";
 
@@ -12,7 +12,12 @@ export default function Classes() {
   const [studentsForGrade, setStudentsForGrade] = useState([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [editingId, setEditingId] = useState(null);
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  
+  const handleLogout = () => {
+    logout();
+  };
+  
   const [editForm, setEditForm] = useState({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({
@@ -33,7 +38,6 @@ export default function Classes() {
   const [showAllStudents, setShowAllStudents] = useState(false);
 
   const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const TIMEZONE = 'America/Chicago'; // CST/CDT
   const navigate = useNavigate();
 
   // Role-based fetch: admin sees all, teacher sees their classes, student sees their classes
@@ -92,6 +96,7 @@ export default function Classes() {
     fetchTeachers();
     fetchAllStudents();
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [user]);
 
   const startEditing = (cls) => {
@@ -340,27 +345,23 @@ export default function Classes() {
   // Role helpers (robust to whitespace/case)
   const getRole = u => (u && u.role ? u.role.trim().toLowerCase() : "");
   const isStudent = getRole(user) === "student";
-  const isTeacher = getRole(user) === "teacher";
   const isAdmin = getRole(user) === "admin";
 
   if (!user) {
     return (
-      <div style={{ display: 'flex' }}>
-        <Sidebar />
-        <div style={{ flex: 1, padding: '40px', marginLeft: 300 }}>
+      <SidebarLayout onLogout={handleLogout}>
+        <div style={{ padding: '40px' }}>
           <p>Loading...</p>
         </div>
-      </div>
+      </SidebarLayout>
     );
   }
 
   // Student UI: Card layout (improved look)
   if (isStudent) {
     return (
-      <div style={{ display: 'flex' }}>
-        <Sidebar />
+      <SidebarLayout onLogout={handleLogout}>
         <div style={{
-          flex: 1,
           padding: '32px 16px 32px 16px',
           background: 'linear-gradient(120deg, #e3f0ff 0%, #f9f9fb 100%)',
           minHeight: '100vh',
@@ -511,15 +512,14 @@ export default function Classes() {
             </div>
           )}
         </div>
-      </div>
+      </SidebarLayout>
     );
   }
 
   // Admin and Teacher UI: same permissions, but teacher only sees their classes
   return (
-    <div style={{ display: 'flex' }}>
-      <Sidebar />
-      <div style={{ flex: 1, padding: '40px', marginLeft: 300 }}>
+    <SidebarLayout onLogout={handleLogout}>
+      <div style={{ padding: '40px' }}>
         <h1 style={{ marginBottom: 20 }}>Class List</h1>
         <p style={{
           fontSize: 17,
@@ -956,7 +956,7 @@ export default function Classes() {
           </>
         )}
       </div>
-    </div>
+    </SidebarLayout>
   );
 }
 

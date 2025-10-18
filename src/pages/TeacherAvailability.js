@@ -9,10 +9,12 @@ import {
   setHours,
   setMinutes,
   setSeconds,
+  differenceInDays,
 } from "date-fns";
 import enUS from "date-fns/locale/en-US";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import { useAuth } from "../context/AuthContext";
+import SidebarLayout from "../components/SidebarLayout";
 
 const localizer = dateFnsLocalizer({
   format,
@@ -22,8 +24,35 @@ const localizer = dateFnsLocalizer({
   locales: { "en-US": enUS },
 });
 
+// A/B Day Custom Header
+const CustomHeader = ({ date, label }) => {
+  const startDate = new Date('2024-08-14');
+  const daysSinceStart = Math.floor(differenceInDays(date, startDate));
+  const isADay = daysSinceStart % 2 === 0;
+  const abDay = isADay ? 'A' : 'B';
+
+  return (
+    <div style={{ textAlign: 'center', padding: '8px 0' }}>
+      <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>{label}</div>
+      <div
+        style={{
+          padding: '2px 8px',
+          borderRadius: '12px',
+          backgroundColor: isADay ? '#3498db' : '#e74c3c',
+          color: 'white',
+          fontSize: '11px',
+          fontWeight: 'bold',
+          display: 'inline-block',
+        }}
+      >
+        {abDay} Day
+      </div>
+    </div>
+  );
+};
+
 export default function TeacherAvailability() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const urlUserId = new URLSearchParams(window.location.search).get("user_id");
   const userId = urlUserId || user?.id;
 
@@ -32,6 +61,10 @@ export default function TeacherAvailability() {
   const [message, setMessage] = useState("");
   const [calendarView, setCalendarView] = useState("week");
   const [showModal, setShowModal] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+  };
 
   // Helper: convert day + time string → Date object (current week)
   const timeStringToDate = (dayOfWeek, timeStr) => {
@@ -131,9 +164,10 @@ export default function TeacherAvailability() {
   }
 };
 
-  if (loading) return <p>Loading...</p>;
+  if (loading) return <SidebarLayout onLogout={handleLogout}><p>Loading...</p></SidebarLayout>;
 
   return (
+    <SidebarLayout onLogout={handleLogout}>
     <div style={{ padding: 20 }}>
       <div
         style={{
@@ -174,16 +208,21 @@ export default function TeacherAvailability() {
         views={[Views.WEEK]}
         toolbar={false}
         style={{ height: 700 }}
-        step={60}
-        timeslots={1}
-        min={setHours(new Date(), 6)}
-        max={setHours(new Date(), 19)}
+        step={30}
+        timeslots={2}
+        min={setMinutes(setHours(new Date(), 6), 30)}
+        max={setHours(new Date(), 16)}
         eventPropGetter={() => ({
           style: { backgroundColor: "green", color: "white" },
         })}
         formats={{
-          dateHeaderFormat: (date, culture, localizer) =>
+          dayHeaderFormat: (date, culture, localizer) =>
             localizer.format(date, "EEE", culture),
+        }}
+        components={{
+          week: {
+            header: CustomHeader,
+          },
         }}
       />
 
@@ -252,5 +291,6 @@ export default function TeacherAvailability() {
         </div>
       )}
     </div>
+    </SidebarLayout>
   );
 }

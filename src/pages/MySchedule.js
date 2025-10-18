@@ -8,6 +8,34 @@ import { useAuth } from "../context/AuthContext";
 const localizer = momentLocalizer(moment);
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+// A/B Day Custom Header
+const CustomHeader = ({ date, label }) => {
+  const startDate = moment('2024-08-14');
+  const currentDate = moment(date).startOf('day');
+  const daysSinceStart = currentDate.diff(startDate, 'days');
+  const isADay = daysSinceStart % 2 === 0;
+  const abDay = isADay ? 'A' : 'B';
+
+  return (
+    <div style={{ textAlign: 'center', padding: '8px 0' }}>
+      <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>{label}</div>
+      <div
+        style={{
+          padding: '2px 8px',
+          borderRadius: '12px',
+          backgroundColor: isADay ? '#3498db' : '#e74c3c',
+          color: 'white',
+          fontSize: '11px',
+          fontWeight: 'bold',
+          display: 'inline-block',
+        }}
+      >
+        {abDay} Day
+      </div>
+    </div>
+  );
+};
+
 function generateRecurringEvents(classObj, weeks = 8) {
   const daysMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   const events = [];
@@ -1077,15 +1105,26 @@ export default function MySchedule() {
         startAccessor="start"
         endAccessor="end"
         style={{ height: 600 }}
-        views={["month", "week", "day"]}
+        views={["week", "day"]}
         view={view}
         onView={setView}
         date={date}
         onNavigate={setDate}
+        min={moment('2024-01-01 06:30:00').toDate()}
+        max={moment('2024-01-01 16:00:00').toDate()}
+        formats={{
+          timeGutterFormat: 'h:mm A',
+        }}
         eventPropGetter={eventStyleGetter}
         selectable={calendarType === "create-schedule"}
         onSelectEvent={calendarType === "my-schedule" && !showCheckboxes ? handleEventClick : null}
         components={{
+          week: {
+            header: CustomHeader,
+          },
+          day: {
+            header: CustomHeader,
+          },
           event: ({ event }) => (
             <div 
               style={{ 

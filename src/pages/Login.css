@@ -1,75 +1,224 @@
-/* Login.css */
+/* Login.css - Clean white theme */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
 .login-container {
   height: 100vh;
   display: flex;
-  justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: #f8f9fa;
+}
+
+/* Left side - Branding */
+.login-left {
+  flex: 1;
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  display: flex;
   align-items: center;
-  font-family: Arial, sans-serif;
-  background-color: #000000; /* only login page background */
-  margin: 0;
+  justify-content: center;
+  padding: 60px;
+  color: white;
+}
+
+.login-branding {
+  text-align: center;
+  max-width: 400px;
+}
+
+.login-logo {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  margin-bottom: 24px;
+  filter: brightness(0) invert(1);
+}
+
+.login-brand-name {
+  font-size: 48px;
+  font-weight: 800;
+  margin-bottom: 16px;
+  color: white;
+}
+
+.login-tagline {
+  font-size: 20px;
+  opacity: 0.95;
+  line-height: 1.5;
+}
+
+/* Right side - Login form */
+.login-right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  background-color: #ffffff;
 }
 
 .login-box {
-  background-color: #1e1e2f;
-  padding: 40px;
-  border-radius: 10px;
-  text-align: center;
-  border: 2px solid #8c82ff;
-  width: 350px;
+  width: 100%;
+  max-width: 440px;
+  background-color: #ffffff;
+  padding: 48px;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
 }
 
-.login-icon img {
-  width: 60px;
-  margin-bottom: 20px;
+.back-button {
+  background: none;
+  border: none;
+  color: #7f8c8d;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px 0;
+  margin-bottom: 24px;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.back-button:hover {
+  color: #3498db;
 }
 
 .login-box h2 {
-  color: #fff;
-  margin-bottom: 10px;
+  color: #2c3e50;
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 8px;
 }
 
-.login-box p {
-  color: #aaa;
+.login-subtitle {
+  color: #7f8c8d;
+  font-size: 15px;
+  margin-bottom: 32px;
+}
+
+.error-message {
+  background-color: #fee;
+  color: #c33;
+  padding: 12px 16px;
+  border-radius: 8px;
   margin-bottom: 20px;
+  font-size: 14px;
+  border: 1px solid #fcc;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  color: #2c3e50;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
 }
 
 .login-box input {
   width: 100%;
-  padding: 12px;
-  margin-bottom: 15px;
-  border: none;
-  border-radius: 5px;
-  background-color: #2a2a3c;
-  color: #fff;
+  padding: 14px 16px;
+  border: 2px solid #e1e8ed;
+  border-radius: 8px;
+  font-size: 15px;
+  color: #2c3e50;
+  background-color: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.login-box input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
 }
 
 .login-box input::placeholder {
-  color: #777;
+  color: #95a5a6;
 }
 
-.login-box button {
+.login-button {
   width: 100%;
-  padding: 12px;
-  background-color: #7b3fff;
+  padding: 14px;
+  background-color: #3498db;
   border: none;
-  border-radius: 5px;
+  border-radius: 8px;
   color: white;
-  font-weight: bold;
+  font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
 }
 
-.login-box button:hover {
-  background-color: #6a33e0;
+.login-button:hover {
+  background-color: #2980b9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
 }
 
-.login-box .forgot-password {
-  margin-top: 15px;
-  color: #aaa;
+.login-button:active {
+  transform: translateY(0);
+}
+
+.forgot-password {
+  text-align: center;
+  margin-top: 20px;
+  color: #3498db;
+  font-size: 14px;
   cursor: pointer;
+  transition: color 0.2s ease;
 }
 
-.login-box .error-message {
-  color: red;
-  font-weight: bold;
-  margin-bottom: 15px;
+.forgot-password:hover {
+  color: #2980b9;
+  text-decoration: underline;
+}
+
+/* Responsive Design */
+@media (max-width: 968px) {
+  .login-container {
+    flex-direction: column;
+  }
+
+  .login-left {
+    padding: 40px 20px;
+    min-height: 30vh;
+  }
+
+  .login-logo {
+    width: 80px;
+    height: 80px;
+  }
+
+  .login-brand-name {
+    font-size: 36px;
+  }
+
+  .login-tagline {
+    font-size: 16px;
+  }
+
+  .login-right {
+    padding: 40px 20px;
+  }
+
+  .login-box {
+    padding: 32px 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-box {
+    padding: 24px;
+  }
+
+  .login-box h2 {
+    font-size: 26px;
+  }
 }
