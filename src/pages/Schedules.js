@@ -262,6 +262,10 @@ export default function Schedules() {
   });
   const [dragStartPosition, setDragStartPosition] = useState(null);
   const [dragTimeout, setDragTimeout] = useState(null);
+  // Sidebar resize states
+  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
 
   // Cleanup function to remove any potential duplicate events
   const cleanupDuplicateExceptions = () => {
@@ -490,6 +494,39 @@ export default function Schedules() {
     const interval = setInterval(cleanupDuplicateExceptions, 5000); // Every 5 seconds
     return () => clearInterval(interval);
   }, []);
+
+  // Handle sidebar resize
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e) => {
+      // Find the sidebar element to calculate width from right edge
+      const sidebar = document.querySelector('[data-filter-sidebar]');
+      if (!sidebar) return;
+      
+      const sidebarRect = sidebar.getBoundingClientRect();
+      
+      // Calculate new width: distance from mouse to right edge of sidebar
+      const newWidth = sidebarRect.right - e.clientX;
+      
+      // Apply constraints
+      if (newWidth >= 200 && newWidth <= 600) {
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   // Role check - admin only for full access (after all hooks)
   if (!user || user.role !== "admin") {
@@ -1141,14 +1178,17 @@ export default function Schedules() {
           </div>
         </div>
         
-        <div style={{ display:'flex', gap:16, alignItems:'flex-start' }}>
-          <div style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          padding: '24px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
-          flex:1
-        }}>
+        <div style={{ display:'flex', gap:16, alignItems:'flex-start' }} data-master-schedule-container>
+          <div 
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
+              flex:1
+            }}
+            data-calendar-container
+          >
           {/* Ensure calendar headers (A/B day pills) are fully visible and not clipped */}
           <style>{`
             .rbc-time-header, .rbc-time-header .rbc-header { overflow: visible !important; }
@@ -1239,18 +1279,73 @@ export default function Schedules() {
           }}
         />
         </div>
-        {/* Enhanced Teacher Filter Sidebar */}
-        <div style={{
-          width: 280,
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          padding: '20px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
-          maxHeight: 600,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16
-        }}>
+        {/* Enhanced Teacher Filter Sidebar - Collapsible and Resizable */}
+        {!sidebarCollapsed && (
+          <div 
+            data-filter-sidebar
+            style={{
+              width: sidebarWidth,
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '20px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
+              maxHeight: 600,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              position: 'relative',
+              transition: isResizing ? 'none' : 'width 0.2s ease'
+            }}>
+            {/* Collapse button */}
+            <button
+              onClick={() => setSidebarCollapsed(true)}
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 18,
+                color: '#7f8c8d',
+                padding: 4,
+                lineHeight: 1,
+                zIndex: 10
+              }}
+              title="Collapse sidebar"
+            >
+              ✕
+            </button>
+            
+            {/* Resize handle - wider clickable area */}
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsResizing(true);
+              }}
+              style={{
+                position: 'absolute',
+                left: -3,
+                top: 0,
+                bottom: 0,
+                width: 12,
+                cursor: 'ew-resize',
+                backgroundColor: 'transparent',
+                transition: 'background-color 0.2s',
+                zIndex: 100,
+                borderLeft: '3px solid transparent',
+                boxSizing: 'border-box'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.borderLeft = '3px solid #3498db';
+                e.target.style.backgroundColor = 'rgba(52, 152, 219, 0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.borderLeft = '3px solid transparent';
+                e.target.style.backgroundColor = 'transparent';
+              }}
+            />
+            
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <h4 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#2c3e50' }}>Teachers & Availability</h4>
             {selectedTeachers.length > 0 && (
@@ -1636,6 +1731,41 @@ export default function Schedules() {
           
 
         </div>
+        )}
+        
+        {/* Collapsed sidebar - show expand button */}
+        {sidebarCollapsed && (
+          <button
+            onClick={() => setSidebarCollapsed(false)}
+            style={{
+              width: 40,
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '12px 8px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 20,
+              color: '#3498db',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: 'fit-content'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#3498db';
+              e.target.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'white';
+              e.target.style.color = '#3498db';
+            }}
+            title="Expand filters"
+          >
+            ☰
+          </button>
+        )}
 
       </div>
       </>
