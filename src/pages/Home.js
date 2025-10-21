@@ -6,13 +6,8 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import Sidebar from "./Sidebar";
+import SidebarLayout from "../components/SidebarLayout";
 import "../App.css";
-import { Calendar, momentLocalizer, Views } from 'react-big-calendar';
-import moment from 'moment';
-import 'react-big-calendar/lib/css/react-big-calendar.css';
-
-const localizer = momentLocalizer(moment);
 
 // Simple modal for event details
 function EventModal({ event, onClose, onDelete }) {
@@ -71,19 +66,6 @@ const quickStatNum = {
   marginBottom: 6
 };
 
-const quickActionBtn = {
-  background: "#26bedd",
-  color: "white",
-  border: "none",
-  borderRadius: 8,
-  padding: "12px 20px",
-  fontWeight: 700,
-  fontSize: 16,
-  cursor: "pointer",
-  boxShadow: "0 2px 8px rgba(38,190,221,0.08)",
-  transition: "background 0.2s"
-};
-
 export default function Home() {
 
   // For hover/active effects on stat/action cards
@@ -93,19 +75,20 @@ export default function Home() {
   const navigate = useNavigate();
   const [time, setTime] = useState(new Date());
 
+  // Redirect teachers to their dashboard
+  useEffect(() => {
+    if (user && user.role === "teacher") {
+      navigate("/teacher-dashboard");
+    } else if (user && user.role === "student") {
+      navigate("/student-dashboard");
+    }
+  }, [user, navigate]);
+
   // Admin data
-  // const [pendingTasks, setPendingTasks] = useState(null); // Removed unused state
-  const [quickStats, setQuickStats] = useState({ students: 0, teachers: 0, classes: 0 });
-  // const [recentSignups, setRecentSignups] = useState([]); // Removed unused state
-  // const [systemAlerts, setSystemAlerts] = useState([]); // Removed unused state
+  const [quickStats] = useState({ students: 0, teachers: 0, classes: 0 });
 
   // Master schedule events
   const [masterEvents, setMasterEvents] = useState([]);
-
-  // Student/Teacher schedule
-  const [schedule, setSchedule] = useState([]);
-  const [nextClass, setNextClass] = useState(null);
-  const [nextBreak, setNextBreak] = useState(null);
 
   // State for calendar event modal
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -154,9 +137,8 @@ export default function Home() {
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
-      <Sidebar onLogout={handleLogout} />
-      <div style={{ flex: 1, backgroundColor: "white", padding: "40px", marginLeft: 300, overflowY: "auto" }}>
+    <SidebarLayout onLogout={handleLogout}>
+      <div style={{ backgroundColor: "white", padding: "40px", overflowY: "auto", height: "100%" }}>
         <h1 style={{ fontSize: "40px", fontWeight: "bold", marginBottom: "24px" }}>
           Welcome, <span style={{ color: "#26bedd" }}>{capitalizeFirst(user?.username)}</span>
         </h1>
@@ -313,7 +295,7 @@ export default function Home() {
           </>
         )}
       </div>
-    </div>
+    </SidebarLayout>
   );
 }
 

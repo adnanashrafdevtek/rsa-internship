@@ -4,7 +4,7 @@ import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
-import Sidebar from './Sidebar';
+import SidebarLayout from '../components/SidebarLayout';
 import { useAuth } from '../context/AuthContext';
 
 // Inline utilities that were previously imported from a non-existent scheduleUtils
@@ -78,16 +78,22 @@ async function saveScheduleToDatabase(data) {
 
 async function updateScheduleInDatabase(id, data) {
   try {
+    console.log('Updating schedule in database:', { id, data });
     const res = await fetch(`http://localhost:3000/api/schedules/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    if (!res.ok) throw new Error('Update failed');
-    return { success: true };
+    const responseText = await res.text();
+    console.log('Update response:', responseText);
+    if (!res.ok) {
+      console.error('Update failed with status:', res.status, responseText);
+      throw new Error(`Update failed: ${responseText}`);
+    }
+    return { success: true, response: responseText };
   } catch (e) {
     console.error('updateScheduleInDatabase error', e);
-    return { success: false };
+    return { success: false, error: e.message };
   }
 }
 
@@ -113,40 +119,62 @@ const CustomHeader = ({ date }) => {
   const isFriday = moment(date).day() === 5 && ab; // only show if we have A/B
   const bg = isFriday ? '#9b59b6' : (ab === 'A' ? '#3498db' : '#e74c3c');
   const label = ab ? (isFriday ? 'A/B Day' : `${ab} Day`) : '';
+  
   return (
     <div style={{
       textAlign: 'center',
-      padding: '8px 4px 8px 4px',
-      minHeight: 70,
+      padding: '8px 4px',
+      minHeight: 80,
+      height: 80,
       display: 'flex',
       flexDirection: 'column',
-      justifyContent: 'center',
+      justifyContent: 'flex-start',
       alignItems: 'center',
-      background: '#fff',
-      position: 'relative',
-      zIndex: 20,
+      background: 'transparent !important',
       borderBottom: '1px solid #ddd',
-      boxSizing: 'border-box'
+      boxSizing: 'border-box',
+      position: 'relative',
+      zIndex: 10
     }}>
+      {/* Day name in top section */}
       <div style={{
         fontSize: 14,
         fontWeight: 'bold',
-        marginBottom: 6,
-        color: '#2c3e50'
+        color: '#2c3e50',
+        marginTop: '8px',
+        marginBottom: '8px',
+        whiteSpace: 'nowrap',
+        zIndex: 11
       }}>{dayName}</div>
-      {label && (
-        <div style={{
-          fontSize: 11,
-          padding: '6px 14px',
-          backgroundColor: bg,
-          color: '#fff',
-          borderRadius: 18,
-          fontWeight: 600,
-          boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
-          lineHeight: 1.1,
-          minWidth: 70
-        }}>{label}</div>
-      )}
+      
+      {/* A/B Day label in bottom section */}
+      <div style={{
+        position: 'absolute',
+        bottom: '8px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '100%',
+        display: 'flex',
+        justifyContent: 'center',
+        zIndex: 12
+      }}>
+        {label && (
+          <div style={{
+            fontSize: 11,
+            padding: '4px 12px',
+            backgroundColor: bg,
+            color: '#fff',
+            borderRadius: 12,
+            fontWeight: 600,
+            lineHeight: 1,
+            whiteSpace: 'nowrap',
+            textAlign: 'center',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            zIndex: 13
+          }}>{label}</div>
+        )}
+      </div>
     </div>
   );
 };
@@ -162,25 +190,8 @@ export default function Schedules() {
   
   // All useState hooks must come before any conditional returns
   const [activeTab, setActiveTab] = useState("master-schedule");
-  const [scheduleEvents, setScheduleEvents] = useState([]);
-  const [showCheckboxes, setShowCheckboxes] = useState(false);
-  const [selectedEvents, setSelectedEvents] = useState(new Set());
-  const [showAddEventModal, setShowAddEventModal] = useState(false);
-  const [newEvent, setNewEvent] = useState({
-    title: "",
-    startDate: moment().format("YYYY-MM-DD"),
-    startTime: moment().format("HH:mm"),
-    endDate: moment().format("YYYY-MM-DD"),
-    endTime: moment().add(1, 'hour').format("HH:mm"),
-    recurringDays: [],
-    description: "",
-    eventType: "event",
-  });
   const [date, setDate] = useState(new Date());
   const [view, setView] = useState(Views.WEEK);
-  const [deleting, setDeleting] = useState(false);
-  const [selectedEventDetails, setSelectedEventDetails] = useState(null);
-  const [showEventModal, setShowEventModal] = useState(false);
   const [masterEvents, setMasterEvents] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [selectedTeacher, setSelectedTeacher] = useState(null);
@@ -190,38 +201,31 @@ export default function Schedules() {
   const [studentEvents, setStudentEvents] = useState([]);
   const [createEvents, setCreateEvents] = useState([]);
   const [allAvailabilities, setAllAvailabilities] = useState([]);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [createDetails, setCreateDetails] = useState({
-    teacherId: "",
-    grade: "",
-    customGrade: "",
-    subject: "",
-    room: "",
-    startTime: "",
-    endTime: "",
-    recurringDays: [],
-    dayType: ""
-  });
-  const [showCustomGrade, setShowCustomGrade] = useState(false);
   const [conflictModal, setConflictModal] = useState({ open: false, messages: [], pendingEvent: null });
   const [selectedTeachers, setSelectedTeachers] = useState([]);
   const [deleteMode, setDeleteMode] = useState(false);
   const [selectedToDelete, setSelectedToDelete] = useState([]);
   const [editMode, setEditMode] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [fridayModal, setFridayModal] = useState({ open: false, slotInfo: null });
-  const [draggingEventId, setDraggingEventId] = useState(null);
   const [teacherDropdownOpen, setTeacherDropdownOpen] = useState(false);
   const [eventDetailsModal, setEventDetailsModal] = useState({ open: false, event: null });
   const [loading, setLoading] = useState(false);
-  const [showUnselect, setShowUnselect] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [scheduleEvents, setScheduleEvents] = useState([]);
+  const [draggingEventId, setDraggingEventId] = useState(null);
   // Master schedule filters
-  const [filterTeacher, setFilterTeacher] = useState('');
-  const [filterGrade, setFilterGrade] = useState('');
-  const [filterRoom, setFilterRoom] = useState('');
+  const [selectedGrades, setSelectedGrades] = useState([]);
+  const [selectedRooms, setSelectedRooms] = useState([]);
+  const [availableRooms, setAvailableRooms] = useState([]);
+  // Collapsible filter states
+  const [teacherFilterExpanded, setTeacherFilterExpanded] = useState(true);
+  const [gradeFilterExpanded, setGradeFilterExpanded] = useState(true);
+  const [roomFilterExpanded, setRoomFilterExpanded] = useState(true);
   const [details, setDetails] = useState({
     teacherId: "",
     grade: "",
@@ -234,8 +238,10 @@ export default function Schedules() {
     abDay: "",
     dayType: ""
   });
-  const [dragStartPosition, setDragStartPosition] = useState(null);
-  const [dragTimeout, setDragTimeout] = useState(null);
+  // Sidebar resize states
+  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
 
   // Cleanup function to remove any potential duplicate events
   const cleanupDuplicateExceptions = () => {
@@ -258,7 +264,6 @@ export default function Schedules() {
   const getRole = u => (u && u.role ? u.role.trim().toLowerCase() : "");
   const isStudent = getRole(user) === "student";
   const isTeacher = getRole(user) === "teacher";
-  const isAdmin = getRole(user) === "admin";
 
   const handleLogout = () => {
     logout();
@@ -269,7 +274,6 @@ export default function Schedules() {
     { id: 'master-schedule', label: 'Master Schedule', icon: '📘', count: masterEvents.length || null },
     { id: 'teacher-schedules', label: 'Teacher Schedules', icon: '👨‍🏫', count: teachers.length || null },
     { id: 'student-schedules', label: 'Student Schedules', icon: '🧑‍🎓', count: students.length || null },
-    { id: 'create-schedule', label: 'Create Schedule', icon: '➕', count: createEvents.length || null },
   ]);
 
   const tabs = getTabs();
@@ -298,23 +302,32 @@ export default function Schedules() {
 
     const fetchMasterSchedule = async () => {
       try {
-        // Fetch from new schedules API
+        // Connect to the actual backend running on port 3000
         const response = await fetch('http://localhost:3000/api/schedules');
         const data = await response.json();
+        console.log('Raw data from backend:', data[0]); // Debug log
+        
         const events = data.map(schedule => ({
           id: schedule.idcalendar,
-          title: schedule.event_title,
+          title: schedule.subject || schedule.event_title || 'Class',
           start: new Date(schedule.start_time),
           end: new Date(schedule.end_time),
           isClass: true,
           description: schedule.description,
           teacherId: schedule.user_id,
-          teacher: schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : 'Unknown Teacher'
+          teacher: schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : 'Unknown Teacher',
+          room: schedule.room || '',
+          grade: schedule.grade || '',
+          subject: schedule.subject || schedule.event_title || 'Class',
+          // Store original database ID for updates
+          databaseId: schedule.idcalendar
         }));
         setMasterEvents(events);
         setCreateEvents(events); // Also set for create schedule tab
+        console.log('Master schedule loaded from backend:', events.length, 'events');
+        console.log('Sample event structure:', events[0]);
       } catch (error) {
-        console.error('Error fetching master schedule:', error);
+        console.error('Error fetching master schedule from backend:', error);
         setMasterEvents([]);
         setCreateEvents([]);
       }
@@ -322,11 +335,23 @@ export default function Schedules() {
 
     const fetchTeachers = async () => {
       try {
+        console.log('Fetching teachers from http://localhost:3000/api/teachers');
         const res = await fetch("http://localhost:3000/api/teachers");
-        const teachersData = res.ok ? await res.json() : [];
-        setTeachers(teachersData);
+        console.log('Teachers API response status:', res.status, res.statusText);
+        
+        if (!res.ok) {
+          console.error('Teachers API failed:', res.status, res.statusText);
+          const errorText = await res.text();
+          console.error('Error response:', errorText);
+          setTeachers([]);
+          return;
+        }
+        
+        const teachersData = await res.json();
+        console.log('Teachers loaded from backend:', teachersData.length, 'teachers', teachersData);
+        setTeachers(teachersData || []);
       } catch (err) {
-        console.error(err);
+        console.error('Error fetching teachers from backend:', err);
         setTeachers([]);
       }
     };
@@ -336,9 +361,70 @@ export default function Schedules() {
         const res = await fetch("http://localhost:3000/api/students");
         const studentsData = res.ok ? await res.json() : [];
         setStudents(studentsData);
+        console.log('Students loaded:', studentsData.length, 'students');
       } catch (err) {
-        console.error(err);
-        setStudents([]);
+        console.error('Error fetching students - trying backup port:', err);
+        // Try backup port 3001
+        try {
+          const res = await fetch("http://localhost:3001/api/students");
+          const studentsData = res.ok ? await res.json() : [];
+          setStudents(studentsData);
+          console.log('Students loaded from backup port:', studentsData.length, 'students');
+        } catch (backupErr) {
+          console.error('Backup port failed for students:', backupErr);
+          setStudents([]);
+        }
+      }
+    };
+
+    const fetchRooms = async () => {
+      try {
+        // Get rooms from existing schedules
+        const response = await fetch('http://localhost:3000/api/schedules');
+        if (!response.ok) {
+          throw new Error(`API responded with status: ${response.status}`);
+        }
+        
+        const schedules = await response.json();
+        console.log('Fetched schedules for room extraction:', schedules);
+        
+        // Extract unique rooms, handling different possible field names and data types
+        const rooms = Array.from(new Set(
+          schedules
+            .map(schedule => {
+              // Handle both 'room' and 'room_number' fields
+              const roomValue = schedule.room || schedule.room_number || '';
+              return roomValue ? roomValue.toString().trim() : '';
+            })
+            .filter(room => room !== '')
+        )).sort();
+        
+        console.log('Extracted unique rooms from database:', rooms);
+        
+        // Enhanced fallback rooms if none exist in database
+        const fallbackRooms = [
+          '101', '102', '103', '104', '105', 
+          '201', '202', '203', '204', '205',
+          'Art Room', 'Music Room', 'Science Lab', 
+          'Computer Lab', 'Library', 'Gym', 
+          'Cafeteria', 'Auditorium'
+        ];
+        
+        const finalRooms = rooms.length > 0 ? rooms : fallbackRooms;
+        setAvailableRooms(finalRooms);
+        console.log('Final rooms set for filtering:', finalRooms);
+        
+      } catch (err) {
+        console.error('Error fetching rooms from schedules API:', err);
+        // Enhanced fallback to test rooms if API fails
+        const fallbackRooms = [
+          '101', '102', '103', '104', '105', 
+          '201', '202', '203', '204', '205',
+          'Art Room', 'Music Room', 'Science Lab', 
+          'Computer Lab', 'Library', 'Gym'
+        ];
+        setAvailableRooms(fallbackRooms);
+        console.log('Using fallback rooms due to API error:', fallbackRooms);
       }
     };
 
@@ -349,8 +435,9 @@ export default function Schedules() {
         const res = await fetch("http://localhost:3000/api/teacher-availabilities");
         const availData = res.ok ? await res.json() : [];
         setAllAvailabilities(availData);
+        console.log('Teacher availability loaded from backend:', availData.length, 'records');
       } catch (err) {
-        console.error(err);
+        console.error('Error fetching teacher availability from backend:', err);
         setAllAvailabilities([]);
       }
     };
@@ -362,7 +449,7 @@ export default function Schedules() {
         if (activeTab === "my-schedule") {
           await fetchMyScheduleEvents();
         } else if (activeTab === "master-schedule") {
-          await fetchMasterSchedule();
+          await Promise.all([fetchMasterSchedule(), fetchTeachers(), fetchAvailabilities(), fetchRooms()]);
         } else if (activeTab === "teacher-schedules") {
           await fetchTeachers();
         } else if (activeTab === "student-schedules") {
@@ -370,9 +457,13 @@ export default function Schedules() {
         } else if (activeTab === "create-schedule") {
           await Promise.all([fetchTeachers(), fetchAvailabilities(), fetchMasterSchedule()]);
         }
+      } catch (error) {
+        console.error('Data fetching error:', error);
       } finally {
         setLoading(false);
       }
+      
+      // Real backend should now be connected
     };
 
     fetchData();
@@ -384,15 +475,64 @@ export default function Schedules() {
     return () => clearInterval(interval);
   }, []);
 
+  // Handle sidebar resize
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e) => {
+      // Find the sidebar element to calculate width from right edge
+      const sidebar = document.querySelector('[data-filter-sidebar]');
+      if (!sidebar) return;
+      
+      const sidebarRect = sidebar.getBoundingClientRect();
+      
+      // Calculate new width: distance from mouse to right edge of sidebar
+      const newWidth = sidebarRect.right - e.clientX;
+      
+      // Apply constraints
+      if (newWidth >= 200 && newWidth <= 600) {
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
+  // Warn user before leaving page with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (pendingChanges.length > 0) {
+        e.preventDefault();
+        e.returnValue = ''; // Chrome requires returnValue to be set
+        return 'You have unsaved changes. Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [pendingChanges]);
+
   // Role check - admin only for full access (after all hooks)
   if (!user || user.role !== "admin") {
     return (
-      <div style={{ display: "flex", height: "100vh" }}>
-        <Sidebar onLogout={logout} />
-        <div style={{ flex: 1, backgroundColor: "#f8f9fa", padding: 40, marginLeft: 300 }}>
+      <SidebarLayout onLogout={handleLogout}>
+        <div style={{ backgroundColor: "#f8f9fa", padding: 40 }}>
           <h2>Only admins can access the unified schedule management. Please log in as admin.</h2>
         </div>
-      </div>
+      </SidebarLayout>
     );
   }
 
@@ -448,50 +588,13 @@ export default function Schedules() {
     fetchStudentEvents(student.id);
   };
 
-  // Check for overlapping events
-  const checkEventOverlaps = (events) => {
-    const overlaps = [];
-    for (let i = 0; i < events.length; i++) {
-      for (let j = i + 1; j < events.length; j++) {
-        const event1 = events[i];
-        const event2 = events[j];
-        const start1 = new Date(event1.start);
-        const end1 = new Date(event1.end);
-        const start2 = new Date(event2.start);
-        const end2 = new Date(event2.end);
-        const date1 = moment(start1).format("YYYY-MM-DD");
-        const date2 = moment(start2).format("YYYY-MM-DD");
-        if (date1 === date2 && start1.getTime() < end2.getTime() && start2.getTime() < end1.getTime()) {
-          const overlapStart = new Date(Math.max(start1.getTime(), start2.getTime()));
-          const overlapEnd = new Date(Math.min(end1.getTime(), end2.getTime()));
-          overlaps.push({
-            event1: event1.title,
-            event2: event2.title,
-            overlapStart: moment(overlapStart).format("MMM Do, h:mm A"),
-            overlapEnd: moment(overlapEnd).format("MMM Do, h:mm A"),
-            duration: moment.duration(overlapEnd - overlapStart).humanize()
-          });
-        }
-      }
-    }
-    return overlaps;
-  };
-
   const eventStyleGetter = (event) => {
-    let backgroundColor;
+    // All classes same color - blue
+    let backgroundColor = "#3498db";
     
-    if (event.isClass) {
-      backgroundColor = "#3498db"; // Blue for classes
-    } else if (event.eventType === "personal") {
-      backgroundColor = "#9b59b6"; // Purple for personal events
-    } else if (event.eventType === "meeting") {
-      backgroundColor = "#e74c3c"; // Red for meetings
-    } else if (event.eventType === "appointment") {
-      backgroundColor = "#f39c12"; // Orange for appointments
-    } else if (event.eventType === "reminder") {
-      backgroundColor = "#95a5a6"; // Gray for reminders
-    } else {
-      backgroundColor = "#27ae60"; // Green for regular events
+    // Check if event has conflicts
+    if (event.hasConflict) {
+      backgroundColor = "#e74c3c"; // Red for conflicts
     }
     
     return {
@@ -508,8 +611,18 @@ export default function Schedules() {
   };
 
   const handleEventClick = (event) => {
-    setSelectedEventDetails(event);
-    setShowEventModal(true);
+    // If in delete mode, toggle event selection
+    if (deleteMode) {
+      if (selectedToDelete.includes(event.id)) {
+        setSelectedToDelete(prev => prev.filter(id => id !== event.id));
+      } else {
+        setSelectedToDelete(prev => [...prev, event.id]);
+      }
+      return;
+    }
+    
+    // Normal event click - show details
+      setEventDetailsModal({ open: true, event });
   };
 
   // Loading Component
@@ -553,8 +666,6 @@ export default function Schedules() {
         return renderTeacherSchedules();
       case "student-schedules":
         return renderStudentSchedules();
-      case "create-schedule":
-        return renderCreateSchedule();
       default:
         return renderMasterSchedule();
     }
@@ -562,6 +673,32 @@ export default function Schedules() {
 
   // Master Schedule renderer (custom: hide Sat/Sun and lock to week view + A/B headers + time window)
   function renderMasterSchedule() {
+    // Handle delete mode for master schedule (only allowed in edit mode)
+    const handleMasterDeleteMode = () => {
+      if (!isEditMode) {
+        return;
+      }
+      setDeleteMode(!deleteMode);
+      setSelectedToDelete([]);
+    };
+
+    // Confirm delete selected events for master schedule
+    const handleMasterConfirmDelete = async () => {
+      try {
+        for (const eventId of selectedToDelete) {
+          await deleteScheduleFromDatabase(eventId);
+        }
+        // Remove from both master and create events
+        setMasterEvents(prev => prev.filter(ev => !selectedToDelete.includes(ev.id)));
+        setCreateEvents(prev => prev.filter(ev => !selectedToDelete.includes(ev.id)));
+        setSelectedToDelete([]);
+        setDeleteMode(false);
+        console.log('Events deleted successfully');
+      } catch (error) {
+        console.error('Error deleting events:', error);
+        alert('Failed to delete some events. Please try again.');
+      }
+    };
     // Helper to extract a normalized grade from various possible fields/title text
     const extractGradeValue = (ev) => {
       // Direct fields first
@@ -607,32 +744,243 @@ export default function Schedules() {
       const level = classify(g);
       return level === schoolView;
     });
-    // Apply dropdown filters
-    if (filterTeacher) {
+    
+    // Note: Teacher filtering is handled in the calendar events array to show all when none selected
+    if (selectedGrades.length > 0) {
       filteredMasterEvents = filteredMasterEvents.filter(ev => {
-        if (filterTeacher === 'all' || filterTeacher === '') return true;
-        const tId = ev.teacherId || ev.teacher_id || (ev.teacher && ev.teacher.id);
-        return tId && tId.toString() === filterTeacher;
-      });
-    }
-    if (filterGrade) {
-      filteredMasterEvents = filteredMasterEvents.filter(ev => {
-        if (filterGrade === 'all' || filterGrade === '') return true;
         const g = extractGradeValue(ev);
         if (g === null || g === undefined) return false;
         const gStr = (typeof g === 'number') ? g.toString() : g;
-        return gStr === filterGrade;
+        return selectedGrades.includes(gStr);
       });
     }
-    if (filterRoom) {
+    if (selectedRooms.length > 0) {
       filteredMasterEvents = filteredMasterEvents.filter(ev => {
-        if (filterRoom === 'all' || filterRoom === '') return true;
-        return (ev.room || '').toString().trim() === filterRoom;
+        const room = (ev.room || '').toString().trim();
+        return selectedRooms.includes(room);
       });
     }
 
+    // Get overlapping event IDs for styling
+    const getMasterOverlappingEventIds = () => {
+      const ids = new Set();
+      const events = filteredMasterEvents;
+      
+      for (let i = 0; i < events.length; i++) {
+        for (let j = i + 1; j < events.length; j++) {
+          const event1 = events[i];
+          const event2 = events[j];
+          
+          // Check if events overlap in time
+          const start1 = moment(event1.start);
+          const end1 = moment(event1.end);
+          const start2 = moment(event2.start);
+          const end2 = moment(event2.end);
+          
+          const timeOverlap = start1.isBefore(end2) && start2.isBefore(end1);
+          
+          if (timeOverlap) {
+            // Check for same teacher or same room conflicts
+            const sameTeacher = event1.teacherId && event2.teacherId && 
+              event1.teacherId.toString() === event2.teacherId.toString();
+            const sameRoom = event1.room && event2.room && 
+              event1.room.toString().trim().toLowerCase() === event2.room.toString().trim().toLowerCase();
+            
+            if (sameTeacher || sameRoom) {
+              ids.add(event1.id);
+              ids.add(event2.id);
+            }
+          }
+        }
+      }
+      return Array.from(ids);
+    };
+
+    const overlappingEventIds = getMasterOverlappingEventIds();
+
+    // Enhanced event style getter for master schedule
+    const masterEventStyleGetter = (event) => {
+      let backgroundColor;
+      let opacity = 1;
+      
+      if (event.availability) {
+        // Availability events - use teacher color with transparency
+        backgroundColor = event.color || getTeacherColor(event.teacher_id);
+        opacity = 0.3; // Make availability transparent
+      } else if (event.isClass) {
+        // All class events use the same color for consistency
+        backgroundColor = "#3498db"; // Blue color for all classes
+      } else {
+        // Other events
+        const colors = ["#3498db", "#9b59b6", "#f39c12", "#e74c3c", "#1abc9c"];
+        const colorIndex = event.id ? String(event.id).length % colors.length : 0;
+        backgroundColor = colors[colorIndex];
+      }
+
+      // Highlight conflicts
+      if (overlappingEventIds.includes(event.id)) {
+        backgroundColor = "#e74c3c";
+        opacity = 1;
+      }
+
+      // Highlight selected events in delete mode
+      if (deleteMode && selectedToDelete.includes(event.id)) {
+        backgroundColor = "#8e44ad";
+        opacity = 1;
+      }
+      
+      return {
+        style: {
+          backgroundColor,
+          opacity,
+          color: "white",
+          borderRadius: 4,
+          border: event.availability 
+            ? `2px dashed ${backgroundColor}` // Dashed border for availability
+            : (overlappingEventIds.includes(event.id) ? "2px solid #c0392b" : 
+               (deleteMode && selectedToDelete.includes(event.id) ? "3px solid #9b59b6" : "none")),
+          fontSize: "13px",
+          fontWeight: 500,
+          boxShadow: event.availability 
+            ? "0 1px 2px rgba(0,0,0,0.1)" 
+            : "0 1px 3px rgba(0,0,0,0.1)",
+          cursor: event.availability ? "default" : (deleteMode ? "pointer" : "move"),
+          zIndex: event.availability ? 1 : 10, // Availability blocks stay in background
+          pointerEvents: event.availability ? 'none' : 'auto', // Allow clicking through availability blocks
+        },
+      };
+    };
+
+    // Handle slot selection for master schedule
+    const handleMasterSelectSlot = ({ start, end }) => {
+      // Only allow creating new events in edit mode
+      if (!isEditMode) {
+        return;
+      }
+
+      if (deleteMode) {
+        return;
+      }
+
+      const isFriday = moment(start).day() === 5;
+      
+      if (isFriday) {
+        setFridayModal({ 
+          open: true, 
+          slotInfo: { start, end, isNewClass: true } 
+        });
+        return;
+      }
+      
+      const abDay = getABDay(start);
+      
+      // Find overlapping teacher availabilities
+      const overlappingAvailabilities = allAvailabilities.filter(av => {
+        const avDay = typeof av.day_of_week === 'number' ? av.day_of_week : moment().day(av.day_of_week).day();
+        const slotDay = moment(start).day();
+        
+        if (avDay !== slotDay) return false;
+        
+        const slotStart = moment(start);
+        const slotEnd = moment(end);
+        const avStart = moment(av.start_time, 'HH:mm:ss');
+        const avEnd = moment(av.end_time, 'HH:mm:ss');
+        
+        return slotStart.format('HH:mm') >= avStart.format('HH:mm') && 
+               slotEnd.format('HH:mm') <= avEnd.format('HH:mm');
+      });
+      
+      // Auto-select teacher if exactly one availability matches
+      let preSelectedTeacherId = "";
+      if (overlappingAvailabilities.length === 1) {
+        preSelectedTeacherId = overlappingAvailabilities[0].teacher_id.toString();
+      }
+      
+      // Pre-select recurring day for the day being added
+      const dayIdx = moment(start).day() - 1; // 0=Monday, ... 4=Friday
+      const recurringDays = (dayIdx >= 0 && dayIdx <= 4) ? [dayIdx] : [];
+      
+      setSelectedSlot({ start, end });
+      setDetails(d => ({ 
+        ...d, 
+        teacherId: preSelectedTeacherId,
+        startTime: moment(start).format("h:mm A"), 
+        endTime: moment(end).format("h:mm A"),
+        abDay: abDay || "",
+        dayType: abDay || "",
+        recurringDays
+      }));
+      setModalOpen(true);
+    };
+
+    // Handle event drop for master schedule
+    const handleMasterEventDrop = async ({ event, start, end }) => {
+      // Only allow dragging in edit mode
+      if (!isEditMode) {
+        return;
+      }
+      
+      // Prevent dragging availability events
+      if (event.availability) {
+        return; // Don't allow dropping availability events
+      }
+      
+      const isFriday = moment(start).day() === 5;
+      
+      if (isFriday && !event.abDay) {
+        setFridayModal({ 
+          open: true, 
+          slotInfo: { 
+            start, 
+            end, 
+            dragEvent: event, 
+            originalEvent: event,
+            draggedEventId: event.id 
+          } 
+        });
+        return;
+      }
+      
+      // Update the event with new times - PRESERVE ALL ORIGINAL EVENT DATA
+      const updatedEvent = {
+        // Spread all original properties first to preserve everything
+        ...event,
+        // Only update time-related fields
+        start,
+        end,
+        startTime: moment(start).format("HH:mm:ss"),
+        endTime: moment(end).format("HH:mm:ss"),
+        // Explicitly preserve critical fields to ensure they don't get lost
+        id: event.id,
+        title: event.title || event.subject,
+        subject: event.subject,
+        teacher: event.teacher,
+        teacherId: event.teacherId,
+        grade: event.grade,
+        room: event.room,
+        description: event.description,
+        databaseId: event.databaseId || event.id
+      };
+      
+      console.log('🔄 Dragged event - Original:', event);
+      console.log('✅ Dragged event - Updated:', updatedEvent);
+      
+      // Update master events immediately for UI
+      setMasterEvents(prev => prev.map(ev => 
+        ev.id === event.id ? updatedEvent : ev
+      ));
+      
+      // Track change for batch save
+      setPendingChanges(prev => {
+        // Remove any existing change for this event
+        const filtered = prev.filter(change => change.id !== event.id);
+        // Add the new change
+        return [...filtered, updatedEvent];
+      });
+    };
+
     const MasterToolbar = ({ label }) => (
-      <div className="rbc-toolbar" style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 8, gap: 12 }}>
+      <div className="rbc-toolbar" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, gap: 12 }}>
         <span className="rbc-btn-group" style={{ display: 'flex', gap: 4 }}>
           {[
             { id: 'all', label: 'All' },
@@ -662,8 +1010,67 @@ export default function Schedules() {
             </button>
           ))}
         </span>
+        
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* View/Edit Mode Toggle Buttons - Same style as school level filters */}
+          <span className="rbc-btn-group" style={{ display: 'flex', gap: 4 }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (isEditMode && pendingChanges.length > 0) {
+                  if (window.confirm('You have unsaved changes. Discard them?')) {
+                    setIsEditMode(false);
+                    setPendingChanges([]);
+                    fetchMasterSchedule(); // Reload to discard changes
+                  }
+                } else {
+                  setIsEditMode(false);
+                }
+              }}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 20,
+                border: !isEditMode ? '2px solid #3498db' : '1px solid #d0d7de',
+                background: !isEditMode ? '#3498db' : '#fff',
+                color: !isEditMode ? '#fff' : '#2c3e50',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                minWidth: 90,
+                boxShadow: !isEditMode ? '0 2px 6px rgba(0,0,0,0.15)' : '0 1px 2px rgba(0,0,0,0.08)'
+              }}
+            >
+              👁️ View
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsEditMode(true);
+              }}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 20,
+                border: isEditMode ? '2px solid #3498db' : '1px solid #d0d7de',
+                background: isEditMode ? '#3498db' : '#fff',
+                color: isEditMode ? '#fff' : '#2c3e50',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                minWidth: 90,
+                boxShadow: isEditMode ? '0 2px 6px rgba(0,0,0,0.15)' : '0 1px 2px rgba(0,0,0,0.08)'
+              }}
+            >
+              ✏️ Edit
+            </button>
+          </span>
+        </div>
       </div>
     );
+
+    // Static PreK-12 grade list
+    const gradeDropdownOptions = ['PK','K','1','2','3','4','5','6','7','8','9','10','11','12'];
 
       const MasterHeader = ({ date }) => {
         const ab = getABLabelForHeader(date);
@@ -722,36 +1129,216 @@ export default function Schedules() {
         );
       };
 
-    // Build dropdown option sets (teachers from teachers state to ensure actual teacher DB data)
-    const teacherOptions = teachers
-      .filter(t => (t.role ? /teacher/i.test(t.role) : true))
-      .map(t => ({ id: t.id, name: `${t.first_name || t.firstName || ''} ${t.last_name || t.lastName || ''}`.trim() || `Teacher ${t.id}` }));
-
-    // Static PreK-12 grade list
-    const gradeDropdownOptions = ['PK','K','1','2','3','4','5','6','7','8','9','10','11','12'];
-
-    // Unique room list from events
-    const roomOptions = Array.from(new Set(masterEvents.map(e => (e.room||'').toString().trim()).filter(Boolean))).sort();
+    // Use rooms from state (fetched from database)
+    const roomOptions = availableRooms;
 
     return (
-      <div style={{ display:'flex', gap:16, alignItems:'flex-start' }}>
-        <div style={{
-        backgroundColor: 'white',
-        borderRadius: '12px',
-        padding: '24px',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
-        flex:1
-      }}>
-        {/* Ensure calendar headers (A/B day pills) are fully visible and not clipped */}
-        <style>{`
-          .rbc-time-header, .rbc-time-header .rbc-header { overflow: visible !important; }
-          .rbc-time-header { z-index: 60; position: relative; }
-          .rbc-time-content { position: relative; z-index: 1; }
-          .rbc-time-view { overflow: visible !important; }
-        `}</style>
-        <Calendar
+      <>
+        {/* Master Schedule Header */}
+        <div style={{ 
+          backgroundColor: "white", 
+          borderRadius: "8px", 
+          padding: "12px 16px", 
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          marginBottom: "12px"
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <h1 style={{ 
+                fontSize: 20, 
+                fontWeight: "bold", 
+                margin: 0, 
+                color: "#2c3e50",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px"
+              }}>
+                📘 Master Schedule
+              </h1>
+              <p style={{ margin: "8px 0 0 0", color: "#7f8c8d", fontSize: "14px" }}>
+                View and manage all class schedules. Drag to create new classes or move existing ones.
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              {isEditMode && (
+                <>
+                  {/* Save Changes Button - shown when there are pending changes */}
+                  {pendingChanges.length > 0 && (
+                    <>
+                      <span style={{ fontSize: 14, color: '#e67e22', fontWeight: 600, marginRight: 8 }}>
+                        {pendingChanges.length} unsaved change{pendingChanges.length !== 1 ? 's' : ''}
+                      </span>
+                      <button
+                        onClick={async () => {
+                          // Save all pending changes to database
+                          setLoading(true);
+                          try {
+                            console.log('💾 Saving pending changes:', pendingChanges);
+                            
+                            for (const change of pendingChanges) {
+                              // Use databaseId if available, otherwise use id
+                              const dbId = change.databaseId || change.id;
+                              
+                              // Send complete schedule data including all fields
+                              const scheduleData = {
+                                start_time: moment(change.start).format('YYYY-MM-DD HH:mm:ss'),
+                                end_time: moment(change.end).format('YYYY-MM-DD HH:mm:ss'),
+                                event_title: change.title || change.subject || 'Class',
+                                user_id: change.teacherId,
+                                room: change.room || '',
+                                grade: change.grade || '',
+                                subject: change.subject || change.title || 'Class',
+                                description: change.description || `${change.subject || 'Class'} - Grade ${change.grade || 'N/A'}`,
+                                class_id: change.class_id || null
+                              };
+                              
+                              console.log('📤 Updating schedule ID:', dbId, 'with data:', scheduleData);
+                              const result = await updateScheduleInDatabase(dbId, scheduleData);
+                              
+                              if (!result.success) {
+                                console.error('❌ Failed to update schedule:', dbId, result.error);
+                                throw new Error(`Failed to update schedule ${dbId}: ${result.error || 'Unknown error'}`);
+                              }
+                              console.log('✅ Successfully updated schedule:', dbId);
+                            }
+                            
+                            setPendingChanges([]);
+                            alert('✅ All changes saved successfully!');
+                            
+                            // Refresh to ensure we have latest data from backend
+                            await fetchMasterSchedule();
+                          } catch (error) {
+                            console.error('❌ Error saving changes:', error);
+                            alert(`Error saving changes: ${error.message}\n\nPlease check the console for details.`);
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                        style={{
+                          padding: "8px 16px",
+                          backgroundColor: "#27ae60",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                          fontWeight: "500",
+                          marginRight: 8
+                        }}
+                      >
+                        💾 Save Changes
+                      </button>
+                    </>
+                  )}
+                  {deleteMode ? (
+                    <>
+                      <button
+                        onClick={handleMasterConfirmDelete}
+                        disabled={selectedToDelete.length === 0}
+                        style={{
+                          padding: "8px 16px",
+                          backgroundColor: selectedToDelete.length > 0 ? "#e74c3c" : "#bdc3c7",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: selectedToDelete.length > 0 ? "pointer" : "not-allowed",
+                          fontSize: "14px",
+                          fontWeight: "500"
+                        }}
+                      >
+                        Delete Selected ({selectedToDelete.length})
+                      </button>
+                      <button
+                        onClick={handleMasterDeleteMode}
+                        style={{
+                          padding: "8px 16px",
+                          backgroundColor: "#95a5a6",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                          fontWeight: "500"
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleMasterDeleteMode}
+                      style={{
+                        padding: "8px 16px",
+                        backgroundColor: "#e74c3c",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        fontWeight: "500"
+                      }}
+                    >
+                      🗑️ Delete Mode
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <div style={{ display:'flex', gap:16, alignItems:'flex-start' }} data-master-schedule-container>
+          <div 
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
+              flex:1
+            }}
+            data-calendar-container
+          >
+          {/* Ensure calendar headers (A/B day pills) are fully visible and not clipped */}
+          <style>{`
+            .rbc-time-header, .rbc-time-header .rbc-header { overflow: visible !important; }
+            .rbc-time-header { z-index: 60; position: relative; }
+            .rbc-time-content { position: relative; z-index: 1; }
+            .rbc-time-view { overflow: visible !important; }
+          `}</style>
+        <DragAndDropCalendar
           localizer={localizer}
-          events={filteredMasterEvents}
+          events={[
+            // Show filtered master schedule events
+            ...filteredMasterEvents,
+            // Add availability events for selected teachers with transparency
+            ...allAvailabilities
+              .filter(av => selectedTeachers.includes(av.teacher_id))
+              .map(av => {
+                const dayOfWeek = typeof av.day_of_week === 'string' 
+                  ? ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].indexOf(av.day_of_week.toLowerCase()) + 1
+                  : av.day_of_week;
+                
+                const weekStart = moment().startOf('week').day(dayOfWeek);
+                const [startHour, startMinute] = av.start_time.split(":");
+                const [endHour, endMinute] = av.end_time.split(":");
+                const start = weekStart.clone().set({ hour: +startHour, minute: +startMinute, second: 0 }).toDate();
+                const end = weekStart.clone().set({ hour: +endHour, minute: +endMinute, second: 0 }).toDate();
+                
+                return {
+                  id: `avail-${av.teacher_id}-${av.id}`,
+                  title: `${av.teacher_first_name || ''} ${av.teacher_last_name || ''} - Available`.trim(),
+                  start,
+                  end,
+                  availability: true,
+                  isDraggable: false, // Make availability non-draggable
+                  resizable: false, // Make availability non-resizable
+                  color: getTeacherColor(av.teacher_id),
+                  teacher_id: av.teacher_id,
+                  teacher_first_name: av.teacher_first_name,
+                  teacher_last_name: av.teacher_last_name
+                };
+              })
+          ]}
           startAccessor="start"
           endAccessor="end"
           style={{ height: 600 }}
@@ -761,12 +1348,19 @@ export default function Schedules() {
           // still allow navigation via custom toolbar
           date={date}
           onNavigate={setDate}
-          eventPropGetter={eventStyleGetter}
-          selectable={false}
+          eventPropGetter={masterEventStyleGetter}
+          selectable={true}
+          selectOverlap={true} // Allow selecting slots even when there are overlapping events (like availability blocks)
+          onSelectSlot={handleMasterSelectSlot}
           onSelectEvent={handleEventClick}
-            // Restrict visible time range 6:30 - 16:00
-            min={new Date(1970, 0, 1, 6, 30, 0)}
-              max={new Date(1970, 0, 1, 16, 0, 0)}
+          onEventDrop={handleMasterEventDrop}
+          onEventResize={handleMasterEventDrop}
+          resizable={isEditMode}
+          draggableAccessor={(event) => isEditMode && !event.availability} // Only allow dragging in edit mode and non-availability events
+          resizableAccessor={(event) => isEditMode && !event.availability} // Only allow resizing in edit mode and non-availability events
+          // Restrict visible time range 6:30 - 16:00
+          min={new Date(1970, 0, 1, 6, 30, 0)}
+          max={new Date(1970, 0, 1, 16, 0, 0)}
           step={5}
           timeslots={6}
           components={{
@@ -780,56 +1374,509 @@ export default function Schedules() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  fontSize: '13px',
-                  fontWeight: 500,
+                  fontSize: event.availability ? '11px' : '13px',
+                  fontWeight: event.availability ? 400 : 500,
                   cursor: 'pointer',
                   color: 'white'
                 }}
               >
-                <span>{event.title}</span>
+                <span>{event.title || event.subject || 'Event'}</span>
                 {event.isClass && <span style={{ fontSize: '10px', opacity: 0.8 }}>📚</span>}
+                {event.availability && <span style={{ fontSize: '10px', opacity: 0.9 }}>⏰</span>}
               </div>
             ),
           }}
         />
         </div>
-        {/* Right-side Filters Panel */}
-        <div style={{
-          width:240,
-          backgroundColor:'white',
-          borderRadius:'12px',
-          padding:'16px',
-          boxShadow:'0 4px 16px rgba(0,0,0,0.05)',
-          maxHeight:600,
-          display:'flex',
-          flexDirection:'column',
-          gap:16
-        }}>
-          <h4 style={{margin:0,fontSize:16,fontWeight:700,color:'#2c3e50'}}>Filters</h4>
-          <div>
-            <label style={{display:'block',fontSize:11,fontWeight:600,marginBottom:4,color:'#555'}}>Teacher</label>
-            <select value={filterTeacher} onChange={e=>setFilterTeacher(e.target.value)} style={{width:'100%',padding:'6px 8px',borderRadius:8,border:'1px solid #d0d7de'}}>
-              <option value=''>Any</option>
-              {teacherOptions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+        {/* Enhanced Teacher Filter Sidebar - Collapsible and Resizable */}
+        {!sidebarCollapsed && (
+          <div 
+            data-filter-sidebar
+            style={{
+              width: sidebarWidth,
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '20px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
+              maxHeight: 600,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              position: 'relative',
+              transition: isResizing ? 'none' : 'width 0.2s ease'
+            }}>
+            {/* Collapse button */}
+            <button
+              onClick={() => setSidebarCollapsed(true)}
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 18,
+                color: '#7f8c8d',
+                padding: 4,
+                lineHeight: 1,
+                zIndex: 10
+              }}
+              title="Collapse sidebar"
+            >
+              ✕
+            </button>
+            
+            {/* Resize handle - wider clickable area */}
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsResizing(true);
+              }}
+              style={{
+                position: 'absolute',
+                left: -3,
+                top: 0,
+                bottom: 0,
+                width: 12,
+                cursor: 'ew-resize',
+                backgroundColor: 'transparent',
+                transition: 'background-color 0.2s',
+                zIndex: 100,
+                borderLeft: '3px solid transparent',
+                boxSizing: 'border-box'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.borderLeft = '3px solid #3498db';
+                e.target.style.backgroundColor = 'rgba(52, 152, 219, 0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.borderLeft = '3px solid transparent';
+                e.target.style.backgroundColor = 'transparent';
+              }}
+            />
+            
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <h4 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#2c3e50' }}>Teachers & Availability</h4>
+            {selectedTeachers.length > 0 && (
+              <button
+                onClick={() => setSelectedTeachers([])}
+                style={{
+                  padding: "4px 8px",
+                  backgroundColor: "#e74c3c",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontSize: "11px",
+                  fontWeight: "500"
+                }}
+              >
+                Clear All
+              </button>
+            )}
           </div>
-          <div>
-            <label style={{display:'block',fontSize:11,fontWeight:600,marginBottom:4,color:'#555'}}>Grade</label>
-            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} style={{width:'100%',padding:'6px 8px',borderRadius:8,border:'1px solid #d0d7de'}}>
-              <option value=''>Any</option>
-              {gradeDropdownOptions.map(g => <option key={g} value={g}>{g === 'PK' ? 'PreK' : g}</option>)}
-            </select>
+          
+          {/* Search bar */}
+          <input
+            type="text"
+            placeholder="Search teachers..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "2px solid #e1e8ed",
+              fontSize: 14,
+              boxSizing: "border-box"
+            }}
+          />
+          
+          {/* Teacher list with custom checkboxes - MOVED TO TOP */}
+          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+            <div 
+              onClick={() => setTeacherFilterExpanded(!teacherFilterExpanded)}
+              style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: 6,
+                cursor: 'pointer',
+                padding: '8px 4px',
+                borderRadius: '6px',
+                backgroundColor: '#f8f9fa',
+                border: '1px solid #e1e8ed',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '12px', color: '#666', transition: 'transform 0.2s ease', transform: teacherFilterExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#555', cursor: 'pointer' }}>
+                  Select Teachers
+                </label>
+              </div>
+            </div>
+            {teacherFilterExpanded && (
+              <>
+                {teachers && teachers.length > 0 ? (
+                  teachers
+                    .filter(t =>
+                      searchTerm.trim() === "" ||
+                      `${t.first_name || ''} ${t.last_name || ''}`.toLowerCase().includes(searchTerm.trim().toLowerCase())
+                    )
+                    .map((t) => {
+                const teacherAvailabilities = allAvailabilities.filter(av => av.teacher_id === t.id);
+                const isSelected = selectedTeachers.includes(t.id);
+                const teacherColor = getTeacherColor(t.id);
+                
+                return (
+                  <div key={t.id} style={{ 
+                    border: `2px solid ${isSelected ? teacherColor : '#e1e8ed'}`,
+                    borderRadius: 8,
+                    padding: 10,
+                    backgroundColor: isSelected ? hexToRgba(teacherColor, 0.15) : '#f8f9fa',
+                    transition: 'all 0.2s ease',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => {
+                    if (isSelected) {
+                      setSelectedTeachers(prev => prev.filter(id => id !== t.id));
+                    } else {
+                      setSelectedTeachers(prev => [...prev, t.id]);
+                    }
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                      {/* Custom checkbox */}
+                      <div style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 4,
+                        border: `3px solid ${teacherColor}`,
+                        backgroundColor: isSelected ? teacherColor : 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontSize: 14,
+                        fontWeight: 'bold',
+                        flexShrink: 0,
+                        boxShadow: isSelected ? '0 2px 4px rgba(0,0,0,0.2)' : '0 1px 2px rgba(0,0,0,0.1)'
+                      }}>
+                        {isSelected ? '✓' : ''}
+                      </div>
+                      {/* Color indicator */}
+                      <div style={{ 
+                        width: 16, 
+                        height: 16, 
+                        backgroundColor: teacherColor, 
+                        borderRadius: 3,
+                        border: "2px solid white",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                        flexShrink: 0
+                      }}></div>
+                      {/* Teacher name */}
+                      <span style={{ 
+                        fontSize: 14, 
+                        fontWeight: isSelected ? 600 : 500,
+                        color: '#2c3e50',
+                        flex: 1
+                      }}>
+                        {t.first_name} {t.last_name}
+                      </span>
+                    </div>
+                    
+                    {/* Show availability info when selected or hovered */}
+                    {(isSelected || teacherAvailabilities.length > 0) && (
+                      <div style={{ marginLeft: 40, display: "flex", flexDirection: "column", gap: 3 }}>
+                        {teacherAvailabilities.length > 0 ? (
+                          teacherAvailabilities.slice(0, 3).map((av, idx) => (
+                            <div key={av.id || idx} style={{ 
+                              fontSize: 11, 
+                              color: "#666", 
+                              background: "rgba(255,255,255,0.7)", 
+                              borderRadius: 3, 
+                              padding: "2px 6px",
+                              borderLeft: `3px solid ${teacherColor}`
+                            }}>
+                              {typeof av.day_of_week === 'number' ? 
+                                moment().day(av.day_of_week).format('ddd') : 
+                                av.day_of_week.slice(0,3)
+                              } {av.start_time?.slice(0,5)} - {av.end_time?.slice(0,5)}
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ 
+                            fontSize: 11, 
+                            color: "#999", 
+                            fontStyle: "italic", 
+                            padding: "2px 6px" 
+                          }}>
+                            No availability set
+                          </div>
+                        )}
+                        {teacherAvailabilities.length > 3 && (
+                          <div style={{ fontSize: 10, color: '#999', padding: '2px 6px' }}>
+                            +{teacherAvailabilities.length - 3} more...
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+                ) : (
+                  <div style={{ 
+                    padding: 20,
+                    textAlign: 'center',
+                    color: '#666',
+                    fontSize: 14
+                  }}>
+                    {teachers === null || teachers === undefined ? 'Loading teachers...' : 'No teachers found'}
+                  </div>
+                )}
+              </>
+            )}
           </div>
+          
+          {/* Grade Filter - MOVED TO MIDDLE */}
           <div>
-            <label style={{display:'block',fontSize:11,fontWeight:600,marginBottom:4,color:'#555'}}>Location / Room</label>
-            <select value={filterRoom} onChange={e=>setFilterRoom(e.target.value)} style={{width:'100%',padding:'6px 8px',borderRadius:8,border:'1px solid #d0d7de'}}>
-              <option value=''>Any</option>
-              {roomOptions.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
+            <div 
+              onClick={() => setGradeFilterExpanded(!gradeFilterExpanded)}
+              style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: 6,
+                cursor: 'pointer',
+                padding: '8px 4px',
+                borderRadius: '6px',
+                backgroundColor: '#f8f9fa',
+                border: '1px solid #e1e8ed',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '12px', color: '#666', transition: 'transform 0.2s ease', transform: gradeFilterExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#555', cursor: 'pointer' }}>
+                  Filter by Grade
+                </label>
+              </div>
+              {selectedGrades.length > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedGrades([]);
+                  }}
+                  style={{
+                    padding: "2px 6px",
+                    backgroundColor: "#e74c3c",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "3px",
+                    cursor: "pointer",
+                    fontSize: "10px",
+                    fontWeight: "500"
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {gradeFilterExpanded && (
+              <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {gradeDropdownOptions.map(grade => {
+                const isSelected = selectedGrades.includes(grade);
+                const gradeColor = grade === 'PK' ? '#9b59b6' : '#3498db';
+                return (
+                  <div
+                    key={grade}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedGrades(prev => prev.filter(g => g !== grade));
+                      } else {
+                        setSelectedGrades(prev => [...prev, grade]);
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                      border: `2px solid ${isSelected ? gradeColor : '#e1e8ed'}`,
+                      backgroundColor: isSelected ? hexToRgba(gradeColor, 0.15) : '#f8f9fa',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 3,
+                      border: `2px solid ${gradeColor}`,
+                      backgroundColor: isSelected ? gradeColor : 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: 10,
+                      fontWeight: 'bold',
+                      flexShrink: 0
+                    }}>
+                      {isSelected ? '✓' : ''}
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: isSelected ? 600 : 500 }}>
+                      {grade === 'PK' ? 'PreK' : grade}
+                    </span>
+                  </div>
+                );
+              })}
+              </div>
+            )}
           </div>
-          <button onClick={()=>{setFilterTeacher('');setFilterGrade('');setFilterRoom('');}} style={{marginTop:'auto',padding:'8px 10px',fontSize:12,border:'1px solid #ccc',borderRadius:8,background:'#f1f2f4',cursor:'pointer'}}>Reset</button>
+          
+          {/* Room Filter - MOVED TO BOTTOM */}
+          <div>
+            <div 
+              onClick={() => setRoomFilterExpanded(!roomFilterExpanded)}
+              style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: 6,
+                cursor: 'pointer',
+                padding: '8px 4px',
+                borderRadius: '6px',
+                backgroundColor: '#f8f9fa',
+                border: '1px solid #e1e8ed',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '12px', color: '#666', transition: 'transform 0.2s ease', transform: roomFilterExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#555', cursor: 'pointer' }}>
+                  Filter by Room
+                </label>
+              </div>
+              {selectedRooms.length > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedRooms([]);
+                  }}
+                  style={{
+                    padding: "2px 6px",
+                    backgroundColor: "#e74c3c",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "3px",
+                    cursor: "pointer",
+                    fontSize: "10px",
+                    fontWeight: "500"
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {roomFilterExpanded && (
+              <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {roomOptions.map(room => {
+                const isSelected = selectedRooms.includes(room);
+                const roomColor = '#f39c12';
+                return (
+                  <div
+                    key={room}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedRooms(prev => prev.filter(r => r !== room));
+                      } else {
+                        setSelectedRooms(prev => [...prev, room]);
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                      border: `2px solid ${isSelected ? roomColor : '#e1e8ed'}`,
+                      backgroundColor: isSelected ? hexToRgba(roomColor, 0.15) : '#f8f9fa',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 3,
+                      border: `2px solid ${roomColor}`,
+                      backgroundColor: isSelected ? roomColor : 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: 10,
+                      fontWeight: 'bold',
+                      flexShrink: 0
+                    }}>
+                      {isSelected ? '✓' : ''}
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: isSelected ? 600 : 500 }}>
+                      Room {room}
+                    </span>
+                  </div>
+                );
+              })}
+              </div>
+            )}
+          </div>
+
         </div>
+        )}
+        
+        {/* Collapsed sidebar - show expand button */}
+        {sidebarCollapsed && (
+          <button
+            onClick={() => setSidebarCollapsed(false)}
+            style={{
+              width: 40,
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '12px 8px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 20,
+              color: '#3498db',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: 'fit-content'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#3498db';
+              e.target.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'white';
+              e.target.style.color = '#3498db';
+            }}
+            title="Expand filters"
+          >
+            ☰
+          </button>
+        )}
+
       </div>
+      </>
     );
   }
 
@@ -1052,237 +2099,40 @@ export default function Schedules() {
   );
 
   // Create Schedule Tab Content (Full implementation like CreateSchedule.js)
-  const renderCreateSchedule = () => (
-    <>
-      <div style={{ 
-        backgroundColor: "white", 
-        borderRadius: "8px", 
-        padding: "12px 16px", 
-        boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-        marginBottom: "12px"
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h1 style={{ 
-              fontSize: 20, 
-              fontWeight: "bold", 
-              margin: 0, 
-              color: "#2c3e50",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px"
-            }}>
-              ➕ Create Schedule
-            </h1>
-            <p style={{ margin: "8px 0 0 0", color: "#7f8c8d", fontSize: "14px" }}>
-              Drag on the calendar to create new class schedules. Select teachers to view their availability.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "8px" }}>
-            {deleteMode ? (
-              <>
-                <button
-                  onClick={handleConfirmDelete}
-                  disabled={selectedToDelete.length === 0}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: selectedToDelete.length > 0 ? "#e74c3c" : "#bdc3c7",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: selectedToDelete.length > 0 ? "pointer" : "not-allowed",
-                    fontSize: "14px",
-                    fontWeight: "500"
-                  }}
-                >
-                  Delete Selected ({selectedToDelete.length})
-                </button>
-                <button
-                  onClick={handleDeleteMode}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#95a5a6",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: "500"
-                  }}
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={handleDeleteMode}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#e74c3c",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                  fontWeight: "500"
-                }}
-              >
-                🗑️ Delete Mode
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-      
-      <div style={{ display: "flex", gap: "16px", height: "calc(100vh - 240px)" }}>
-        {/* Calendar */}
-        <div style={{ flex: 1 }}>
-          {renderCreateCalendar()}
-        </div>
-        
-        {/* Teacher sidebar */}
-        <div style={{ 
-          width: 260, 
-          backgroundColor: "#f8f9fa", 
-          borderRadius: 16, 
-          padding: 24, 
-          boxShadow: "0 2px 8px rgba(0,0,0,0.07)", 
-          maxHeight: "100%", 
-          display: "flex", 
-          flexDirection: "column" 
-        }}>
-          <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 18 }}>Teacher Availability</h3>
-          
-          {/* Controls */}
-          <div style={{ marginBottom: 16 }}>
-            {selectedTeachers.length > 0 && (
-              <button
-                onClick={() => setSelectedTeachers([])}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#e74c3c",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "12px",
-                  fontWeight: "500",
-                  marginBottom: "8px",
-                  width: "100%"
-                }}
-              >
-                Unselect All
-              </button>
-            )}
-          </div>
-          
-          {/* Search bar */}
-          <input
-            type="text"
-            placeholder="Search teachers..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "8px 12px",
-              borderRadius: 8,
-              border: "2px solid #e1e8ed",
-              marginBottom: 16,
-              fontSize: 14,
-              boxSizing: "border-box"
-            }}
-          />
-          
-          {/* Teacher list */}
-          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-            {teachers
-              .filter(t =>
-                searchTerm.trim() === "" ||
-                `${t.first_name} ${t.last_name}`.toLowerCase().includes(searchTerm.trim().toLowerCase())
-              )
-              .map((t) => {
-                const teacherAvailabilities = allAvailabilities.filter(av => av.teacher_id === t.id);
-                const isSelected = selectedTeachers.includes(t.id);
-                
-                return (
-                  <div key={t.id} style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 2 }}>
-                    <label style={{ 
-                      display: "flex", 
-                      alignItems: "center", 
-                      gap: 10, 
-                      fontSize: 16, 
-                      fontWeight: 500, 
-                      borderRadius: 8, 
-                      padding: "6px 8px", 
-                      backgroundColor: isSelected ? "#e3f2fd" : "transparent",
-                      transition: "background 0.2s",
-                      cursor: "pointer"
-                    }}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedTeachers(prev => [...prev, t.id]);
-                          } else {
-                            setSelectedTeachers(prev => prev.filter(id => id !== t.id));
-                          }
-                        }}
-                        style={{ 
-                          width: 16, 
-                          height: 16, 
-                          accentColor: "#2196f3", 
-                          cursor: "pointer"
-                        }}
-                      />
-                      <div style={{ 
-                        width: 12, 
-                        height: 12, 
-                        backgroundColor: getTeacherColor(t.id), 
-                        borderRadius: 2, 
-                        border: "1px solid #ccc"
-                      }}></div>
-                      <span>{t.first_name} {t.last_name}</span>
-                    </label>
-                    
-                    <div style={{ marginLeft: 34, display: "flex", flexDirection: "column", gap: 2 }}>
-                      {teacherAvailabilities.length > 0 ? (
-                        teacherAvailabilities.map(av => (
-                          <div key={av.id} style={{ 
-                            fontSize: 13, 
-                            color: "#555", 
-                            background: "#eaf6fb", 
-                            borderRadius: 4, 
-                            padding: "2px 8px", 
-                            borderLeft: `4px solid ${getTeacherColor(t.id)}`
-                          }}>
-                            {typeof av.day_of_week === 'number' ? moment().day(av.day_of_week).format('dddd') : av.day_of_week}, {av.start_time} - {av.end_time}
-                          </div>
-                        ))
-                      ) : (
-                        <div style={{ fontSize: 13, color: "#bbb", fontStyle: "italic", padding: "2px 8px" }}>
-                          No availability set
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      </div>
-    </>
-  );
-
-  // Teacher colors for availability blocks
+  // Teacher colors for availability blocks - generates unique colors for each teacher
   const getTeacherColor = (teacherId) => {
     const teacherColors = [
-      "#27ae60", "#f39c12", "#8e44ad", "#e67e22", "#d35400", 
-      "#16a085", "#2980b9", "#2c3e50", "#c0392b", "#7f8c8d"
+      "#3498db", // Blue
+      "#e74c3c", // Red  
+      "#f39c12", // Orange
+      "#27ae60", // Green
+      "#8e44ad", // Purple
+      "#e67e22", // Dark Orange
+      "#16a085", // Teal
+      "#2c3e50", // Dark Blue
+      "#c0392b", // Dark Red
+      "#d35400", // Burnt Orange
+      "#9b59b6", // Light Purple
+      "#1abc9c", // Turquoise
+      "#34495e", // Dark Gray
+      "#f1c40f", // Yellow
+      "#e8950f"  // Amber
     ];
-    const idx = teachers.findIndex(t => t.id === teacherId);
-    if (idx === -1) return "#000000";
-    return teacherColors[idx % teacherColors.length];
+    
+    // Ensure teacherId is a number for consistent color assignment
+    const numericId = parseInt(teacherId) || 0;
+    const colorIndex = numericId % teacherColors.length;
+    const color = teacherColors[colorIndex];
+    console.log(`Teacher ID: ${teacherId}, Numeric ID: ${numericId}, Color Index: ${colorIndex}, Color: ${color}`);
+    return color;
+  };
+
+  // Helper function to convert hex color to rgba with opacity
+  const hexToRgba = (hex, opacity) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
   };
 
   // Helper function to check if an event is within teacher availability
@@ -1368,50 +2218,6 @@ export default function Schedules() {
     }
     console.log('Expanded events:', expanded);
     return expanded;
-  };
-
-  // Overlap detection (returns array of event ids that overlap for same teacher or same room)
-  const getOverlappingEventIds = () => {
-    const ids = new Set();
-    const expandedEvents = getCalendarEvents();
-    
-    for (let i = 0; i < expandedEvents.length; i++) {
-      for (let j = i + 1; j < expandedEvents.length; j++) {
-        const a = expandedEvents[i], b = expandedEvents[j];
-        
-        // Skip if either is an availability block
-        if (a.availability || b.availability) continue;
-        
-        // Check if they are on the same day
-        const aStart = moment(a.start);
-        const aEnd = moment(a.end);
-        const bStart = moment(b.start);
-        const bEnd = moment(b.end);
-        const sameDay = aStart.format('YYYY-MM-DD') === bStart.format('YYYY-MM-DD');
-        
-        if (!sameDay) continue;
-        
-        // Check for any time overlap (even 1 minute)
-        const hasTimeOverlap = aStart.isBefore(bEnd) && bStart.isBefore(aEnd);
-        
-        if (hasTimeOverlap) {
-          // Flag for same teacher conflicts
-          const sameTeacher = a.teacher && b.teacher && a.teacher === b.teacher;
-          
-          // Flag for same room conflicts
-          const sameRoom = a.room && b.room && a.room === b.room;
-          
-          if (sameTeacher || sameRoom) {
-            // Get the original event IDs for highlighting
-            const aId = (typeof a.id === 'string' && a.id.includes('-recurring-')) ? a.id.split('-recurring-')[0] : a.id;
-            const bId = (typeof b.id === 'string' && b.id.includes('-recurring-')) ? b.id.split('-recurring-')[0] : b.id;
-            ids.add(aId);
-            ids.add(bId);
-          }
-        }
-      }
-    }
-    return Array.from(ids);
   };
 
   // Generate time options for dropdown (6:30 AM - 4:00 PM in 5-minute intervals)
@@ -1562,6 +2368,7 @@ export default function Schedules() {
             class_id: baseEvent.id,
             event_title: `${baseEvent.subject} - ${baseEvent.grade} (Friday ${abDay} Day)`,
             user_id: baseEvent.teacherId,
+              room: baseEvent.room, // Add room field to database
             description: `Friday ${abDay} Day exception for ${baseEvent.subject}`
           };
           
@@ -1586,6 +2393,7 @@ export default function Schedules() {
               class_id: dragEvent.id,
               event_title: `${dragEvent.subject} - ${dragEvent.grade} (Friday ${abDay} Day)`,
               user_id: dragEvent.teacherId,
+                room: dragEvent.room, // Add room field to database
               description: `Friday ${abDay} Day - ${dragEvent.subject}`
             };
             
@@ -1715,8 +2523,9 @@ export default function Schedules() {
           }
         }
 
-        // Check conflicts with existing events
-        const otherEvents = editMode ? createEvents.filter(ev => ev.id !== editingEventId) : createEvents;
+        // Check conflicts with existing events (both create and master events)
+        const allEvents = [...createEvents, ...masterEvents];
+        const otherEvents = editMode ? allEvents.filter(ev => ev.id !== editingEventId) : allEvents;
         for (const otherEvent of otherEvents) {
           let otherInstances = [];
           if (Array.isArray(otherEvent.recurringDays) && otherEvent.recurringDays.length > 0) {
@@ -1798,22 +2607,103 @@ export default function Schedules() {
         start_time: newStart.format('YYYY-MM-DD HH:mm:ss'),
         end_time: newEnd.format('YYYY-MM-DD HH:mm:ss'),
         class_id: null, // You can link this to a classes table if you have one
-        event_title: `${newSubject} - Grade ${newGrade} - Room ${newRoom}`,
+        event_title: `${newSubject} - Grade ${newGrade}`,
         user_id: newTeacherId,
+        room: newRoom,
+        grade: newGrade, // Add grade field
+        subject: newSubject, // Add subject field
         description: `Subject: ${newSubject}, Grade: ${newGrade}, Room: ${newRoom}, Teacher: ${newTeacherName}${newAbDay ? `, A/B Day: ${newAbDay}` : ''}${newRecurringDays.length > 0 ? `, Recurring: ${newRecurringDays.map(d => ["Mon", "Tue", "Wed", "Thu", "Fri"][d]).join(", ")}` : ''}`
       };
 
       if (editMode) {
+        // When editing, generate new recurring events for all selected days
+        const baseId = editingEventId;
+        const newRecurringEvents = newRecurringDays.map(dayIdx => {
+          const weekday = dayIdx + 1; // Monday=1
+          const base = moment().startOf('week').day(weekday);
+          const duration = newEnd.diff(newStart, 'minutes');
+          const start = base.clone().set({ hour: newStart.hour(), minute: newStart.minute(), second: 0 });
+          const end = start.clone().add(duration, 'minutes');
+          
+          return {
+            id: `${baseId}-recurring-${dayIdx}`,
+            title: `${newSubject} - ${newGrade}`,
+            subject: newSubject,
+            teacher: newTeacherName,
+            teacherId: newTeacherId,
+            grade: newGrade,
+            room: newRoom,
+            start: start.toDate(),
+            end: end.toDate(),
+            recurringDays: [dayIdx],
+            abDay: newAbDay || getABDay(start.toDate()),
+            isClass: true,
+            description: newSubject,
+            hasConflicts: false,
+            outOfAvailability: !isEventInTeacherAvailability(newEvent)
+          };
+        });
+
         await updateScheduleInDatabase(editingEventId, scheduleData);
-        setCreateEvents(prev => prev.map(ev => ev.id === editingEventId ? newEvent : ev));
+        
+        // Remove old recurring events and add new ones
+        setCreateEvents(prev => {
+          const filtered = prev.filter(ev => 
+            !ev.id.toString().startsWith(editingEventId.toString())
+          );
+          return [...filtered, ...newRecurringEvents];
+        });
+        
+        // Also update master events
+        setMasterEvents(prev => {
+          const filtered = prev.filter(ev => 
+            !ev.id.toString().startsWith(editingEventId.toString())
+          );
+          return [...filtered, ...newRecurringEvents];
+        });
+        
         setEditMode(false);
         setEditingEventId(null);
         console.log('Schedule updated in database successfully');
       } else {
+        // Creating new event - generate recurring events for all selected days
         const result = await saveScheduleToDatabase(scheduleData);
         if (result.success) {
-          newEvent.id = result.id.toString(); // Use the database ID
-          setCreateEvents(prev => [...prev, newEvent]);
+          const baseId = result.id;
+          const newRecurringEvents = newRecurringDays.map(dayIdx => {
+            const weekday = dayIdx + 1; // Monday=1
+            const base = moment().startOf('week').day(weekday);
+            const duration = newEnd.diff(newStart, 'minutes');
+            const start = base.clone().set({ hour: newStart.hour(), minute: newStart.minute(), second: 0 });
+            const end = start.clone().add(duration, 'minutes');
+            
+            return {
+              id: `${baseId}-recurring-${dayIdx}`,
+              title: `${newSubject} - ${newGrade}`,
+              subject: newSubject,
+              teacher: newTeacherName,
+              teacherId: newTeacherId,
+              grade: newGrade,
+              room: newRoom,
+              start: start.toDate(),
+              end: end.toDate(),
+              recurringDays: [dayIdx],
+              abDay: newAbDay || getABDay(start.toDate()),
+              isClass: true,
+              description: newSubject,
+              hasConflicts: false,
+              outOfAvailability: !isEventInTeacherAvailability(newEvent),
+              databaseId: baseId
+            };
+          });
+          
+          setCreateEvents(prev => [...prev, ...newRecurringEvents]);
+          // Also add to master events
+          setMasterEvents(prev => [...prev, ...newRecurringEvents]);
+          
+          // Refresh rooms list to include the new room
+          await fetchRooms();
+          
           console.log('Schedule saved to database successfully');
         } else {
           alert('Failed to save schedule to database');
@@ -1843,36 +2733,8 @@ export default function Schedules() {
     setSelectedSlot(null);
   };
 
-  // Handle drag start
-  const handleEventDragStart = ({ event }) => {
-    // Don't allow dragging availability blocks or if in delete mode
-    if (event.availability || deleteMode) {
-      return;
-    }
-    setDraggingEventId(event.id);
-    
-    // Prevent auto-scrolling during drag
-    const timeContent = document.querySelector('.rbc-time-content');
-    if (timeContent) {
-      timeContent.style.scrollBehavior = 'auto';
-      timeContent.style.overflowAnchor = 'none';
-    }
-  };
-
-  // Handle drag end
-  const handleDragEnd = () => {
-    setDraggingEventId(null);
-    
-    // Restore normal scrolling behavior
-    const timeContent = document.querySelector('.rbc-time-content');
-    if (timeContent) {
-      timeContent.style.scrollBehavior = '';
-      timeContent.style.overflowAnchor = '';
-    }
-  };
-
-  // Handle event drop
-  const handleEventDrop = async ({ event, start, end }) => {
+  // Handle event drop (unused in current implementation but kept for reference)
+  /* const handleEventDrop = async ({ event, start, end }) => {
     console.log('Drop event triggered:', { event, start, end });
     
     // Don't allow dragging availability blocks or if in delete mode
@@ -1948,6 +2810,7 @@ export default function Schedules() {
             class_id: baseEvent.id,
             event_title: `${baseEvent.subject} - ${baseEvent.grade} (Exception)`,
             user_id: baseEvent.teacherId,
+              room: baseEvent.room, // Add room field to database
             description: `Exception for ${baseEvent.subject} on ${moment(start).format('YYYY-MM-DD')}`
           };
           
@@ -1980,6 +2843,7 @@ export default function Schedules() {
             class_id: event.id,
             event_title: `${event.subject} - ${event.grade}`,
             user_id: event.teacherId,
+              room: event.room, // Add room field to database
             description: event.subject
           };
           
@@ -2011,7 +2875,7 @@ export default function Schedules() {
     }
 
     setDraggingEventId(null);
-  };
+  }; */
 
   // Handle edit event
   const handleEditEvent = (event) => {
@@ -2039,294 +2903,7 @@ export default function Schedules() {
     setEventDetailsModal({ open: false, event: null });
   };
 
-  // Toggle delete mode
-  const handleDeleteMode = () => {
-    setDeleteMode(dm => !dm);
-    setSelectedToDelete([]);
-  };
-
-  // Confirm delete selected events
-  const handleConfirmDelete = async () => {
-    try {
-      // Delete from database first
-      for (const eventId of selectedToDelete) {
-        await deleteScheduleFromDatabase(eventId);
-      }
-      
-      // Then remove from local state
-      setCreateEvents(evts => evts.filter(ev => {
-        // For all events, check if the base ID is selected
-        const baseId = (typeof ev.id === 'string' && ev.id.includes('-recurring-')) ? ev.id.split('-recurring-')[0] : ev.id;
-        return !selectedToDelete.includes(baseId);
-      }));
-      
-      console.log('Selected schedules deleted from database successfully');
-    } catch (error) {
-      console.error('Error deleting schedules:', error);
-      alert('Failed to delete some schedules. Please try again.');
-    } finally {
-      setDeleteMode(false);
-      setSelectedToDelete([]);
-    }
-  };
-
   // Render Create Calendar with drag and drop functionality
-  const renderCreateCalendar = () => {
-    // Show availabilities for selected teachers
-    const selectedAvailabilities = allAvailabilities.filter(av =>
-      selectedTeachers.includes(av.teacher_id)
-    ).map(av => {
-      const weekStart = moment().startOf('week').add(av.day_of_week, 'days');
-      const [startHour, startMinute] = av.start_time.split(":");
-      const [endHour, endMinute] = av.end_time.split(":");
-      const start = weekStart.clone().set({ hour: +startHour, minute: +startMinute, second: 0 }).toDate();
-      const end = weekStart.clone().set({ hour: +endHour, minute: +endMinute, second: 0 }).toDate();
-      return {
-        id: `avail-${av.teacher_id}-${av.id}`,
-        start,
-        end,
-        availability: true,
-        color: getTeacherColor(av.teacher_id),
-        teacher_id: av.teacher_id,
-        teacher_first_name: av.teacher_first_name,
-        teacher_last_name: av.teacher_last_name
-      };
-    });
-
-    // Get expanded calendar events (with recurring instances)
-    const expandedEvents = getCalendarEvents();
-    const overlappingIds = getOverlappingEventIds();
-    const allEventsForCreate = [...expandedEvents, ...selectedAvailabilities];
-
-    return (
-      <div style={{
-        backgroundColor: "white",
-        borderRadius: "12px",
-        padding: "16px",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
-        height: "100%",
-        position: "relative",
-        display: "flex",
-        flexDirection: "column"
-      }}>
-        <style>{`
-          .rbc-header {
-            z-index: 15 !important;
-            position: relative !important;
-            background: white !important;
-            border-bottom: 1px solid #ddd !important;
-          }
-          .rbc-time-view .rbc-header {
-            z-index: 15 !important;
-            background: white !important;
-            min-height: 60px !important;
-          }
-          .rbc-time-header {
-            z-index: 14 !important;
-            background: white !important;
-          }
-          .rbc-time-header-content {
-            z-index: 13 !important;
-            background: white !important;
-          }
-          .rbc-time-content {
-            border-top: none !important;
-          }
-          .rbc-calendar {
-            height: 100% !important;
-          }
-          .rbc-time-view {
-            border: 1px solid #ddd !important;
-            border-radius: 8px !important;
-            overflow: hidden !important;
-          }
-          
-          /* Fix drag scrolling issues */
-          .rbc-time-content {
-            overflow-y: auto !important;
-            scroll-behavior: auto !important;
-          }
-          
-          /* Prevent auto-scroll during drag operations */
-          .rbc-addons-dnd-drag-preview {
-            pointer-events: none !important;
-          }
-          
-          .rbc-addons-dnd-drag-row {
-            pointer-events: none !important;
-          }
-          
-          /* Disable smooth scrolling during drag */
-          .rbc-time-view.rbc-addons-dnd-is-dragging {
-            scroll-behavior: auto !important;
-          }
-          
-          .rbc-time-view.rbc-addons-dnd-is-dragging .rbc-time-content {
-            scroll-behavior: auto !important;
-            overflow-anchor: none !important;
-          }
-          
-          /* Prevent calendar from auto-scrolling */
-          .rbc-time-slot {
-            pointer-events: auto !important;
-          }
-          
-          .rbc-addons-dnd-resize-anchor {
-            display: none !important;
-          }
-        `}</style>
-        <DragAndDropCalendar
-          localizer={localizer}
-          events={allEventsForCreate}
-          startAccessor="start"
-          endAccessor="end"
-          style={{ height: "calc(100% - 20px)" }}
-          views={{ work_week: true }}
-          defaultView="work_week"
-          toolbar={false}
-          popup={false}
-          min={moment().startOf('day').set({ hour: 6, minute: 30 }).toDate()}
-          max={moment().startOf('day').set({ hour: 16, minute: 0 }).toDate()}
-          daysOfWeek={[1,2,3,4,5]}
-          selectable={true}
-          onSelectSlot={handleSelectSlot}
-          onEventDrop={handleEventDrop}
-          onDragStart={handleEventDragStart}
-          onDragEnd={handleDragEnd}
-          resizable={false}
-          draggableAccessor={(event) => !event.availability}
-          dragFromOutsideItem={null}
-          onDropFromOutside={null}
-          step={5}
-          timeslots={6}
-          showMultiDayTimes={false}
-          scrollToTime={moment().set({ hour: 8, minute: 0 }).toDate()}
-          onSelectEvent={deleteMode ? (event) => {
-            if (event.availability) return;
-            
-            // For exception events, use the exact ID
-            const eventId = (typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id;
-            
-            setSelectedToDelete(prev => 
-              prev.includes(eventId) 
-                ? prev.filter(id => id !== eventId)
-                : [...prev, eventId]
-            );
-          } : (event) => {
-            if (event.availability) return;
-            setEventDetailsModal({ open: true, event });
-          }}
-          eventPropGetter={event => {
-            const eventId = (typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id;
-            const baseId = (typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id;
-            const isSelected = selectedToDelete.includes(eventId);
-            const hasConflict = overlappingIds.includes(baseId);
-            const isBeingDragged = draggingEventId === event.id;
-            
-            if (event.availability) {
-              return {
-                style: {
-                  backgroundColor: event.color,
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  fontSize: "10px",
-                  fontWeight: "400",
-                  opacity: 0.7,
-                  cursor: "default",
-                  pointerEvents: "none"
-                }
-              };
-            }
-            
-            let backgroundColor = "#3498db";
-            let border = "none";
-            let opacity = isBeingDragged ? 0.6 : 1;
-            
-            // Check if event is outside teacher availability
-            const isOutOfAvailability = event.outOfAvailability || (!event.availability && !isEventInTeacherAvailability(event));
-            
-            if (deleteMode && isSelected) {
-              backgroundColor = "#e74c3c";
-              border = "2px solid #c0392b";
-            } else if (hasConflict) {
-              border = "2px solid #e74c3c";
-            } else if (isOutOfAvailability && !event.availability) {
-              backgroundColor = "#ff9800"; // Orange for availability warning
-              border = "2px dashed #f57c00";
-            }
-            
-            return {
-              style: {
-                backgroundColor,
-                color: "white",
-                border,
-                borderRadius: "4px",
-                fontSize: "12px",
-                fontWeight: "500",
-                opacity,
-                cursor: deleteMode ? "pointer" : (isBeingDragged ? "grabbing" : "grab"),
-                position: "relative"
-              }
-            };
-          }}
-          components={{
-            event: ({ event }) => {
-              const isOutOfAvailability = event.outOfAvailability || (!event.availability && !isEventInTeacherAvailability(event));
-              
-              return (
-                <div style={{ 
-                  padding: "2px 4px", 
-                  fontSize: event.availability ? "10px" : "12px",
-                  fontWeight: event.availability ? 400 : 500,
-                  opacity: event.availability ? 0.8 : 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between"
-                }}>
-                  <span>
-                    {event.availability 
-                      ? `${event.teacher_first_name} ${event.teacher_last_name}`
-                      : (event.title || event.subject)
-                    }
-                  </span>
-                  
-                  <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
-
-                    
-                    {!event.availability && isOutOfAvailability && (
-                      <span 
-                        style={{ 
-                          fontSize: "10px", 
-                          color: "#fff",
-                          backgroundColor: "rgba(255,152,0,0.8)",
-                          borderRadius: "2px",
-                          padding: "1px 3px",
-                          fontWeight: "bold"
-                        }}
-                        title="Outside teacher availability"
-                      >
-                        ⚠
-                      </span>
-                    )}
-                    
-                    {deleteMode && !event.availability && (
-                      <span style={{ fontSize: "10px" }}>
-                        {selectedToDelete.includes((typeof event.id === 'string' && event.id.includes('-recurring-')) ? event.id.split('-recurring-')[0] : event.id) ? "✓" : ""}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            },
-            header: CustomHeader
-          }}
-        />
-      </div>
-    );
-  };
-
-  // Unified Calendar Component
   const renderCalendar = (events, calendarType) => {
     // Restrict to Mon-Fri and 6:30am-4:00pm for master, teacher, and student schedules
     const isRestricted = ["master-schedule", "teacher-schedule", "student-schedule"].includes(calendarType);
@@ -2447,12 +3024,9 @@ export default function Schedules() {
   );
 
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
-      <Sidebar onLogout={handleLogout} />
-      <div style={{ flex: 1, backgroundColor: "#f8f9fa", padding: 16, marginLeft: 300 }}>
+    <SidebarLayout onLogout={handleLogout}>
         <TabNavigation />
         {renderTabContent()}
-      </div>
 
       {/* Create Event Modal */}
       {modalOpen && (
@@ -3005,20 +3579,22 @@ export default function Schedules() {
               >
                 Close
               </button>
-              <button
-                onClick={() => handleEditEvent(eventDetailsModal.event)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#3498db",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "14px"
-                }}
-              >
-                Edit
-              </button>
+              {isEditMode && (
+                <button
+                  onClick={() => handleEditEvent(eventDetailsModal.event)}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#3498db",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "14px"
+                  }}
+                >
+                  Edit
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -3155,6 +3731,6 @@ export default function Schedules() {
           </div>
         </div>
       )}
-    </div>
+    </SidebarLayout>
   );
 }

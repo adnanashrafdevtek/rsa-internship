@@ -316,7 +316,7 @@ const getTeacherColor = (teacherId) => {
     if (dragEvent) {
       // Check if this is a recurring event instance being dragged
       if (typeof dragEvent.id === 'string' && dragEvent.id.includes('-recurring-')) {
-        const [originalEventId, , dayIndex] = dragEvent.id.split('-recurring-');
+        const [originalEventId] = dragEvent.id.split('-recurring-');
         const newDayOfWeek = moment(start).day(); // 5 for Friday
         const newDayIndex = newDayOfWeek - 1; // 4 for Friday
         
@@ -561,7 +561,7 @@ const getTeacherColor = (teacherId) => {
 
     // Check if this is a recurring event instance being dragged
     if (typeof event.id === 'string' && event.id.includes('-recurring-')) {
-      const [originalEventId, , dayIndex] = event.id.split('-recurring-');
+      const [originalEventId] = event.id.split('-recurring-');
       const newDayOfWeek = moment(start).day(); // 1=Monday, 5=Friday
       const newDayIndex = newDayOfWeek - 1; // Convert to 0=Monday, 4=Friday
 
@@ -780,7 +780,6 @@ const getTeacherColor = (teacherId) => {
     for (const newInst of newInstances) {
       // 1. Check teacher availability conflicts
       const teacherAvailabilities = allAvailabilities.filter(av => av.teacher_id === newTeacherId);
-      let hasAvailabilityConflict = false;
       
       if (teacherAvailabilities.length > 0) {
         // Convert day index to moment day (0=Sunday in availability, 1=Monday in moment)
@@ -800,7 +799,6 @@ const getTeacherColor = (teacherId) => {
         });
         
         if (!availableOnDay) {
-          hasAvailabilityConflict = true;
           availabilityConflicts.push(`📅 Availability Conflict: ${newTeacherName} is not available on ${newInst.start.format('dddd')} from ${newInst.start.format('h:mm A')} to ${newInst.end.format('h:mm A')}.`);
         }
       }

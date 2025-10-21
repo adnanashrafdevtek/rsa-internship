@@ -1,6 +1,7 @@
 // src/pages/AddUserPage.js
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import SidebarLayout from "../components/SidebarLayout";
 
 export default function AddUserPage() {
   const navigate = useNavigate();
@@ -59,73 +60,75 @@ export default function AddUserPage() {
 };
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h1>Add New User</h1>
+    <SidebarLayout>
+      <div style={{ padding: "20px" }}>
+        <h1>Add New User</h1>
 
-      {message && <p>{message}</p>}
-      {isLoading && <p>⏳ Processing...</p>}
+        {message && <p>{message}</p>}
+        {isLoading && <p>⏳ Processing...</p>}
 
-      <form
-        onSubmit={handleSubmit}
-        style={{ display: "flex", flexDirection: "column", gap: "12px", maxWidth: "400px" }}
-      >
-        <input
-          type="text"
-          name="firstName"
-          placeholder="First Name"
-          value={formData.firstName}
-          onChange={handleChange}
-          required
-        />
-
-        <input
-          type="text"
-          name="lastName"
-          placeholder="Last Name"
-          value={formData.lastName}
-          onChange={handleChange}
-          required
-        />
-
-        <input
-          type="email"
-          name="emailAddress"
-          placeholder="Email"
-          value={formData.emailAddress}
-          onChange={handleChange}
-          required
-        />
-
-        <input
-          type="text"
-          name="address"
-          placeholder="Address"
-          value={formData.address}
-          onChange={handleChange}
-          required
-        />
-
-        <select name="role" value={formData.role} onChange={handleChange} required>
-          <option value="student">Student</option>
-          <option value="teacher">Teacher</option>
-          <option value="admin">Admin</option>
-        </select>
-
-        <button
-          type="submit"
-          disabled={isLoading}
-          style={{
-            backgroundColor: isLoading ? "#95a5a6" : "#16a085",
-            color: "white",
-            padding: "10px",
-            border: "none",
-            borderRadius: "4px",
-            cursor: isLoading ? "not-allowed" : "pointer",
-          }}
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: "flex", flexDirection: "column", gap: "12px", maxWidth: "400px" }}
         >
-          {isLoading ? "Adding..." : "Add User"}
-        </button>
-      </form>
-    </div>
+          <input
+            type="text"
+            name="firstName"
+            placeholder="First Name"
+            value={formData.firstName}
+            onChange={handleChange}
+            required
+          />
+
+          <input
+            type="text"
+            name="lastName"
+            placeholder="Last Name"
+            value={formData.lastName}
+            onChange={handleChange}
+            required
+          />
+
+          <input
+            type="email"
+            name="emailAddress"
+            placeholder="Email"
+            value={formData.emailAddress}
+            onChange={handleChange}
+            required
+          />
+
+          <input
+            type="text"
+            name="address"
+            placeholder="Address"
+            value={formData.address}
+            onChange={handleChange}
+            required
+          />
+
+          <select name="role" value={formData.role} onChange={handleChange} required>
+            <option value="student">Student</option>
+            <option value="teacher">Teacher</option>
+            <option value="admin">Admin</option>
+          </select>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            style={{
+              backgroundColor: isLoading ? "#95a5a6" : "#16a085",
+              color: "white",
+              padding: "10px",
+              border: "none",
+              borderRadius: "4px",
+              cursor: isLoading ? "not-allowed" : "pointer",
+            }}
+          >
+            {isLoading ? "Adding..." : "Add User"}
+          </button>
+        </form>
+      </div>
+    </SidebarLayout>
   );
 }
