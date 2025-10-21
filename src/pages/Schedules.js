@@ -271,9 +271,9 @@ export default function Schedules() {
 
   // Tab configuration for admin users
   const getTabs = () => ([
-    { id: 'master-schedule', label: 'Master Schedule', icon: '📘', count: masterEvents.length || null },
-    { id: 'teacher-schedules', label: 'Teacher Schedules', icon: '👨‍🏫', count: teachers.length || null },
-    { id: 'student-schedules', label: 'Student Schedules', icon: '🧑‍🎓', count: students.length || null },
+    { id: 'master-schedule', label: 'Master Schedule', icon: '📘' },
+    { id: 'teacher-schedules', label: 'Teacher Schedules', icon: '👨‍🏫' },
+    { id: 'student-schedules', label: 'Student Schedules', icon: '🧑‍🎓' },
   ]);
 
   const tabs = getTabs();
@@ -3001,23 +3001,6 @@ export default function Schedules() {
         >
           <span>{tab.icon}</span>
           <span>{tab.label}</span>
-          {tab.count !== null && tab.count > 0 && (
-            <span style={{
-              backgroundColor: activeTab === tab.id ? "rgba(255,255,255,0.2)" : "#e74c3c",
-              color: activeTab === tab.id ? "white" : "white",
-              fontSize: "11px",
-              fontWeight: "600",
-              padding: "2px 6px",
-              borderRadius: "10px",
-              minWidth: "16px",
-              height: "16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center"
-            }}>
-              {tab.count}
-            </span>
-          )}
         </button>
       ))}
     </div>
