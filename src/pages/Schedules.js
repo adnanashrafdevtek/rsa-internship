@@ -307,21 +307,31 @@ export default function Schedules() {
         const data = await response.json();
         console.log('Raw data from backend:', data[0]); // Debug log
         
-        const events = data.map(schedule => ({
-          id: schedule.idcalendar,
-          title: schedule.subject || schedule.event_title || 'Class',
-          start: new Date(schedule.start_time),
-          end: new Date(schedule.end_time),
-          isClass: true,
-          description: schedule.description,
-          teacherId: schedule.user_id,
-          teacher: schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : 'Unknown Teacher',
-          room: schedule.room || '',
-          grade: schedule.grade || '',
-          subject: schedule.subject || schedule.event_title || 'Class',
-          // Store original database ID for updates
-          databaseId: schedule.idcalendar
-        }));
+        const events = data.map(schedule => {
+          // Parse the recurring_day if it exists
+          const recurringDay = schedule.recurring_day !== undefined && schedule.recurring_day !== null 
+            ? parseInt(schedule.recurring_day) 
+            : null;
+          
+          return {
+            id: schedule.idcalendar,
+            title: schedule.subject || schedule.event_title || 'Class',
+            start: new Date(schedule.start_time),
+            end: new Date(schedule.end_time),
+            isClass: true,
+            description: schedule.description,
+            teacherId: schedule.user_id,
+            teacher: schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : 'Unknown Teacher',
+            room: schedule.room || '',
+            grade: schedule.grade || '',
+            subject: schedule.subject || schedule.event_title || 'Class',
+            recurringDays: recurringDay !== null ? [recurringDay] : [],
+            abDay: schedule.ab_day || '',
+            // Store original database ID for updates
+            databaseId: schedule.idcalendar
+          };
+        });
+        
         setMasterEvents(events);
         setCreateEvents(events); // Also set for create schedule tab
         console.log('Master schedule loaded from backend:', events.length, 'events');
@@ -541,16 +551,28 @@ export default function Schedules() {
     try {
       const response = await fetch(`http://localhost:3000/api/teachers/${teacherId}/schedules`);
       const data = await response.json();
-      const events = data.map(schedule => ({
-        id: schedule.idcalendar,
-        title: schedule.event_title,
-        start: new Date(schedule.start_time),
-        end: new Date(schedule.end_time),
-        isClass: true,
-        description: schedule.description,
-        teacherId: schedule.user_id,
-        teacher: schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : 'Unknown Teacher'
-      }));
+      const events = data.map(schedule => {
+        const recurringDay = schedule.recurring_day !== undefined && schedule.recurring_day !== null 
+          ? parseInt(schedule.recurring_day) 
+          : null;
+        
+        return {
+          id: schedule.idcalendar,
+          title: schedule.event_title,
+          start: new Date(schedule.start_time),
+          end: new Date(schedule.end_time),
+          isClass: true,
+          description: schedule.description,
+          teacherId: schedule.user_id,
+          teacher: schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : 'Unknown Teacher',
+          room: schedule.room || '',
+          grade: schedule.grade || '',
+          subject: schedule.subject || schedule.event_title || 'Class',
+          recurringDays: recurringDay !== null ? [recurringDay] : [],
+          abDay: schedule.ab_day || '',
+          databaseId: schedule.idcalendar
+        };
+      });
       setTeacherEvents(events);
     } catch (error) {
       console.error('Error fetching teacher events:', error);
@@ -2603,82 +2625,64 @@ export default function Schedules() {
 
     // Save to database
     try {
-      const scheduleData = {
-        start_time: newStart.format('YYYY-MM-DD HH:mm:ss'),
-        end_time: newEnd.format('YYYY-MM-DD HH:mm:ss'),
-        class_id: null, // You can link this to a classes table if you have one
-        event_title: `${newSubject} - Grade ${newGrade}`,
-        user_id: newTeacherId,
-        room: newRoom,
-        grade: newGrade, // Add grade field
-        subject: newSubject, // Add subject field
-        description: `Subject: ${newSubject}, Grade: ${newGrade}, Room: ${newRoom}, Teacher: ${newTeacherName}${newAbDay ? `, A/B Day: ${newAbDay}` : ''}${newRecurringDays.length > 0 ? `, Recurring: ${newRecurringDays.map(d => ["Mon", "Tue", "Wed", "Thu", "Fri"][d]).join(", ")}` : ''}`
-      };
-
       if (editMode) {
-        // When editing, generate new recurring events for all selected days
+        // When editing, delete old events and create new ones for each recurring day
         const baseId = editingEventId;
-        const newRecurringEvents = newRecurringDays.map(dayIdx => {
+        
+        // Delete old events from database
+        // Find all related events (same subject, teacher, grade, time, room)
+        const oldEvents = createEvents.filter(ev => {
+          // For backward compatibility, check both by ID prefix and by event properties
+          if (ev.id.toString().startsWith(baseId.toString())) {
+            return true;
+          }
+          // Also find events with matching properties
+          const eventToEdit = createEvents.find(e => e.id.toString() === baseId.toString());
+          if (eventToEdit) {
+            return ev.subject === eventToEdit.subject &&
+                   ev.teacher === eventToEdit.teacher &&
+                   ev.grade === eventToEdit.grade &&
+                   ev.room === eventToEdit.room &&
+                   moment(ev.start).format('HH:mm') === moment(eventToEdit.start).format('HH:mm') &&
+                   moment(ev.end).format('HH:mm') === moment(eventToEdit.end).format('HH:mm');
+          }
+          return false;
+        });
+        
+        for (const oldEvent of oldEvents) {
+          if (oldEvent.databaseId) {
+            await deleteScheduleFromDatabase(oldEvent.databaseId);
+          }
+        }
+        
+        // Save each recurring day as a separate database record
+        const newRecurringEvents = [];
+        for (const dayIdx of newRecurringDays) {
           const weekday = dayIdx + 1; // Monday=1
           const base = moment().startOf('week').day(weekday);
           const duration = newEnd.diff(newStart, 'minutes');
           const start = base.clone().set({ hour: newStart.hour(), minute: newStart.minute(), second: 0 });
           const end = start.clone().add(duration, 'minutes');
           
-          return {
-            id: `${baseId}-recurring-${dayIdx}`,
-            title: `${newSubject} - ${newGrade}`,
-            subject: newSubject,
-            teacher: newTeacherName,
-            teacherId: newTeacherId,
-            grade: newGrade,
+          const scheduleData = {
+            start_time: start.format('YYYY-MM-DD HH:mm:ss'),
+            end_time: end.format('YYYY-MM-DD HH:mm:ss'),
+            class_id: null,
+            event_title: `${newSubject} - Grade ${newGrade}`,
+            user_id: newTeacherId,
             room: newRoom,
-            start: start.toDate(),
-            end: end.toDate(),
-            recurringDays: [dayIdx],
-            abDay: newAbDay || getABDay(start.toDate()),
-            isClass: true,
-            description: newSubject,
-            hasConflicts: false,
-            outOfAvailability: !isEventInTeacherAvailability(newEvent)
+            grade: newGrade,
+            subject: newSubject,
+            recurring_day: dayIdx,
+            ab_day: newAbDay || getABDay(start.toDate()),
+            description: `${newSubject} - Grade ${newGrade}`
           };
-        });
-
-        await updateScheduleInDatabase(editingEventId, scheduleData);
-        
-        // Remove old recurring events and add new ones
-        setCreateEvents(prev => {
-          const filtered = prev.filter(ev => 
-            !ev.id.toString().startsWith(editingEventId.toString())
-          );
-          return [...filtered, ...newRecurringEvents];
-        });
-        
-        // Also update master events
-        setMasterEvents(prev => {
-          const filtered = prev.filter(ev => 
-            !ev.id.toString().startsWith(editingEventId.toString())
-          );
-          return [...filtered, ...newRecurringEvents];
-        });
-        
-        setEditMode(false);
-        setEditingEventId(null);
-        console.log('Schedule updated in database successfully');
-      } else {
-        // Creating new event - generate recurring events for all selected days
-        const result = await saveScheduleToDatabase(scheduleData);
-        if (result.success) {
-          const baseId = result.id;
-          const newRecurringEvents = newRecurringDays.map(dayIdx => {
-            const weekday = dayIdx + 1; // Monday=1
-            const base = moment().startOf('week').day(weekday);
-            const duration = newEnd.diff(newStart, 'minutes');
-            const start = base.clone().set({ hour: newStart.hour(), minute: newStart.minute(), second: 0 });
-            const end = start.clone().add(duration, 'minutes');
-            
-            return {
-              id: `${baseId}-recurring-${dayIdx}`,
+          
+          const result = await saveScheduleToDatabase(scheduleData);
+          
+          if (result.success) {
+            newRecurringEvents.push({
+              id: `${result.id}`,
               title: `${newSubject} - ${newGrade}`,
               subject: newSubject,
               teacher: newTeacherName,
@@ -2693,10 +2697,108 @@ export default function Schedules() {
               description: newSubject,
               hasConflicts: false,
               outOfAvailability: !isEventInTeacherAvailability(newEvent),
-              databaseId: baseId
-            };
+              databaseId: result.id
+            });
+          }
+        }
+        
+        // Remove old recurring events and add new ones
+        setCreateEvents(prev => {
+          const eventToEdit = prev.find(e => e.id.toString() === baseId.toString());
+          const filtered = prev.filter(ev => {
+            // Remove by ID prefix (for backward compatibility)
+            if (ev.id.toString().startsWith(baseId.toString())) {
+              return false;
+            }
+            // Also remove events with matching properties
+            if (eventToEdit) {
+              return !(ev.subject === eventToEdit.subject &&
+                     ev.teacher === eventToEdit.teacher &&
+                     ev.grade === eventToEdit.grade &&
+                     ev.room === eventToEdit.room &&
+                     moment(ev.start).format('HH:mm') === moment(eventToEdit.start).format('HH:mm') &&
+                     moment(ev.end).format('HH:mm') === moment(eventToEdit.end).format('HH:mm'));
+            }
+            return true;
           });
+          return [...filtered, ...newRecurringEvents];
+        });
+        
+        // Also update master events
+        setMasterEvents(prev => {
+          const eventToEdit = prev.find(e => e.id.toString() === baseId.toString());
+          const filtered = prev.filter(ev => {
+            // Remove by ID prefix (for backward compatibility)
+            if (ev.id.toString().startsWith(baseId.toString())) {
+              return false;
+            }
+            // Also remove events with matching properties
+            if (eventToEdit) {
+              return !(ev.subject === eventToEdit.subject &&
+                     ev.teacher === eventToEdit.teacher &&
+                     ev.grade === eventToEdit.grade &&
+                     ev.room === eventToEdit.room &&
+                     moment(ev.start).format('HH:mm') === moment(eventToEdit.start).format('HH:mm') &&
+                     moment(ev.end).format('HH:mm') === moment(eventToEdit.end).format('HH:mm'));
+            }
+            return true;
+          });
+          return [...filtered, ...newRecurringEvents];
+        });
+        
+        setEditMode(false);
+        setEditingEventId(null);
+        console.log('Schedule updated in database successfully');
+      } else {
+        // Creating new event - save each recurring day as a separate database record
+        const newRecurringEvents = [];
+        
+        for (const dayIdx of newRecurringDays) {
+          const weekday = dayIdx + 1; // Monday=1
+          const base = moment().startOf('week').day(weekday);
+          const duration = newEnd.diff(newStart, 'minutes');
+          const start = base.clone().set({ hour: newStart.hour(), minute: newStart.minute(), second: 0 });
+          const end = start.clone().add(duration, 'minutes');
           
+          const scheduleData = {
+            start_time: start.format('YYYY-MM-DD HH:mm:ss'),
+            end_time: end.format('YYYY-MM-DD HH:mm:ss'),
+            class_id: null,
+            event_title: `${newSubject} - Grade ${newGrade}`,
+            user_id: newTeacherId,
+            room: newRoom,
+            grade: newGrade,
+            subject: newSubject,
+            recurring_day: dayIdx,
+            ab_day: newAbDay || getABDay(start.toDate()),
+            description: `${newSubject} - Grade ${newGrade}`
+          };
+          
+          const result = await saveScheduleToDatabase(scheduleData);
+          
+          if (result.success) {
+            newRecurringEvents.push({
+              id: `${result.id}`,
+              title: `${newSubject} - ${newGrade}`,
+              subject: newSubject,
+              teacher: newTeacherName,
+              teacherId: newTeacherId,
+              grade: newGrade,
+              room: newRoom,
+              start: start.toDate(),
+              end: end.toDate(),
+              recurringDays: [dayIdx],
+              abDay: newAbDay || getABDay(start.toDate()),
+              isClass: true,
+              description: newSubject,
+              hasConflicts: false,
+              outOfAvailability: !isEventInTeacherAvailability(newEvent),
+              databaseId: result.id
+            });
+          }
+        }
+        
+        if (newRecurringEvents.length > 0) {
           setCreateEvents(prev => [...prev, ...newRecurringEvents]);
           // Also add to master events
           setMasterEvents(prev => [...prev, ...newRecurringEvents]);
@@ -2880,7 +2982,33 @@ export default function Schedules() {
   // Handle edit event
   const handleEditEvent = (event) => {
     setEditMode(true);
-    setEditingEventId(event.id);
+    
+    // Find all related recurring events (same subject, teacher, grade, time, room)
+    const relatedEvents = createEvents.filter(ev => 
+      ev.subject === event.subject &&
+      ev.teacher === event.teacher &&
+      ev.grade === event.grade &&
+      ev.room === event.room &&
+      moment(ev.start).format('HH:mm') === moment(event.start).format('HH:mm') &&
+      moment(ev.end).format('HH:mm') === moment(event.end).format('HH:mm')
+    );
+    
+    // Use the first event's ID as the base editing ID
+    const baseEditingId = relatedEvents.length > 0 ? relatedEvents[0].id : event.id;
+    setEditingEventId(baseEditingId);
+    
+    // Collect all recurring days from related events
+    const allRecurringDays = [];
+    relatedEvents.forEach(ev => {
+      if (ev.recurringDays && ev.recurringDays.length > 0) {
+        ev.recurringDays.forEach(day => {
+          if (!allRecurringDays.includes(day)) {
+            allRecurringDays.push(day);
+          }
+        });
+      }
+    });
+    
     setSelectedSlot({ start: event.start, end: event.end });
     setDetails({
       teacherId: (() => {
@@ -2895,7 +3023,7 @@ export default function Schedules() {
       room: event.room,
       startTime: moment(event.start).format("h:mm A"),
       endTime: moment(event.end).format("h:mm A"),
-      recurringDays: event.recurringDays || [],
+      recurringDays: allRecurringDays.sort((a, b) => a - b),
       abDay: event.abDay || "",
       dayType: event.abDay || ""
     });
