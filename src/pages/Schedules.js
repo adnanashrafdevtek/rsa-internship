@@ -272,7 +272,6 @@ export default function Schedules() {
   // Tab configuration for admin users
   const getTabs = () => ([
     { id: 'master-schedule', label: 'Master Schedule', icon: '📘' },
-    { id: 'teacher-schedules', label: 'Teacher Schedules', icon: '👨‍🏫' },
     { id: 'student-schedules', label: 'Student Schedules', icon: '🧑‍🎓' },
   ]);
 
@@ -684,8 +683,6 @@ export default function Schedules() {
     switch (activeTab) {
       case "master-schedule":
         return renderMasterSchedule();
-      case "teacher-schedules":
-        return renderTeacherSchedules();
       case "student-schedules":
         return renderStudentSchedules();
       default:
@@ -1478,7 +1475,7 @@ export default function Schedules() {
             />
             
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <h4 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#2c3e50' }}>Teachers & Availability</h4>
+            <h4 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#2c3e50' }}>Filters</h4>
             {selectedTeachers.length > 0 && (
               <button
                 onClick={() => setSelectedTeachers([])}
@@ -1903,113 +1900,6 @@ export default function Schedules() {
   }
 
   // (Removed duplicate TabNavigation definition)
-  const renderTeacherSchedules = () => (
-    <>
-      <div style={{ 
-        backgroundColor: "white", 
-        borderRadius: "8px", 
-        padding: "12px 16px", 
-        boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-        marginBottom: "12px"
-      }}>
-        <h1 style={{ 
-          fontSize: 20, 
-          fontWeight: "bold", 
-          margin: 0, 
-          color: "#2c3e50",
-          display: "flex",
-          alignItems: "center",
-          gap: "6px"
-        }}>
-          👨‍🏫 Teacher Schedules
-        </h1>
-      </div>
-      
-      <div style={{ display: "flex", gap: "16px", height: "calc(100vh - 200px)" }}>
-        {/* Teacher List */}
-        <div style={{
-          width: "300px",
-          backgroundColor: "white",
-          borderRadius: "12px",
-          padding: "16px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          overflowY: "auto"
-        }}>
-          <h3 style={{ margin: "0 0 16px 0", color: "#2c3e50" }}>Select Teacher</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {teachers.map(teacher => (
-              <button
-                key={teacher.id}
-                onClick={() => handleTeacherSelect(teacher)}
-                style={{
-                  padding: "12px",
-                  border: "2px solid #e1e8ed",
-                  borderRadius: "8px",
-                  backgroundColor: selectedTeacher?.id === teacher.id ? "#3498db" : "white",
-                  color: selectedTeacher?.id === teacher.id ? "white" : "#2c3e50",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  transition: "all 0.2s ease"
-                }}
-                onMouseEnter={(e) => {
-                  if (selectedTeacher?.id !== teacher.id) {
-                    e.target.style.backgroundColor = "#f8f9fa";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (selectedTeacher?.id !== teacher.id) {
-                    e.target.style.backgroundColor = "white";
-                  }
-                }}
-              >
-                <div style={{ fontWeight: "600" }}>
-                  {teacher.first_name} {teacher.last_name}
-                </div>
-                <div style={{ fontSize: "12px", opacity: 0.8 }}>
-                  ID: {teacher.id}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-        
-        {/* Calendar */}
-        <div style={{ flex: 1 }}>
-          {selectedTeacher ? (
-            <>
-              <div style={{
-                backgroundColor: "white",
-                borderRadius: "8px",
-                padding: "12px 16px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-                marginBottom: "12px"
-              }}>
-                <h3 style={{ margin: 0, color: "#2c3e50" }}>
-                  Schedule for {selectedTeacher.first_name} {selectedTeacher.last_name}
-                </h3>
-              </div>
-              {renderCalendar(teacherEvents, "teacher-schedule")}
-            </>
-          ) : (
-            <div style={{
-              backgroundColor: "white",
-              borderRadius: "12px",
-              padding: "40px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-              textAlign: "center",
-              color: "#7f8c8d"
-            }}>
-              <div style={{ fontSize: "48px", marginBottom: "16px" }}>👨‍🏫</div>
-              <h3 style={{ margin: "0 0 8px 0", color: "#2c3e50" }}>Select a Teacher</h3>
-              <p style={{ margin: 0 }}>Choose a teacher from the list to view their schedule</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </>
-  );
 
   // Student Schedules Tab Content
   const renderStudentSchedules = () => (
