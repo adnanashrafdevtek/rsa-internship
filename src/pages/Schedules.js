@@ -1452,16 +1452,21 @@ export default function Schedules() {
               onClick={() => setSidebarCollapsed(true)}
               style={{
                 position: 'absolute',
-                top: 8,
-                right: 8,
+                top: 22,
+                right: 16,
                 background: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
                 fontSize: 18,
                 color: '#7f8c8d',
-                padding: 4,
+                padding: 0,
                 lineHeight: 1,
-                zIndex: 10
+                zIndex: 10,
+                width: 24,
+                height: 24,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
               title="Collapse sidebar"
             >
@@ -1497,23 +1502,37 @@ export default function Schedules() {
               }}
             />
             
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingRight: 32 }}>
             <h4 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#2c3e50' }}>Filters</h4>
-            {selectedTeachers.length > 0 && (
+            {(selectedTeachers.length > 0 || selectedGrades.length > 0 || selectedRooms.length > 0) && (
               <button
-                onClick={() => setSelectedTeachers([])}
+                onClick={() => {
+                  setSelectedTeachers([]);
+                  setSelectedGrades([]);
+                  setSelectedRooms([]);
+                }}
                 style={{
-                  padding: "4px 8px",
-                  backgroundColor: "#e74c3c",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
+                  padding: "6px 12px",
+                  backgroundColor: "transparent",
+                  color: "#3498db",
+                  border: "1px solid #3498db",
+                  borderRadius: "6px",
                   cursor: "pointer",
-                  fontSize: "11px",
-                  fontWeight: "500"
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  transition: "all 0.2s ease",
+                  flexShrink: 0
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = "#3498db";
+                  e.target.style.color = "white";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = "transparent";
+                  e.target.style.color = "#3498db";
                 }}
               >
-                Clear All
+                ✕ Clear
               </button>
             )}
           </div>
@@ -1707,26 +1726,6 @@ export default function Schedules() {
                   Filter by Grade
                 </label>
               </div>
-              {selectedGrades.length > 0 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedGrades([]);
-                  }}
-                  style={{
-                    padding: "2px 6px",
-                    backgroundColor: "#e74c3c",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "3px",
-                    cursor: "pointer",
-                    fontSize: "10px",
-                    fontWeight: "500"
-                  }}
-                >
-                  Clear
-                </button>
-              )}
             </div>
             {gradeFilterExpanded && (
               <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1806,26 +1805,6 @@ export default function Schedules() {
                   Filter by Room
                 </label>
               </div>
-              {selectedRooms.length > 0 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedRooms([]);
-                  }}
-                  style={{
-                    padding: "2px 6px",
-                    backgroundColor: "#e74c3c",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "3px",
-                    cursor: "pointer",
-                    fontSize: "10px",
-                    fontWeight: "500"
-                  }}
-                >
-                  Clear
-                </button>
-              )}
             </div>
             {roomFilterExpanded && (
               <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
