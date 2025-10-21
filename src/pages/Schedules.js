@@ -582,18 +582,36 @@ export default function Schedules() {
   // Fetch student-specific events
   const fetchStudentEvents = async (studentId) => {
     try {
+      console.log('Fetching classes for student:', studentId);
       const res = await fetch(`http://localhost:3000/api/students/${studentId}/classes`);
       const classes = res.ok ? await res.json() : [];
       
+      console.log('Student classes retrieved:', classes);
+      
       let events = [];
       classes.forEach(cls => {
-        events = events.concat(generateRecurringEvents(cls));
+        const recurringEvents = generateRecurringEvents(cls);
+        console.log('Generated recurring events for class:', cls.subject, recurringEvents);
+        events = events.concat(recurringEvents);
       });
       
+      console.log('Total student events:', events.length);
       setStudentEvents(events);
     } catch (err) {
-      console.error(err);
-      setStudentEvents([]);
+      console.error('Error fetching student events:', err);
+      // Try backup port
+      try {
+        const res = await fetch(`http://localhost:3001/api/students/${studentId}/classes`);
+        const classes = res.ok ? await res.json() : [];
+        let events = [];
+        classes.forEach(cls => {
+          events = events.concat(generateRecurringEvents(cls));
+        });
+        setStudentEvents(events);
+      } catch (backupErr) {
+        console.error('Backup port also failed:', backupErr);
+        setStudentEvents([]);
+      }
     }
   };
 
