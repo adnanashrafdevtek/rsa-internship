@@ -1452,7 +1452,7 @@ export default function Schedules() {
               onClick={() => setSidebarCollapsed(true)}
               style={{
                 position: 'absolute',
-                top: 22,
+                top: 21,
                 right: 16,
                 background: 'transparent',
                 border: 'none',
