@@ -797,6 +797,11 @@ export default function Schedules() {
         return selectedRooms.includes(room);
       });
     }
+    if (selectedTeachers.length > 0) {
+      filteredMasterEvents = filteredMasterEvents.filter(ev => {
+        return selectedTeachers.includes(ev.teacherId);
+      });
+    }
 
     // Get overlapping event IDs for styling
     const getMasterOverlappingEventIds = () => {
