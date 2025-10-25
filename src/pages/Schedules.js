@@ -306,6 +306,11 @@ export default function Schedules() {
         const data = await response.json();
         console.log('Raw data from backend:', data[0]); // Debug log
         
+        // Fetch availabilities to check conflicts dynamically
+        const availResponse = await fetch('http://localhost:3000/api/teacher-availabilities');
+        const availabilityData = await availResponse.json();
+        console.log('Availabilities for conflict checking:', availabilityData);
+        
         const events = data.map(schedule => {
           // Parse the recurring_day if it exists
           const recurringDay = schedule.recurring_day !== undefined && schedule.recurring_day !== null 
@@ -321,7 +326,7 @@ export default function Schedules() {
           if (grade) title += ` (${grade})`;
           if (teacherName !== 'Unknown Teacher') title += ` - ${teacherName}`;
           
-          return {
+          const eventObj = {
             id: schedule.idcalendar,
             title: title,
             start: new Date(schedule.start_time),
@@ -338,6 +343,36 @@ export default function Schedules() {
             // Store original database ID for updates
             databaseId: schedule.idcalendar
           };
+          
+          // Dynamically check if event is within teacher availability
+          // This ensures conflicts are flagged on every reload
+          const startTime = schedule.start_time ? moment(schedule.start_time).format('HH:mm:ss') : '';
+          const endTime = schedule.end_time ? moment(schedule.end_time).format('HH:mm:ss') : '';
+          const eventDay = schedule.start_time ? moment(schedule.start_time).day() : 0; // 0=Sunday, 1=Monday, etc
+          
+          // Check if this event is within teacher's availability
+          let hasConflict = false;
+          if (availabilityData && Array.isArray(availabilityData)) {
+            const teacherAvail = availabilityData.filter(a => a.teacher_id == schedule.user_id && a.day_of_week == eventDay);
+            if (teacherAvail.length === 0) {
+              // No availability defined for this day
+              hasConflict = true;
+            } else {
+              // Check if event time is within any availability window
+              const isWithinWindow = teacherAvail.some(a => {
+                const availStart = moment(a.start_time, 'HH:mm:ss');
+                const availEnd = moment(a.end_time, 'HH:mm:ss');
+                const eventStart = moment(startTime, 'HH:mm:ss');
+                const eventEnd = moment(endTime, 'HH:mm:ss');
+                return eventStart.isSameOrAfter(availStart) && eventEnd.isSameOrBefore(availEnd);
+              });
+              hasConflict = !isWithinWindow;
+            }
+          }
+          
+          eventObj.hasConflict = hasConflict;
+          
+          return eventObj;
         });
         
         setMasterEvents(events);
@@ -980,7 +1015,7 @@ export default function Schedules() {
       if (event.availability) {
         return; // Don't allow dropping availability events
       }
-      
+
       const isFriday = moment(start).day() === 5;
       
       if (isFriday && !event.abDay) {
@@ -991,11 +1026,20 @@ export default function Schedules() {
             end, 
             dragEvent: event, 
             originalEvent: event,
-            draggedEventId: event.id 
+            draggedEventId: event.id,
+            isDragging: true
           } 
         });
         return;
       }
+      
+      // Check if event is still within teacher availability
+      const testEvent = {
+        ...event,
+        start,
+        end
+      };
+      const isInAvailability = isEventInTeacherAvailability(testEvent);
       
       // Update the event with new times - PRESERVE ALL ORIGINAL EVENT DATA
       const updatedEvent = {
@@ -1006,6 +1050,8 @@ export default function Schedules() {
         end,
         startTime: moment(start).format("HH:mm:ss"),
         endTime: moment(end).format("HH:mm:ss"),
+        // Flag if outside availability
+        hasConflict: !isInAvailability,
         // Explicitly preserve critical fields to ensure they don't get lost
         id: event.id,
         title: event.title || event.subject,
@@ -1020,6 +1066,7 @@ export default function Schedules() {
       
       console.log('🔄 Dragged event - Original:', event);
       console.log('✅ Dragged event - Updated:', updatedEvent);
+      console.log('📍 In teacher availability?', isInAvailability);
       
       // Update master events immediately for UI
       setMasterEvents(prev => prev.map(ev => 
@@ -1033,9 +1080,7 @@ export default function Schedules() {
         // Add the new change
         return [...filtered, updatedEvent];
       });
-    };
-
-    const MasterToolbar = ({ label }) => (
+    };    const MasterToolbar = ({ label }) => (
       <div className="rbc-toolbar" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, gap: 12 }}>
         <span className="rbc-btn-group" style={{ display: 'flex', gap: 4 }}>
           {[
@@ -1366,8 +1411,8 @@ export default function Schedules() {
           events={[
             // Show filtered master schedule events
             ...filteredMasterEvents,
-            // Add availability events for selected teachers with transparency
-            ...allAvailabilities
+            // Add availability events for selected teachers with transparency - MERGED to combine overlapping blocks
+            ...mergeOverlappingAvailabilities(allAvailabilities)
               .filter(av => selectedTeachers.includes(av.teacher_id))
               .map(av => {
                 const dayOfWeek = typeof av.day_of_week === 'string' 
@@ -1381,7 +1426,7 @@ export default function Schedules() {
                 const end = weekStart.clone().set({ hour: +endHour, minute: +endMinute, second: 0 }).toDate();
                 
                 return {
-                  id: `avail-${av.teacher_id}-${av.id}`,
+                  id: `avail-${av.teacher_id}-${av.day_of_week}-${av.start_time}-${av.end_time}`,
                   title: `${av.teacher_first_name || ''} ${av.teacher_last_name || ''} - Available`.trim(),
                   start,
                   end,
@@ -2110,6 +2155,57 @@ export default function Schedules() {
     return false; // No matching availability found
   };
 
+  // Helper function to merge overlapping availability blocks for the same teacher on the same day
+  const mergeOverlappingAvailabilities = (availabilities) => {
+    if (!availabilities || availabilities.length === 0) return [];
+    
+    // Group by teacher and day
+    const grouped = {};
+    availabilities.forEach(av => {
+      const key = `${av.teacher_id}-${av.day_of_week}`;
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push(av);
+    });
+    
+    // Merge overlapping times within each group
+    const merged = [];
+    Object.values(grouped).forEach(group => {
+      // Sort by start time
+      const sorted = group.sort((a, b) => {
+        const timeA = moment(a.start_time, 'HH:mm:ss').toDate();
+        const timeB = moment(b.start_time, 'HH:mm:ss').toDate();
+        return timeA - timeB;
+      });
+      
+      // Merge overlapping intervals
+      let current = { ...sorted[0] };
+      for (let i = 1; i < sorted.length; i++) {
+        const next = sorted[i];
+        const currentEnd = moment(current.end_time, 'HH:mm:ss');
+        const nextStart = moment(next.start_time, 'HH:mm:ss');
+        
+        // If current end is >= next start, they overlap or are adjacent
+        if (currentEnd.isSameOrAfter(nextStart)) {
+          // Merge: extend current end if needed
+          const nextEnd = moment(next.end_time, 'HH:mm:ss');
+          if (nextEnd.isAfter(currentEnd)) {
+            current.end_time = nextEnd.format('HH:mm:ss');
+          }
+        } else {
+          // No overlap, push current and move to next
+          merged.push(current);
+          current = { ...next };
+        }
+      }
+      // Don't forget the last one
+      merged.push(current);
+    });
+    
+    return merged;
+  };
+
   // Helper: expand recurring events for calendar
   const getCalendarEvents = () => {
     const expanded = [];
@@ -2336,6 +2432,14 @@ export default function Schedules() {
         setCreateEvents(prev => [...prev, exceptionEvent]);
       } else {
         // Regular event or base recurring event being moved to Friday
+        // Check if event is still within teacher availability
+        const testEvent = {
+          ...dragEvent,
+          start,
+          end
+        };
+        const isInAvailability = isEventInTeacherAvailability(testEvent);
+        
         try {
           if (dragEvent.databaseId) {
             const scheduleData = {
@@ -2357,6 +2461,27 @@ export default function Schedules() {
           // Don't return here - allow the drag to continue even if database update fails
         }
         
+        // Update master events with Friday changes
+        const updatedEvent = {
+          ...dragEvent,
+          start: start,
+          end: end,
+          abDay: abDay,
+          recurringDays: [4], // Friday
+          hasConflict: !isInAvailability // Flag if outside availability
+        };
+        
+        setMasterEvents(prev => prev.map(ev => 
+          ev.id === dragEvent.id ? updatedEvent : ev
+        ));
+        
+        // Track change
+        setPendingChanges(prev => {
+          const filtered = prev.filter(change => change.id !== dragEvent.id);
+          return [...filtered, updatedEvent];
+        });
+        
+        // Also update createEvents if it's there
         setCreateEvents(prev => {
           const updatedEvents = prev.map(ev =>
             ev.id === dragEvent.id
