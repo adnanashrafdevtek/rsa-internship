@@ -630,10 +630,11 @@ export default function Schedules() {
   const eventStyleGetter = (event) => {
     // All classes same color - blue
     let backgroundColor = "#3498db";
+    let borderStyle = "none";
     
-    // Check if event has conflicts
-    if (event.hasConflict) {
-      backgroundColor = "#e74c3c"; // Red for conflicts
+    // Check if event has conflicts or flagged issues
+    if (event.hasConflict || event.hasConflicts) {
+      borderStyle = "3px solid #e74c3c"; // Red outline for conflicts
     }
     
     return {
@@ -641,7 +642,7 @@ export default function Schedules() {
         backgroundColor,
         color: "white",
         borderRadius: 4,
-        border: "none",
+        border: borderStyle,
         fontSize: "13px",
         fontWeight: 500,
         boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
@@ -844,14 +845,21 @@ export default function Schedules() {
     const masterEventStyleGetter = (event) => {
       let backgroundColor;
       let opacity = 1;
+      let borderStyle = "none";
       
       if (event.availability) {
         // Availability events - use teacher color with transparency
         backgroundColor = event.color || getTeacherColor(event.teacher_id);
         opacity = 0.3; // Make availability transparent
+        borderStyle = `2px dashed ${backgroundColor}`;
       } else if (event.isClass) {
         // All class events use the same color for consistency
         backgroundColor = "#3498db"; // Blue color for all classes
+        
+        // Check if class has conflict or hasConflicts flag - red outline
+        if (event.hasConflict || event.hasConflicts) {
+          borderStyle = "3px solid #e74c3c";
+        }
       } else {
         // Other events
         const colors = ["#3498db", "#9b59b6", "#f39c12", "#e74c3c", "#1abc9c"];
@@ -859,15 +867,15 @@ export default function Schedules() {
         backgroundColor = colors[colorIndex];
       }
 
-      // Highlight conflicts
-      if (overlappingEventIds.includes(event.id)) {
-        backgroundColor = "#e74c3c";
+      // Highlight conflicts (overlapping events on master schedule)
+      if (overlappingEventIds.includes(event.id) && !event.availability) {
+        borderStyle = "3px solid #c0392b"; // Dark red outline for overlaps
         opacity = 1;
       }
 
       // Highlight selected events in delete mode
       if (deleteMode && selectedToDelete.includes(event.id)) {
-        backgroundColor = "#8e44ad";
+        borderStyle = "3px solid #9b59b6";
         opacity = 1;
       }
       
@@ -877,10 +885,7 @@ export default function Schedules() {
           opacity,
           color: "white",
           borderRadius: 4,
-          border: event.availability 
-            ? `2px dashed ${backgroundColor}` // Dashed border for availability
-            : (overlappingEventIds.includes(event.id) ? "2px solid #c0392b" : 
-               (deleteMode && selectedToDelete.includes(event.id) ? "3px solid #9b59b6" : "none")),
+          border: borderStyle,
           fontSize: "13px",
           fontWeight: 500,
           boxShadow: event.availability 
@@ -2208,8 +2213,27 @@ export default function Schedules() {
 
   // Handle Friday A/B day selection
   const handleFridaySelection = async (abDay) => {
-    const { start, end, dragEvent, originalEvent, draggedEventId, isNewClass } = fridayModal.slotInfo;
+    const { start, end, dragEvent, originalEvent, draggedEventId, isNewClass, isSaveEvent } = fridayModal.slotInfo;
     setFridayModal({ open: false, slotInfo: null });
+    
+    if (isSaveEvent) {
+      // Friday selection from the form - update the details abDay
+      setDetails(prev => ({
+        ...prev,
+        abDay: abDay,
+        dayType: abDay
+      }));
+      // Don't return - let the code continue to actually save the event
+      // We need to manually trigger the save since state updates are async
+      setTimeout(() => {
+        // Create and dispatch the form submission
+        const form = document.querySelector('form');
+        if (form) {
+          form.dispatchEvent(new Event('submit', { bubbles: true }));
+        }
+      }, 50);
+      return;
+    }
     
     if (isNewClass) {
       // Handle new class creation on Friday
@@ -2384,8 +2408,31 @@ export default function Schedules() {
     const newSubject = details.subject;
     const newStart = moment(selectedSlot.start);
     const newEnd = moment(selectedSlot.end);
-    const newRecurringDays = details.recurringDays || [];
+    let newRecurringDays = details.recurringDays || [];
     const newAbDay = details.abDay || "";
+
+    // Check if Friday is included in recurring days without A/B day set
+    if (newRecurringDays.includes(4) && !newAbDay) {
+      // Friday is selected but no A/B day chosen - show modal
+      console.log('Friday selected, showing A/B day modal');
+      setFridayModal({
+        open: true,
+        slotInfo: {
+          start: newStart.toDate(),
+          end: newEnd.toDate(),
+          isSaveEvent: true
+        }
+      });
+      return;
+    }
+    
+    // If no recurring days selected, make it a single event on the selected slot day
+    if (newRecurringDays.length === 0) {
+      const dayIdx = newStart.day() - 1; // Convert moment day (0-6) to our index (0-4 Mon-Fri)
+      if (dayIdx >= 0 && dayIdx <= 4) {
+        newRecurringDays = [dayIdx];
+      }
+    }
 
     // Get teacher name for conflict messages
     const newTeacherName = (() => {
@@ -3691,13 +3738,103 @@ export default function Schedules() {
               {conflictModal.pendingEvent && (
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
+                    // Add event despite conflicts - save to database just like normal save
                     if (editMode) {
                       setCreateEvents(prev => prev.map(ev => ev.id === editingEventId ? conflictModal.pendingEvent : ev));
                       setEditMode(false);
                       setEditingEventId(null);
                     } else {
-                      setCreateEvents(prev => [...prev, conflictModal.pendingEvent]);
+                      // For new events with conflicts, process recurring days if applicable
+                      const pendingEvent = conflictModal.pendingEvent;
+                      const newRecurringDays = pendingEvent.recurringDays || [];
+                      
+                      try {
+                        if (newRecurringDays.length > 0) {
+                          // Generate events for each recurring day and save to database
+                          const newRecurringEvents = [];
+                          for (const dayIdx of newRecurringDays) {
+                            const weekday = dayIdx + 1;
+                            const base = moment().startOf('week').day(weekday);
+                            const newStart = moment(pendingEvent.start);
+                            const newEnd = moment(pendingEvent.end);
+                            const duration = newEnd.diff(newStart, 'minutes');
+                            const start = base.clone().set({ hour: newStart.hour(), minute: newStart.minute(), second: 0 });
+                            const end = start.clone().add(duration, 'minutes');
+                            
+                            const scheduleData = {
+                              start_time: start.format('YYYY-MM-DD HH:mm:ss'),
+                              end_time: end.format('YYYY-MM-DD HH:mm:ss'),
+                              class_id: null,
+                              event_title: `${pendingEvent.subject} - Grade ${pendingEvent.grade}`,
+                              user_id: pendingEvent.teacherId,
+                              room: pendingEvent.room,
+                              grade: pendingEvent.grade,
+                              subject: pendingEvent.subject,
+                              recurring_day: dayIdx,
+                              ab_day: pendingEvent.abDay || getABDay(start.toDate()),
+                              description: `${pendingEvent.subject} - Grade ${pendingEvent.grade}`
+                            };
+                            
+                            const result = await saveScheduleToDatabase(scheduleData);
+                            
+                            if (result.success) {
+                              newRecurringEvents.push({
+                                id: `${result.id}`,
+                                title: `${pendingEvent.subject} - ${pendingEvent.grade}`,
+                                subject: pendingEvent.subject,
+                                teacher: pendingEvent.teacher,
+                                teacherId: pendingEvent.teacherId,
+                                grade: pendingEvent.grade,
+                                room: pendingEvent.room,
+                                start: start.toDate(),
+                                end: end.toDate(),
+                                recurringDays: [dayIdx],
+                                abDay: pendingEvent.abDay || getABDay(start.toDate()),
+                                isClass: true,
+                                description: pendingEvent.subject,
+                                hasConflicts: true,
+                                outOfAvailability: false,
+                                databaseId: result.id
+                              });
+                            }
+                          }
+                          setCreateEvents(prev => [...prev, ...newRecurringEvents]);
+                          setMasterEvents(prev => [...prev, ...newRecurringEvents]);
+                          await fetchRooms();
+                        } else {
+                          // Single event (not recurring) - save to database
+                          const scheduleData = {
+                            start_time: moment(pendingEvent.start).format('YYYY-MM-DD HH:mm:ss'),
+                            end_time: moment(pendingEvent.end).format('YYYY-MM-DD HH:mm:ss'),
+                            class_id: null,
+                            event_title: `${pendingEvent.subject} - Grade ${pendingEvent.grade}`,
+                            user_id: pendingEvent.teacherId,
+                            room: pendingEvent.room,
+                            grade: pendingEvent.grade,
+                            subject: pendingEvent.subject,
+                            ab_day: pendingEvent.abDay || getABDay(moment(pendingEvent.start).toDate()),
+                            description: `${pendingEvent.subject} - Grade ${pendingEvent.grade}`
+                          };
+                          
+                          const result = await saveScheduleToDatabase(scheduleData);
+                          
+                          if (result.success) {
+                            const savedEvent = {
+                              ...pendingEvent,
+                              id: `${result.id}`,
+                              databaseId: result.id
+                            };
+                            setCreateEvents(prev => [...prev, savedEvent]);
+                            setMasterEvents(prev => [...prev, savedEvent]);
+                            await fetchRooms();
+                          }
+                        }
+                      } catch (error) {
+                        console.error('Error saving conflicting event:', error);
+                        alert('Failed to save event with conflicts');
+                        return;
+                      }
                     }
                     setConflictModal({ open: false, messages: [], pendingEvent: null });
                     setModalOpen(false);
