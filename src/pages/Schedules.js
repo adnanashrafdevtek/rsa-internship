@@ -184,6 +184,23 @@ const CustomHeader = ({ date }) => {
 
 
 export default function Schedules() {
+  // Teacher-grade mapping: { teacher_id, grade_level }
+  const [teacherGrades, setTeacherGrades] = useState([]);
+  // Fetch teacher-grades mapping
+  useEffect(() => {
+    async function fetchTeacherGrades() {
+      try {
+        const res = await fetch('http://localhost:3000/api/teacher-grades');
+        if (!res.ok) throw new Error('Failed to fetch teacher grades');
+        const data = await res.json();
+        setTeacherGrades(data);
+      } catch (err) {
+        console.error('Error fetching teacher grades:', err);
+        setTeacherGrades([]);
+      }
+    }
+    fetchTeacherGrades();
+  }, []);
   // School view state for master schedule
   const [schoolView, setSchoolView] = useState("all");
   const { user, logout } = useAuth();
@@ -1111,8 +1128,15 @@ export default function Schedules() {
       </div>
     );
 
-    // Static PreK-12 grade list
-    const gradeDropdownOptions = ['PK','K','1','2','3','4','5','6','7','8','9','10','11','12'];
+    // Dynamic grade list based on schoolView
+    let gradeDropdownOptions = ['PK','K','1','2','3','4','5','6','7','8','9','10','11','12'];
+    if (schoolView === 'elementary') {
+      gradeDropdownOptions = ['PK','1','2','3','4','5'];
+    } else if (schoolView === 'middle') {
+      gradeDropdownOptions = ['6','7','8'];
+    } else if (schoolView === 'high') {
+      gradeDropdownOptions = ['9','10','11','12'];
+    }
 
       const MasterHeader = ({ date }) => {
         const ab = getABLabelForHeader(date);
@@ -1583,10 +1607,23 @@ export default function Schedules() {
               <>
                 {teachers && teachers.length > 0 ? (
                   teachers
-                    .filter(t =>
-                      searchTerm.trim() === "" ||
-                      `${t.first_name || ''} ${t.last_name || ''}`.toLowerCase().includes(searchTerm.trim().toLowerCase())
-                    )
+                    .filter(t => {
+                      // Filter by search term
+                      if (
+                        searchTerm.trim() !== "" &&
+                        !(`${t.first_name || ''} ${t.last_name || ''}`.toLowerCase().includes(searchTerm.trim().toLowerCase()))
+                      ) return false;
+                      // Filter by schoolView (elementary, middle, high)
+                      if (schoolView === 'all') return true;
+                      const gradesForTeacher = teacherGrades
+                        .filter(g => g.teacher_id === t.id)
+                        .map(g => g.grade_level);
+                      let allowedGrades = [];
+                      if (schoolView === 'elementary') allowedGrades = ['PK','1','2','3','4','5'];
+                      else if (schoolView === 'middle') allowedGrades = ['6','7','8'];
+                      else if (schoolView === 'high') allowedGrades = ['9','10','11','12'];
+                      return gradesForTeacher.some(g => allowedGrades.includes(g));
+                    })
                     .map((t) => {
                 const teacherAvailabilities = allAvailabilities.filter(av => av.teacher_id === t.id);
                 const isSelected = selectedTeachers.includes(t.id);
