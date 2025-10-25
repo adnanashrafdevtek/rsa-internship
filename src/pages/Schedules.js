@@ -309,7 +309,8 @@ export default function Schedules() {
         // Fetch availabilities to check conflicts dynamically
         const availResponse = await fetch('http://localhost:3000/api/teacher-availabilities');
         const availabilityData = await availResponse.json();
-        console.log('Availabilities for conflict checking:', availabilityData);
+        console.log('🔔 FETCH: Availabilities for conflict checking:', availabilityData);
+        console.log(`🔔 FETCH: Total availability records: ${availabilityData ? availabilityData.length : 0}`);
         
         const events = data.map(schedule => {
           // Parse the recurring_day if it exists
@@ -321,10 +322,9 @@ export default function Schedules() {
           const subject = schedule.subject || schedule.event_title || 'Class';
           const grade = schedule.grade || '';
           
-          // Build title with teacher and grade info
+          // Build title with subject and grade only (no teacher name)
           let title = subject;
           if (grade) title += ` (${grade})`;
-          if (teacherName !== 'Unknown Teacher') title += ` - ${teacherName}`;
           
           const eventObj = {
             id: schedule.idcalendar,
@@ -352,11 +352,44 @@ export default function Schedules() {
           
           // Check if this event is within teacher's availability
           let hasConflict = false;
+          console.log(`📋 Checking availability for Schedule ID: ${schedule.id}, Teacher: ${schedule.user_id}, Event Day: ${eventDay}`);
+          console.log(`   Available availability records total: ${availabilityData ? availabilityData.length : 0}`);
+          
           if (availabilityData && Array.isArray(availabilityData)) {
-            const teacherAvail = availabilityData.filter(a => a.teacher_id == schedule.user_id && a.day_of_week == eventDay);
+            // Filter availabilities for this teacher and day
+            const teacherAvail = availabilityData.filter(a => {
+              // Match teacher ID
+              if (a.teacher_id != schedule.user_id) return false;
+              
+              // Handle different day_of_week formats from database
+              let availDay = a.day_of_week;
+              if (typeof availDay === 'string') {
+                // Convert day name to number (0=Sunday, 1=Monday, etc)
+                const dayMap = { 'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6 };
+                availDay = dayMap[availDay] !== undefined ? dayMap[availDay] : parseInt(availDay);
+              } else {
+                availDay = parseInt(availDay);
+              }
+              
+              // Database might use 1-7 (Monday-Sunday) or 0-6 (Sunday-Saturday)
+              // Normalize to 0-6 range
+              if (availDay > 6) availDay = availDay - 1;
+              
+              const dayMatch = availDay === eventDay;
+              if (dayMatch) {
+                console.log(`   ✅ Day match found: availDay=${availDay} (from ${a.day_of_week}) vs eventDay=${eventDay}`);
+              }
+              
+              // Match day of week
+              return dayMatch;
+            });
+            
+            console.log(`   Found ${teacherAvail.length} availability entries for this teacher on day ${eventDay}`);
+            
             if (teacherAvail.length === 0) {
-              // No availability defined for this day
+              // No availability defined for this day - flag as conflict
               hasConflict = true;
+              console.log(`   ⚠️ CONFLICT: Teacher ${schedule.user_id} has NO availability for day ${eventDay}`);
             } else {
               // Check if event time is within any availability window
               const isWithinWindow = teacherAvail.some(a => {
@@ -364,9 +397,13 @@ export default function Schedules() {
                 const availEnd = moment(a.end_time, 'HH:mm:ss');
                 const eventStart = moment(startTime, 'HH:mm:ss');
                 const eventEnd = moment(endTime, 'HH:mm:ss');
-                return eventStart.isSameOrAfter(availStart) && eventEnd.isSameOrBefore(availEnd);
+                
+                const withinWindow = eventStart.isSameOrAfter(availStart) && eventEnd.isSameOrBefore(availEnd);
+                console.log(`📍 Event ${schedule.subject}: ${startTime}-${endTime} vs Availability ${a.start_time}-${a.end_time} = ${withinWindow}`);
+                return withinWindow;
               });
               hasConflict = !isWithinWindow;
+              console.log(`✓ Teacher ${schedule.user_id} availability check: ${isWithinWindow ? 'WITHIN' : 'OUTSIDE'}`);
             }
           }
           
@@ -432,7 +469,7 @@ export default function Schedules() {
 
     const fetchRooms = async () => {
       try {
-        // Get rooms from existing schedules
+        // Get rooms from existing schedules - only rooms that are actually being used
         const response = await fetch('http://localhost:3000/api/schedules');
         if (!response.ok) {
           throw new Error(`API responded with status: ${response.status}`);
@@ -441,7 +478,8 @@ export default function Schedules() {
         const schedules = await response.json();
         console.log('Fetched schedules for room extraction:', schedules);
         
-        // Extract unique rooms, handling different possible field names and data types
+        // Extract unique rooms from classes that were actually created
+        // Only show rooms that exist in the database
         const rooms = Array.from(new Set(
           schedules
             .map(schedule => {
@@ -454,30 +492,16 @@ export default function Schedules() {
         
         console.log('Extracted unique rooms from database:', rooms);
         
-        // Enhanced fallback rooms if none exist in database
-        const fallbackRooms = [
-          '101', '102', '103', '104', '105', 
-          '201', '202', '203', '204', '205',
-          'Art Room', 'Music Room', 'Science Lab', 
-          'Computer Lab', 'Library', 'Gym', 
-          'Cafeteria', 'Auditorium'
-        ];
-        
-        const finalRooms = rooms.length > 0 ? rooms : fallbackRooms;
-        setAvailableRooms(finalRooms);
-        console.log('Final rooms set for filtering:', finalRooms);
+        // Set available rooms - ONLY rooms that actually exist (no fallback)
+        setAvailableRooms(rooms);
+        console.log('Room filter set to only show rooms in use:', rooms);
         
       } catch (err) {
         console.error('Error fetching rooms from schedules API:', err);
-        // Enhanced fallback to test rooms if API fails
-        const fallbackRooms = [
-          '101', '102', '103', '104', '105', 
-          '201', '202', '203', '204', '205',
-          'Art Room', 'Music Room', 'Science Lab', 
-          'Computer Lab', 'Library', 'Gym'
-        ];
-        setAvailableRooms(fallbackRooms);
-        console.log('Using fallback rooms due to API error:', fallbackRooms);
+        // If API fails, show empty rooms instead of fallback
+        // This way the filter only shows rooms that were actually created
+        setAvailableRooms([]);
+        console.log('No rooms available (API error or no classes created yet)');
       }
     };
 
@@ -936,8 +960,12 @@ export default function Schedules() {
             ? "0 1px 2px rgba(0,0,0,0.1)" 
             : "0 1px 3px rgba(0,0,0,0.1)",
           cursor: event.availability ? "default" : (deleteMode ? "pointer" : "move"),
-          zIndex: event.availability ? 1 : 10, // Availability blocks stay in background
-          pointerEvents: event.availability ? 'none' : 'auto', // Allow clicking through availability blocks
+          zIndex: event.availability ? 1 : 10,
+          pointerEvents: event.availability ? 'none' : 'auto',
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          padding: "4px 6px"
         },
       };
     };
@@ -1040,6 +1068,10 @@ export default function Schedules() {
         end
       };
       const isInAvailability = isEventInTeacherAvailability(testEvent);
+      
+      console.log(`🎯 DRAG: Checking availability after drop for event ${event.id}`);
+      console.log(`🎯 DRAG: Available teacher availabilities in state: ${allAvailabilities ? allAvailabilities.length : 0}`);
+      console.log(`🎯 DRAG: isInAvailability result: ${isInAvailability}`);
       
       // Update the event with new times - PRESERVE ALL ORIGINAL EVENT DATA
       const updatedEvent = {
@@ -1484,7 +1516,7 @@ export default function Schedules() {
                 <span style={{ fontWeight: 600 }}>{event.title || event.subject || 'Event'}</span>
                 {event.isClass && event.teacher && (
                   <span style={{ fontSize: '10px', opacity: 0.85, fontWeight: 400 }}>
-                    �‍🏫 {event.teacher}
+                    {event.teacher}
                   </span>
                 )}
                 {event.availability && <span style={{ fontSize: '10px', opacity: 0.9 }}>⏰</span>}
@@ -2116,14 +2148,23 @@ export default function Schedules() {
   const isEventInTeacherAvailability = (event) => {
     if (!event.teacherId) return true; // No teacher assigned, no conflict
     
+    console.log(`🔎 AVAILABILITY_CHECK: Checking event for teacher ${event.teacherId}, time: ${moment(event.start).format('HH:mm')}-${moment(event.end).format('HH:mm')}`);
+    console.log(`🔎 AVAILABILITY_CHECK: Total availabilities in state: ${allAvailabilities ? allAvailabilities.length : 0}`);
+    
     const eventStart = moment(event.start);
     const eventEnd = moment(event.end);
     const eventDay = eventStart.day(); // 0=Sunday, 1=Monday, etc.
     
+    console.log(`🔎 AVAILABILITY_CHECK: Event day: ${eventDay} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][eventDay]})`);
+    
     // Find teacher's availability for this day
-    const teacherAvailabilities = allAvailabilities.filter(av => 
-      av.teacher_id === event.teacherId
-    );
+    const teacherAvailabilities = allAvailabilities.filter(av => {
+      const match = av.teacher_id === event.teacherId;
+      if (match) console.log(`   🔎 Found availability for teacher: ${av.teacher_id}, day_of_week: ${av.day_of_week}`);
+      return match;
+    });
+    
+    console.log(`🔎 AVAILABILITY_CHECK: Teacher has ${teacherAvailabilities.length} total availability entries`);
     
     for (const availability of teacherAvailabilities) {
       let availabilityDay;
@@ -2136,8 +2177,14 @@ export default function Schedules() {
         availabilityDay = dayMap[availability.day_of_week] || 0;
       }
       
+      // Normalize day: database might use 1-7 instead of 0-6
+      if (availabilityDay > 6) availabilityDay = availabilityDay - 1;
+      
+      console.log(`   🔎 Checking availability day ${availabilityDay} (from ${availability.day_of_week}) vs event day ${eventDay}`);
+      
       // Check if event is on the same day as availability
       if (eventDay === availabilityDay) {
+        console.log(`   ✅ Day matches! Checking time window...`);
         const availStart = moment(availability.start_time, 'HH:mm:ss');
         const availEnd = moment(availability.end_time, 'HH:mm:ss');
         
@@ -2146,12 +2193,17 @@ export default function Schedules() {
         availEnd.year(eventEnd.year()).month(eventEnd.month()).date(eventEnd.date());
         
         // Check if event is within availability window
-        if (eventStart.isSameOrAfter(availStart) && eventEnd.isSameOrBefore(availEnd)) {
+        const isWithin = eventStart.isSameOrAfter(availStart) && eventEnd.isSameOrBefore(availEnd);
+        console.log(`   📍 Time check: event ${eventStart.format('HH:mm')}-${eventEnd.format('HH:mm')} vs avail ${availStart.format('HH:mm')}-${availEnd.format('HH:mm')} = ${isWithin}`);
+        
+        if (isWithin) {
+          console.log(`   ✅✅✅ EVENT IS WITHIN AVAILABILITY - RETURNING TRUE`);
           return true;
         }
       }
     }
     
+    console.log(`🔎 AVAILABILITY_CHECK: NO matching availability found - RETURNING FALSE`);
     return false; // No matching availability found
   };
 
