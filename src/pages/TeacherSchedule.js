@@ -263,8 +263,29 @@ export default function TeacherSchedule() {
       const res = await fetch(`http://localhost:3000/api/teachers/${user.id}/schedules`);
       const data = await res.json();
       
-      const generatedEvents = generateRecurringEvents(data);
-      setEvents(generatedEvents);
+      // Map database calendar events directly to calendar format
+      const formattedEvents = data.map((item) => {
+        // Parse datetime strings
+        const startTime = new Date(item.start_time);
+        const endTime = new Date(item.end_time);
+        
+        return {
+          id: item.idcalendar,
+          title: item.event_title || item.subject || 'Class',
+          start: startTime,
+          end: endTime,
+          resource: {
+            subject: item.subject,
+            grade: item.grade,
+            room: item.room,
+            description: item.description,
+            teacher_name: `${item.first_name} ${item.last_name}`,
+            color: '#3498db'
+          },
+        };
+      });
+      
+      setEvents(formattedEvents);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching schedule:', error);
@@ -272,87 +293,10 @@ export default function TeacherSchedule() {
     }
   };
 
-  const generateRecurringEvents = (classes) => {
-    const events = [];
-    const startDate = moment('2024-08-14');
-    const endDate = moment().add(2, 'months');
-
-    classes.forEach((cls) => {
-      if (!cls.recurring_days || !cls.start_time || !cls.end_time) return;
-
-      const recurringDays = cls.recurring_days.split(',').map(d => d.trim().toUpperCase());
-      const startTime = moment(cls.start_time);
-      const endTime = moment(cls.end_time);
-      const startHour = startTime.hours();
-      const startMinute = startTime.minutes();
-      const endHour = endTime.hours();
-      const endMinute = endTime.minutes();
-
-      let currentDate = startDate.clone();
-
-      while (currentDate.isBefore(endDate)) {
-        const dayName = currentDate.format('ddd').toUpperCase();
-        const daysSinceStart = currentDate.diff(startDate, 'days');
-        const isADay = daysSinceStart % 2 === 0;
-        const abDay = isADay ? 'A' : 'B';
-
-        let shouldInclude = false;
-
-        if (recurringDays.includes(dayName)) {
-          shouldInclude = true;
-        } else if (recurringDays.includes('A') && isADay) {
-          shouldInclude = true;
-        } else if (recurringDays.includes('B') && !isADay) {
-          shouldInclude = true;
-        }
-
-        if (shouldInclude) {
-          const eventStart = currentDate.clone().set({ hour: startHour, minute: startMinute, second: 0 });
-          const eventEnd = currentDate.clone().set({ hour: endHour, minute: endMinute, second: 0 });
-
-          events.push({
-            title: `${cls.class_name} - Room ${cls.room_number || 'TBA'}`,
-            start: eventStart.toDate(),
-            end: eventEnd.toDate(),
-            resource: cls,
-          });
-        }
-
-        currentDate.add(1, 'day');
-      }
-    });
-
-    return events;
-  };
-
-  const getABDay = (date) => {
-    const startDate = moment('2024-08-14');
-    const currentDate = moment(date).startOf('day');
-    const daysSinceStart = currentDate.diff(startDate, 'days');
-    return daysSinceStart % 2 === 0 ? 'A' : 'B';
-  };
-
   const CustomHeader = ({ date, label }) => {
-    const abDay = getABDay(date);
-    const isADay = abDay === 'A';
-
     return (
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{label}</div>
-        <div
-          style={{
-            marginTop: '4px',
-            padding: '2px 8px',
-            borderRadius: '12px',
-            backgroundColor: isADay ? '#3498db' : '#e74c3c',
-            color: 'white',
-            fontSize: '11px',
-            fontWeight: 'bold',
-            display: 'inline-block',
-          }}
-        >
-          {abDay} Day
-        </div>
       </div>
     );
   };

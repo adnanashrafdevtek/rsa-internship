@@ -9,7 +9,6 @@ import {
   setHours,
   setMinutes,
   setSeconds,
-  differenceInDays,
 } from "date-fns";
 import enUS from "date-fns/locale/en-US";
 import "react-big-calendar/lib/css/react-big-calendar.css";
@@ -24,29 +23,11 @@ const localizer = dateFnsLocalizer({
   locales: { "en-US": enUS },
 });
 
-// A/B Day Custom Header
+// Simple Day Header (no A/B day)
 const CustomHeader = ({ date, label }) => {
-  const startDate = new Date('2024-08-14');
-  const daysSinceStart = Math.floor(differenceInDays(date, startDate));
-  const isADay = daysSinceStart % 2 === 0;
-  const abDay = isADay ? 'A' : 'B';
-
   return (
     <div style={{ textAlign: 'center', padding: '8px 0' }}>
-      <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>{label}</div>
-      <div
-        style={{
-          padding: '2px 8px',
-          borderRadius: '12px',
-          backgroundColor: isADay ? '#3498db' : '#e74c3c',
-          color: 'white',
-          fontSize: '11px',
-          fontWeight: 'bold',
-          display: 'inline-block',
-        }}
-      >
-        {abDay} Day
-      </div>
+      <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{label}</div>
     </div>
   );
 };
@@ -223,6 +204,14 @@ export default function TeacherAvailability() {
           week: {
             header: CustomHeader,
           },
+        }}
+        dayPropGetter={(date) => {
+          const day = date.getDay();
+          // Hide weekends (0 = Sunday, 6 = Saturday)
+          if (day === 0 || day === 6) {
+            return { style: { display: 'none' } };
+          }
+          return {};
         }}
       />
 
