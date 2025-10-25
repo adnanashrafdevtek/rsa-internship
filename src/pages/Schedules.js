@@ -312,17 +312,26 @@ export default function Schedules() {
             ? parseInt(schedule.recurring_day) 
             : null;
           
+          const teacherName = schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : 'Unknown Teacher';
+          const subject = schedule.subject || schedule.event_title || 'Class';
+          const grade = schedule.grade || '';
+          
+          // Build title with teacher and grade info
+          let title = subject;
+          if (grade) title += ` (${grade})`;
+          if (teacherName !== 'Unknown Teacher') title += ` - ${teacherName}`;
+          
           return {
             id: schedule.idcalendar,
-            title: schedule.subject || schedule.event_title || 'Class',
+            title: title,
             start: new Date(schedule.start_time),
             end: new Date(schedule.end_time),
             isClass: true,
             description: schedule.description,
             teacherId: schedule.user_id,
-            teacher: schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : 'Unknown Teacher',
+            teacher: teacherName,
             room: schedule.room || '',
-            grade: schedule.grade || '',
+            grade: grade,
             subject: schedule.subject || schedule.event_title || 'Class',
             recurringDays: recurringDay !== null ? [recurringDay] : [],
             abDay: schedule.ab_day || '',
@@ -444,7 +453,7 @@ export default function Schedules() {
         const res = await fetch("http://localhost:3000/api/teacher-availabilities");
         const availData = res.ok ? await res.json() : [];
         setAllAvailabilities(availData);
-        console.log('✅ Availabilities loaded:', availData.length);
+        console.log('Teacher availability loaded from backend:', availData.length, 'records');
       } catch (err) {
         console.error('Error fetching teacher availability from backend:', err);
         setAllAvailabilities([]);
@@ -1419,16 +1428,20 @@ export default function Schedules() {
                   padding: '4px 6px',
                   borderRadius: '4px',
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: event.availability ? '11px' : '13px',
+                  flexDirection: 'column',
+                  gap: '2px',
+                  fontSize: event.availability ? '11px' : '12px',
                   fontWeight: event.availability ? 400 : 500,
                   cursor: 'pointer',
                   color: 'white'
                 }}
               >
-                <span>{event.title || event.subject || 'Event'}</span>
-                {event.isClass && <span style={{ fontSize: '10px', opacity: 0.8 }}>📚</span>}
+                <span style={{ fontWeight: 600 }}>{event.title || event.subject || 'Event'}</span>
+                {event.isClass && event.teacher && (
+                  <span style={{ fontSize: '10px', opacity: 0.85, fontWeight: 400 }}>
+                    �‍🏫 {event.teacher}
+                  </span>
+                )}
                 {event.availability && <span style={{ fontSize: '10px', opacity: 0.9 }}>⏰</span>}
               </div>
             ),
@@ -1445,7 +1458,7 @@ export default function Schedules() {
               borderRadius: '12px',
               padding: '20px',
               boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
-              maxHeight: 600,
+              maxHeight: 649,
               display: 'flex',
               flexDirection: 'column',
               gap: 16,
@@ -1733,7 +1746,7 @@ export default function Schedules() {
               </div>
             </div>
             {gradeFilterExpanded && (
-              <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ maxHeight: 100, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {gradeDropdownOptions.map(grade => {
                 const isSelected = selectedGrades.includes(grade);
                 const gradeColor = grade === 'PK' ? '#9b59b6' : '#3498db';
@@ -1812,7 +1825,7 @@ export default function Schedules() {
               </div>
             </div>
             {roomFilterExpanded && (
-              <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ maxHeight: 100, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {roomOptions.map(room => {
                 const isSelected = selectedRooms.includes(room);
                 const roomColor = '#f39c12';
@@ -3321,7 +3334,7 @@ export default function Schedules() {
             )}
             
             {/* Show A/B day field for Friday classes */}
-            {selectedSlot && moment(selectedSlot.start).day() === 5 && (
+            {(selectedSlot && moment(selectedSlot.start).day() === 5 || details.recurringDays.includes(4)) && (
               <>
                 <label
                   style={{
