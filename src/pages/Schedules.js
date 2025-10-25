@@ -444,7 +444,7 @@ export default function Schedules() {
         const res = await fetch("http://localhost:3000/api/teacher-availabilities");
         const availData = res.ok ? await res.json() : [];
         setAllAvailabilities(availData);
-        console.log('Teacher availability loaded from backend:', availData.length, 'records');
+        console.log('✅ Availabilities loaded:', availData.length);
       } catch (err) {
         console.error('Error fetching teacher availability from backend:', err);
         setAllAvailabilities([]);

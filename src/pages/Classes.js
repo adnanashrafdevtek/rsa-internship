@@ -44,20 +44,27 @@ export default function Classes() {
   const fetchClasses = () => {
     setLoading(true);
     let url = 'http://localhost:3000/api/classes';
+    
+    // Determine the URL based on user role
     if (user) {
       if (user.role === "student") {
         url = `http://localhost:3000/api/students/${user.id}/classes`;
       } else if (user.role === "teacher") {
         url = `http://localhost:3000/api/teachers/${user.id}/classes`;
       }
+      // For admin, keep the default /api/classes URL
     }
+    
     fetch(url)
       .then(res => res.json())
       .then(data => {
         setClasses(data);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(err => {
+        console.error('Error fetching classes:', err);
+        setLoading(false);
+      });
   };
 
   const fetchTeachers = () => {
