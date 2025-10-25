@@ -1,25 +1,24 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState } from "react";
 
 const AuthContext = createContext();
 
 const dummyUsers = [
-  { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0, active: true },
-  { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1, active: true },
-  { email: "student@example.com", password: "student123", role: "student", first_name: "Student", last_name: "User", id: 2, active: true },
-  { email: "HARUN.person@example.com", password: "uuuuuuu", role: "student", first_name: "HARUN", last_name: "person", id: 5, active: true },
+  { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0 },
+  { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1 },
+  { email: "student@example.com", password: "student123", role: "student", first_name: "Student", last_name: "User", id: 2 },
+  { email: "HARUN.person@example.com", password: "uuuuuuu", role: "student", first_name: "HARUN", last_name: "person", id: 5 },
 ];
 
 export const AuthProvider = ({ children }) => {
-  const [users, setUsers] = useState(dummyUsers);
   const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem("user");
     return storedUser ? JSON.parse(storedUser) : null;
   });
-
+  const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState(null);
 
-  // Fetch all users (admin only)
+  // Fetch all users (admin only, only once per login)
   const fetchAllUsers = async () => {
     setUsersLoading(true);
     setUsersError(null);
@@ -30,12 +29,13 @@ export const AuthProvider = ({ children }) => {
       setUsers(data);
     } catch (err) {
       setUsersError(err.message);
+      // Do NOT clear users on error; keep last good list
     } finally {
       setUsersLoading(false);
     }
   };
 
-  // Change user password
+  // Change user password (admin only)
   const changeUserPassword = async (username, newPassword) => {
     try {
       const res = await fetch(`http://localhost:3000/api/users/${username}/password`, {
@@ -50,7 +50,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Toggle user active status
+  // Toggle user active status (admin only)
   const toggleUserActiveStatus = async (username) => {
     try {
       const res = await fetch(`http://localhost:3000/api/users/${username}/toggle-active`, {
@@ -64,13 +64,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
-    const foundUser = users.find(u => u.email === email && u.password === password);
+    // First try dummy users
+    const foundUser = dummyUsers.find(
+      (u) => u.email === email && u.password === password
+    );
     if (foundUser) {
       setUser(foundUser);
       localStorage.setItem("user", JSON.stringify(foundUser));
       return true;
     }
 
+    // If not found, try backend login
     try {
       const response = await fetch("http://localhost:3000/login", {
         method: "POST",
@@ -100,16 +104,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Only fetch once per admin login
-  const hasFetchedUsers = useRef(false);
-  useEffect(() => {
+  const hasFetchedUsers = React.useRef(false);
+  React.useEffect(() => {
     if (user && user.role === "admin" && !hasFetchedUsers.current) {
       fetchAllUsers();
       hasFetchedUsers.current = true;
     }
     if (!user || user.role !== "admin") {
       hasFetchedUsers.current = false;
-      setUsers(dummyUsers); // fallback to local users
+      setUsers([]);
     }
+    // eslint-disable-next-line
   }, [user]);
 
   return (
@@ -130,4 +135,6 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
+
+
 

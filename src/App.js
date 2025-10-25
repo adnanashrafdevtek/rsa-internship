@@ -4,7 +4,6 @@ import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Classes from "./pages/Classes";
 import Student from "./pages/Users";
-import Schedule from "./pages/Schedule";
 import TeacherList from "./pages/TeacherList";
 import StudentList from "./pages/StudentList";
 import ResetPassword from "./pages/ResetPassword";
@@ -14,11 +13,8 @@ import ActivationForm from "./pages/ActivationForm";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import './App.css';
-import MySchedule from "./pages/MySchedule";
-
 
 import MySchedule from "./pages/MySchedule";
-import MasterSchedule from "./pages/MasterSchedule";
 import Schedules from "./pages/Schedules";
 import CreateSchedule from "./pages/CreateSchedule";
 import TeacherAvailability from "./pages/TeacherAvailability";
@@ -58,7 +54,7 @@ function App() {
             path="/schedule"
             element={
               <ProtectedRoute>
-                <Schedule />
+                <Schedules />
               </ProtectedRoute>
             }
           />
@@ -78,23 +74,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-  path="/student/schedule"
-  element={
-    <ProtectedRoute>
-      <MySchedule />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/teacher/schedule"
-  element={
-    <ProtectedRoute>
-      <MySchedule />
-    </ProtectedRoute>
-  }
-/>
-
           <Route
             path="/reset-password"
             element={<ResetPassword />}
@@ -129,7 +108,6 @@ function App() {
           />
           <Route path="/schedules" element={<Schedules />} />
           <Route path="/create-schedule" element={<ProtectedRoute><CreateSchedule /></ProtectedRoute>} />
-          <Route path="/master-schedule" element={<MasterSchedule />} />
           <Route path="/availability" element={<TeacherAvailability />} />
         </Routes>
       </Router>
