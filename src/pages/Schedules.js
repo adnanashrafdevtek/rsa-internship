@@ -3285,12 +3285,26 @@ export default function Schedules() {
 
       {/* Floating embedded chat assistant */}
       {showAgentChat && (
-        <div style={{ position: 'fixed', bottom: 585, right: 400, zIndex: 800, width: 380, maxWidth: '92vw' }}>
+<div 
+    style={{ 
+      // 1. FIXED POSITIONING (Open/Close button placement)
+      position: 'fixed', 
+      bottom: 300,         // 20px up from the bottom edge
+      right: 400,          // 20px in from the right edge
+      zIndex: 9999,       // Highest Z-index to float over all content
+
+      // 2. DIMENSIONS (Controls the size of the open window)
+      width: 380,         // Standard chat width
+      height: 400,        // Standard, comfortable chat height (reduced from 600px)
+      maxWidth: '92vw',
+      
+    }}
+  >
           <langflow-chat
             window_title="Simple Agent"
             flow_id="e0180ab6-2505-45db-a008-8b06dae8318e"
-            host_url="http://localhost:7860"
-            api_key="AIzaSyDRndn6f9XOzAqsZT7fy-YGHT_gCpskuyQ"
+            host_url="http://127.0.0.1:7860"
+            api_key="sk-Fc1IxA_guUpPwB-gR8r77JvV_JB92TBrDj26LYd1DBM"
           ></langflow-chat>
         </div>
       )}
