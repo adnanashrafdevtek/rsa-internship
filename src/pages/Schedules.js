@@ -218,6 +218,8 @@ export default function Schedules() {
   const [modalOpen, setModalOpen] = useState(false);
   const [scheduleEvents, setScheduleEvents] = useState([]);
   const [draggingEventId, setDraggingEventId] = useState(null);
+  // Langflow chat visibility toggle
+  const [showAgentChat, setShowAgentChat] = useState(true);
   // Master schedule filters
   const [selectedGrades, setSelectedGrades] = useState([]);
   const [selectedRooms, setSelectedRooms] = useState([]);
@@ -601,6 +603,19 @@ export default function Schedules() {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [pendingChanges]);
+
+  // Inject Langflow embedded chat script once when enabled
+  useEffect(() => {
+    if (!showAgentChat || !user || user.role !== 'admin') return;
+    const existing = document.querySelector('script[data-langflow-embed="simple-agent"]');
+    if (existing) return; // already injected
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/gh/logspace-ai/langflow-embedded-chat@v1.0.7/dist/build/static/js/bundle.min.js';
+    script.async = true;
+    script.defer = true;
+    script.dataset.langflowEmbed = 'simple-agent';
+    document.body.appendChild(script);
+  }, [showAgentChat, user]);
 
   // Role check - admin only for full access (after all hooks)
   if (!user || user.role !== "admin") {
@@ -3268,6 +3283,18 @@ export default function Schedules() {
         <TabNavigation />
         {renderTabContent()}
 
+      {/* Floating embedded chat assistant */}
+      {showAgentChat && (
+        <div style={{ position: 'fixed', bottom: 585, right: 400, zIndex: 800, width: 380, maxWidth: '92vw' }}>
+          <langflow-chat
+            window_title="Simple Agent"
+            flow_id="e0180ab6-2505-45db-a008-8b06dae8318e"
+            host_url="http://localhost:7860"
+            api_key="AIzaSyDRndn6f9XOzAqsZT7fy-YGHT_gCpskuyQ"
+          ></langflow-chat>
+        </div>
+      )}
+
       {/* Create Event Modal */}
       {modalOpen && (
         <div style={{
@@ -4053,6 +4080,7 @@ export default function Schedules() {
                     cursor: "pointer",
                     transition: "background 0.2s"
                   }}
+                  
                 >
                   ⚠️ Add Anyway
                 </button>
@@ -4064,3 +4092,4 @@ export default function Schedules() {
     </SidebarLayout>
   );
 }
+
