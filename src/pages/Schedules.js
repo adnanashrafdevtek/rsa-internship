@@ -604,19 +604,8 @@ export default function Schedules() {
     };
   }, [pendingChanges]);
 
-  // Inject Langflow embedded chat script once when enabled
-  useEffect(() => {
-    if (!showAgentChat || !user || user.role !== 'admin') return;
-    const existing = document.querySelector('script[data-langflow-embed="simple-agent"]');
-    if (existing) return; // already injected
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/gh/logspace-ai/langflow-embedded-chat@v1.0.7/dist/build/static/js/bundle.min.js';
-    script.async = true;
-    script.defer = true;
-    script.dataset.langflowEmbed = 'simple-agent';
-    document.body.appendChild(script);
-  }, [showAgentChat, user]);
-
+  // Script injection moved to Sidebar.js for global availability
+  
   // Role check - admin only for full access (after all hooks)
   if (!user || user.role !== "admin") {
     return (
@@ -1281,160 +1270,7 @@ export default function Schedules() {
     const roomOptions = availableRooms;
 
     return (
-      <>
-        {/* Master Schedule Header */}
-        <div style={{ 
-          backgroundColor: "white", 
-          borderRadius: "8px", 
-          padding: "12px 16px", 
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          marginBottom: "12px"
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <h1 style={{ 
-                fontSize: 20, 
-                fontWeight: "bold", 
-                margin: 0, 
-                color: "#2c3e50",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px"
-              }}>
-                📘 Master Schedule
-              </h1>
-              <p style={{ margin: "8px 0 0 0", color: "#7f8c8d", fontSize: "14px" }}>
-                View and manage all class schedules. Drag to create new classes or move existing ones.
-              </p>
-            </div>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              {isEditMode && (
-                <>
-                  {/* Save Changes Button - shown when there are pending changes */}
-                  {pendingChanges.length > 0 && (
-                    <>
-                      <span style={{ fontSize: 14, color: '#e67e22', fontWeight: 600, marginRight: 8 }}>
-                        {pendingChanges.length} unsaved change{pendingChanges.length !== 1 ? 's' : ''}
-                      </span>
-                      <button
-                        onClick={async () => {
-                          // Save all pending changes to database
-                          setLoading(true);
-                          try {
-                            console.log('💾 Saving pending changes:', pendingChanges);
-                            
-                            for (const change of pendingChanges) {
-                              // Use databaseId if available, otherwise use id
-                              const dbId = change.databaseId || change.id;
-                              
-                              // Send complete schedule data including all fields
-                              const scheduleData = {
-                                start_time: moment(change.start).format('YYYY-MM-DD HH:mm:ss'),
-                                end_time: moment(change.end).format('YYYY-MM-DD HH:mm:ss'),
-                                event_title: change.title || change.subject || 'Class',
-                                user_id: change.teacherId,
-                                room: change.room || '',
-                                grade: change.grade || '',
-                                subject: change.subject || change.title || 'Class',
-                                description: change.description || `${change.subject || 'Class'} - Grade ${change.grade || 'N/A'}`,
-                                class_id: change.class_id || null
-                              };
-                              
-                              console.log('📤 Updating schedule ID:', dbId, 'with data:', scheduleData);
-                              const result = await updateScheduleInDatabase(dbId, scheduleData);
-                              
-                              if (!result.success) {
-                                console.error('❌ Failed to update schedule:', dbId, result.error);
-                                throw new Error(`Failed to update schedule ${dbId}: ${result.error || 'Unknown error'}`);
-                              }
-                              console.log('✅ Successfully updated schedule:', dbId);
-                            }
-                            
-                            setPendingChanges([]);
-                            alert('✅ All changes saved successfully!');
-                            
-                            // Refresh to ensure we have latest data from backend
-                            await fetchMasterSchedule();
-                          } catch (error) {
-                            console.error('❌ Error saving changes:', error);
-                            alert(`Error saving changes: ${error.message}\n\nPlease check the console for details.`);
-                          } finally {
-                            setLoading(false);
-                          }
-                        }}
-                        style={{
-                          padding: "8px 16px",
-                          backgroundColor: "#27ae60",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          fontSize: "14px",
-                          fontWeight: "500",
-                          marginRight: 8
-                        }}
-                      >
-                        💾 Save Changes
-                      </button>
-                    </>
-                  )}
-                  {deleteMode ? (
-                    <>
-                      <button
-                        onClick={handleMasterConfirmDelete}
-                        disabled={selectedToDelete.length === 0}
-                        style={{
-                          padding: "8px 16px",
-                          backgroundColor: selectedToDelete.length > 0 ? "#e74c3c" : "#bdc3c7",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "6px",
-                          cursor: selectedToDelete.length > 0 ? "pointer" : "not-allowed",
-                          fontSize: "14px",
-                          fontWeight: "500"
-                        }}
-                      >
-                        Delete Selected ({selectedToDelete.length})
-                      </button>
-                      <button
-                        onClick={handleMasterDeleteMode}
-                        style={{
-                          padding: "8px 16px",
-                          backgroundColor: "#95a5a6",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          fontSize: "14px",
-                          fontWeight: "500"
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={handleMasterDeleteMode}
-                      style={{
-                        padding: "8px 16px",
-                        backgroundColor: "#e74c3c",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        fontSize: "14px",
-                        fontWeight: "500"
-                      }}
-                    >
-                      🗑️ Delete Mode
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-        
+      <>        
         <div style={{ display:'flex', gap:16, alignItems:'flex-start' }} data-master-schedule-container>
           <div 
             style={{
@@ -3283,31 +3119,7 @@ export default function Schedules() {
         <TabNavigation />
         {renderTabContent()}
 
-      {/* Floating embedded chat assistant */}
-      {showAgentChat && (
-<div 
-    style={{ 
-      // 1. FIXED POSITIONING (Open/Close button placement)
-      position: 'fixed', 
-      bottom: 300,         // 20px up from the bottom edge
-      right: 400,          // 20px in from the right edge
-      zIndex: 9999,       // Highest Z-index to float over all content
-
-      // 2. DIMENSIONS (Controls the size of the open window)
-      width: 380,         // Standard chat width
-      height: 400,        // Standard, comfortable chat height (reduced from 600px)
-      maxWidth: '92vw',
-      
-    }}
-  >
-          <langflow-chat
-            window_title="Simple Agent"
-            flow_id="e0180ab6-2505-45db-a008-8b06dae8318e"
-            host_url="http://127.0.0.1:7860"
-            api_key="sk-Fc1IxA_guUpPwB-gR8r77JvV_JB92TBrDj26LYd1DBM"
-          ></langflow-chat>
-        </div>
-      )}
+      {/* Chat assistant moved to Sidebar; removing page-level instance to avoid duplicates */}
 
       {/* Create Event Modal */}
       {modalOpen && (
