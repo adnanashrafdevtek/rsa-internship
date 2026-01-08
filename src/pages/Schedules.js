@@ -1116,7 +1116,9 @@ export default function Schedules() {
         // Add the new change
         return [...filtered, updatedEvent];
       });
-    };    const MasterToolbar = ({ label }) => (
+    };
+
+    const MasterToolbar = ({ label }) => (
       <div className="rbc-toolbar" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, gap: 12 }}>
         <span className="rbc-btn-group" style={{ display: 'flex', gap: 4 }}>
           {[
