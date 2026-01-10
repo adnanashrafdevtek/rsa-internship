@@ -12,6 +12,7 @@ import ClassRosters from "./pages/ClassRosters";
 import AddUserPage from "./pages/AddUserPage";
 import ActivationForm from "./pages/ActivationForm";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ChatBot from "./components/ChatBot";
 import { AuthProvider } from "./context/AuthContext";
 import { SidebarProvider } from "./context/SidebarContext";
 import './App.css';
@@ -150,6 +151,8 @@ function App() {
           <Route path="/create-schedule" element={<ProtectedRoute><CreateSchedule /></ProtectedRoute>} />
           <Route path="/availability" element={<TeacherAvailability />} />
         </Routes>
+        {/* Global ChatBot - appears above all pages */}
+        <ChatBot />
       </Router>
       </SidebarProvider>
     </AuthProvider>

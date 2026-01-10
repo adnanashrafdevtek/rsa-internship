@@ -10,24 +10,6 @@ export default function Sidebar({ onWidthChange }) {
   const [isDragging, setIsDragging] = useState(false);
   const sidebarRef = useRef(null);
   const isResizing = useRef(false);
-  const [chatScriptLoaded, setChatScriptLoaded] = useState(false);
-  
-  // Inject Langflow embedded chat script once
-  useEffect(() => {
-    const existing = document.querySelector('script[data-langflow-embed="sidebar-agent"]');
-    if (existing) {
-      setChatScriptLoaded(true);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/gh/logspace-ai/langflow-embedded-chat@v1.0.7/dist/build/static/js/bundle.min.js';
-    script.async = true;
-    script.defer = true;
-    script.dataset.langflowEmbed = 'sidebar-agent';
-    script.onload = () => setChatScriptLoaded(true);
-    script.onerror = () => console.error('Failed to load Langflow chat script');
-    document.body.appendChild(script);
-  }, []);
   
   // CSS for animations
   React.useEffect(() => {
@@ -207,24 +189,6 @@ export default function Sidebar({ onWidthChange }) {
       </nav>
 
       <div style={{ flexGrow: 1 }}></div>
-
-      {/* AI Chatbot trigger above Logout */}
-      {isAdmin && (
-        <div style={{ margin: '8px 4px 12px 4px', display: 'flex', justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
-          <langflow-chat
-            window_title="Scheduling Assistant"
-            flow_id="e0180ab6-2505-45db-a008-8b06dae8318e"
-            host_url="http://127.0.0.1:7860"
-            api_key="sk-Fc1IxA_guUpPwB-gR8r77JvV_JB92TBrDj26LYd1DBM"
-            chat_position="top-right"
-            width="340"
-            height="420"
-            placeholder="Ask about schedules..."
-            chat_trigger_style='{"width":"44px","height":"44px","borderRadius":"8px","backgroundColor":"#3498db"}'
-            chat_window_style='{"borderRadius":"12px","boxShadow":"0 8px 24px rgba(0,0,0,0.12)"}'
-          ></langflow-chat>
-        </div>
-      )}
 
       <button 
         onClick={handleLogout} 

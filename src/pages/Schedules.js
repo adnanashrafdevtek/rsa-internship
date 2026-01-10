@@ -124,57 +124,44 @@ const CustomHeader = ({ date }) => {
     <div style={{
       textAlign: 'center',
       padding: '8px 4px',
-      minHeight: 80,
-      height: 80,
+      minHeight: 'auto',
       display: 'flex',
       flexDirection: 'column',
-      justifyContent: 'flex-start',
+      justifyContent: 'center',
       alignItems: 'center',
+      gap: '6px',
       background: 'transparent !important',
       borderBottom: '1px solid #ddd',
       boxSizing: 'border-box',
       position: 'relative',
       zIndex: 10
     }}>
-      {/* Day name in top section */}
+      {/* Day name on top */}
       <div style={{
         fontSize: 14,
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginTop: '8px',
-        marginBottom: '8px',
         whiteSpace: 'nowrap',
         zIndex: 11
       }}>{dayName}</div>
       
-      {/* A/B Day label in bottom section */}
-      <div style={{
-        position: 'absolute',
-        bottom: '8px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: '100%',
-        display: 'flex',
-        justifyContent: 'center',
-        zIndex: 12
-      }}>
-        {label && (
-          <div style={{
-            fontSize: 11,
-            padding: '4px 12px',
-            backgroundColor: bg,
-            color: '#fff',
-            borderRadius: 12,
-            fontWeight: 600,
-            lineHeight: 1,
-            whiteSpace: 'nowrap',
-            textAlign: 'center',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-            border: '1px solid rgba(255,255,255,0.2)',
-            zIndex: 13
-          }}>{label}</div>
-        )}
-      </div>
+      {/* A/B Day label on bottom */}
+      {label && (
+        <div style={{
+          fontSize: 11,
+          padding: '4px 12px',
+          backgroundColor: bg,
+          color: '#fff',
+          borderRadius: 12,
+          fontWeight: 600,
+          lineHeight: 1,
+          whiteSpace: 'nowrap',
+          textAlign: 'center',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          zIndex: 12
+        }}>{label}</div>
+      )}
     </div>
   );
 };
