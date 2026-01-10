@@ -1280,10 +1280,25 @@ export default function Schedules() {
               borderRadius: '12px',
               padding: '24px',
               boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
-              flex:1
+              flex:1,
+              position: 'relative'
             }}
             data-calendar-container
           >
+          {/* View mode overlay - light blue gloss */}
+          {!isEditMode && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(73, 119, 236, 0.15)',
+              borderRadius: '12px',
+              pointerEvents: 'none',
+              zIndex: 100,
+            }} />
+          )}
           {/* Ensure calendar headers (A/B day pills) are fully visible and not clipped */}
           <style>{`
             .rbc-time-header, .rbc-time-header .rbc-header { overflow: visible !important; }
