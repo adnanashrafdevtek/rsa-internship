@@ -103,10 +103,10 @@ function CreateSchedule() {
 
   // Fetch teachers and availabilities on mount
   useEffect(() => {
-    fetch("http://localhost:3000/api/teachers")
+    fetch("${API_BASE_URL}/api/teachers")
       .then(res => res.json())
       .then(data => setTeachers(data || []));
-    fetch("http://localhost:3000/api/teacher-availabilities")
+    fetch("${API_BASE_URL}/api/teacher-availabilities")
       .then(res => res.json())
       .then(data => setAllAvailabilities(data || []));
   }, []);

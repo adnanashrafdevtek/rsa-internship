@@ -27,7 +27,7 @@ export default function TeacherHome() {
 
   const fetchTodaySchedule = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/teachers/${user.id}/schedules`);
+      const res = await fetch(`${API_BASE_URL}/api/teachers/${user.id}/schedules`);
       const data = await res.json();
       
       const today = moment().format('ddd').toUpperCase();

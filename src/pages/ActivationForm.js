@@ -36,7 +36,7 @@ export default function ActivationForm() {
     setError("");
 
     try {
-      const res = await fetch("http://localhost:3000/api/activate", {
+      const res = await fetch("${API_BASE_URL}/api/activate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password }),

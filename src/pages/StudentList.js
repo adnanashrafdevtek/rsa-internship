@@ -150,7 +150,7 @@ export default function StudentList() {
       setLoading(false);
     } else {
       // For admin users, fetch all students
-      fetch("http://localhost:3000/api/students")
+      fetch("${API_BASE_URL}/api/students")
         .then(res => res.json())
         .then(data => {
           setStudents(data || []);
@@ -168,7 +168,7 @@ export default function StudentList() {
   const fetchEventsForStudent = async (studentId) => {
     try {
       // Classes
-      const classRes = await fetch(`http://localhost:3000/api/students/${studentId}/classes`);
+      const classRes = await fetch(`${API_BASE_URL}/api/students/${studentId}/classes`);
       const classes = classRes.ok ? await classRes.json() : [];
       let classEvents = [];
       classes.forEach(cls => {
@@ -176,7 +176,7 @@ export default function StudentList() {
       });
 
       // Personal events
-      const res = await fetch(`http://localhost:3000/myCalendar?userId=${studentId}`);
+      const res = await fetch(`${API_BASE_URL}/myCalendar?userId=${studentId}`);
       const personalEventsRaw = res.ok ? await res.json() : [];
       const personalEvents = personalEventsRaw.map(event => ({
         id: Number(event.id),
@@ -351,7 +351,7 @@ export default function StudentList() {
 
     try {
       for (const event of eventsToAdd) {
-        await fetch("http://localhost:3000/api/calendar", {
+        await fetch("${API_BASE_URL}/api/calendar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(event),
@@ -381,7 +381,7 @@ export default function StudentList() {
     setDeleting(true);
     try {
       for (const eventId of selectedEvents) {
-        await fetch(`http://localhost:3000/api/calendar/${eventId}`, { method: "DELETE" });
+        await fetch(`${API_BASE_URL}/api/calendar/${eventId}`, { method: "DELETE" });
       }
       // Refresh events
       fetchEventsForStudent(selectedStudent.id);

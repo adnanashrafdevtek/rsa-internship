@@ -43,14 +43,14 @@ export default function Classes() {
   // Role-based fetch: admin sees all, teacher sees their classes, student sees their classes
   const fetchClasses = () => {
     setLoading(true);
-    let url = 'http://localhost:3000/api/classes';
+    let url = '${API_BASE_URL}/api/classes';
     
     // Determine the URL based on user role
     if (user) {
       if (user.role === "student") {
-        url = `http://localhost:3000/api/students/${user.id}/classes`;
+        url = `${API_BASE_URL}/api/students/${user.id}/classes`;
       } else if (user.role === "teacher") {
-        url = `http://localhost:3000/api/teachers/${user.id}/classes`;
+        url = `${API_BASE_URL}/api/teachers/${user.id}/classes`;
       }
       // For admin, keep the default /api/classes URL
     }
@@ -68,7 +68,7 @@ export default function Classes() {
   };
 
   const fetchTeachers = () => {
-    fetch('http://localhost:3000/api/teachers')
+    fetch('${API_BASE_URL}/api/teachers')
       .then(res => res.json())
       .then(data => {
         setTeachers(data);
@@ -78,7 +78,7 @@ export default function Classes() {
   const fetchStudentsByGrade = async (grade) => {
     if (!grade) return setStudentsForGrade([]);
     try {
-      const res = await fetch(`http://localhost:3000/api/students/grade/${grade}`);
+      const res = await fetch(`${API_BASE_URL}/api/students/grade/${grade}`);
       if (!res.ok) throw new Error('Failed to fetch students');
       const data = await res.json();
       setStudentsForGrade(data);
@@ -89,7 +89,7 @@ export default function Classes() {
 
   const fetchAllStudents = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/students');
+      const res = await fetch('${API_BASE_URL}/api/students');
       if (!res.ok) throw new Error();
       setAllStudents(await res.json());
     } catch {
@@ -215,7 +215,7 @@ export default function Classes() {
 
     try {
       for (const student_id of selectedStudentIds) {
-        const res = await fetch(`http://localhost:3000/api/classes/${showAddStudentsFor}/students`, {
+        const res = await fetch(`${API_BASE_URL}/api/classes/${showAddStudentsFor}/students`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ student_id }),
@@ -249,7 +249,7 @@ export default function Classes() {
         const original = classes.find(c => c.id === editingId);
         teacherIdToSend = original ? original.teacher_id : '';
       }
-      const res = await fetch(`http://localhost:3000/api/classes/${editingId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/classes/${editingId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -275,7 +275,7 @@ export default function Classes() {
       const startDatetime = combineLocalDatetime(addForm.start_date, addForm.start_time);
       const endDatetime = combineLocalDatetime(addForm.end_date, addForm.end_time);
 
-      const res = await fetch('http://localhost:3000/api/classes', {
+      const res = await fetch('${API_BASE_URL}/api/classes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -311,7 +311,7 @@ export default function Classes() {
   const deleteClass = async (id) => {
     if (!window.confirm('Are you sure you want to delete this class?')) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/classes/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/classes/${id}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Failed to delete class');
@@ -328,7 +328,7 @@ export default function Classes() {
     setShowAllStudents(false);
     fetchStudentsByGrade(cls.grade_level);
     try {
-      const res = await fetch(`http://localhost:3000/api/classes/${cls.id}/students`);
+      const res = await fetch(`${API_BASE_URL}/api/classes/${cls.id}/students`);
       let students = [];
       if (res.ok) {
         students = await res.json();

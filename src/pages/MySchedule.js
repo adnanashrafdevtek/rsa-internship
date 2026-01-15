@@ -240,10 +240,10 @@ export default function MySchedule() {
       try {
         let classes = [];
         if (isStudent) {
-          const classRes = await fetch(`http://localhost:3000/api/students/${user.id}/classes`);
+          const classRes = await fetch(`${API_BASE_URL}/api/students/${user.id}/classes`);
           classes = classRes.ok ? await classRes.json() : [];
         } else if (isTeacher) {
-          const classRes = await fetch(`http://localhost:3000/api/teachers/${user.id}/classes`);
+          const classRes = await fetch(`${API_BASE_URL}/api/teachers/${user.id}/classes`);
           classes = classRes.ok ? await classRes.json() : [];
         }
         let classEvents = [];
@@ -252,7 +252,7 @@ export default function MySchedule() {
         });
 
         // Personal events
-        const res = await fetch(`http://localhost:3000/myCalendar?userId=${user.id}`);
+        const res = await fetch(`${API_BASE_URL}/myCalendar?userId=${user.id}`);
         const personalEventsRaw = res.ok ? await res.json() : [];
         const personalEvents = personalEventsRaw.map(event => ({
           id: Number(event.id),
@@ -275,7 +275,7 @@ export default function MySchedule() {
     const fetchMasterSchedule = async () => {
       try {
         // Fetch all classes and events for master schedule
-        const classRes = await fetch("http://localhost:3000/api/classes");
+        const classRes = await fetch("${API_BASE_URL}/api/classes");
         const allClasses = classRes.ok ? await classRes.json() : [];
         
         let allEvents = [];
@@ -292,7 +292,7 @@ export default function MySchedule() {
 
     const fetchTeachers = async () => {
       try {
-        const res = await fetch("http://localhost:3000/api/teachers");
+        const res = await fetch("${API_BASE_URL}/api/teachers");
         const teachersData = res.ok ? await res.json() : [];
         setTeachers(teachersData);
       } catch (err) {
@@ -303,7 +303,7 @@ export default function MySchedule() {
 
     const fetchStudents = async () => {
       try {
-        const res = await fetch("http://localhost:3000/api/students");
+        const res = await fetch("${API_BASE_URL}/api/students");
         const studentsData = res.ok ? await res.json() : [];
         setStudents(studentsData);
       } catch (err) {
@@ -329,7 +329,7 @@ export default function MySchedule() {
           // Fetch existing schedule events for create tab
           const fetchCreateEvents = async () => {
             try {
-              const res = await fetch("http://localhost:3000/api/classes");
+              const res = await fetch("${API_BASE_URL}/api/classes");
               const classes = res.ok ? await res.json() : [];
               
               let events = [];
@@ -397,7 +397,7 @@ export default function MySchedule() {
     setDeleting(true);
     try {
       for (const eventId of selectedEvents) {
-        await fetch(`http://localhost:3000/api/calendar/${eventId}`, { method: "DELETE" });
+        await fetch(`${API_BASE_URL}/api/calendar/${eventId}`, { method: "DELETE" });
       }
   setScheduleEvents(prev => prev.filter(e => !selectedEvents.has(e.id)));
       setSelectedEvents(new Set());
@@ -484,7 +484,7 @@ export default function MySchedule() {
 
     try {
       for (const event of eventsToAdd) {
-        await fetch("http://localhost:3000/api/calendar", {
+        await fetch("${API_BASE_URL}/api/calendar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(event),
@@ -516,7 +516,7 @@ export default function MySchedule() {
   // Fetch teacher-specific events
   const fetchTeacherEvents = async (teacherId) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/teachers/${teacherId}/classes`);
+      const res = await fetch(`${API_BASE_URL}/api/teachers/${teacherId}/classes`);
       const classes = res.ok ? await res.json() : [];
       
       let events = [];
@@ -534,7 +534,7 @@ export default function MySchedule() {
   // Fetch student-specific events
   const fetchStudentEvents = async (studentId) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/students/${studentId}/classes`);
+      const res = await fetch(`${API_BASE_URL}/api/students/${studentId}/classes`);
       const classes = res.ok ? await res.json() : [];
       
       let events = [];

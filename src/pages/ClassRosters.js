@@ -45,19 +45,19 @@ export default function ClassRosters() {
     if (!classId) return;
 
     // Fetch class details
-    fetch(`http://localhost:3000/api/classes/${classId}`)
+    fetch(`${API_BASE_URL}/api/classes/${classId}`)
       .then(res => res.json())
       .then(data => setClassInfo(data))
       .catch(err => console.error('Failed to load class info:', err));
 
     // Fetch students in this class
-    fetch(`http://localhost:3000/api/classes/${classId}/students`)
+    fetch(`${API_BASE_URL}/api/classes/${classId}/students`)
       .then(res => res.json())
       .then(data => setStudents(data))
       .catch(err => console.error('Failed to load students:', err));
 
     // Fetch all students for adding new ones (admin/teacher only)
-    fetch('http://localhost:3000/api/students')
+    fetch('${API_BASE_URL}/api/students')
       .then(res => res.json())
       .then(data => setAllStudents(data))
       .catch(err => console.error('Failed to load all students:', err));
@@ -191,7 +191,7 @@ export default function ClassRosters() {
   // Admin/teacher UI: improved, user-friendly card layout with "Add Student" button
   // Define handlers here so they're available for JSX
   const handleRemoveStudent = (studentId) => {
-    fetch(`http://localhost:3000/api/classes/${classId}/students/${studentId}`, {
+    fetch(`${API_BASE_URL}/api/classes/${classId}/students/${studentId}`, {
       method: 'DELETE',
     })
       .then(res => {
@@ -204,7 +204,7 @@ export default function ClassRosters() {
   const handleAddStudent = () => {
     if (!newStudentId) return;
 
-    fetch(`http://localhost:3000/api/classes/${classId}/students`, {
+    fetch(`${API_BASE_URL}/api/classes/${classId}/students`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ student_id: newStudentId }),
@@ -212,7 +212,7 @@ export default function ClassRosters() {
       .then(res => {
         if (!res.ok) throw new Error('Failed to add student');
         setNewStudentId('');
-        return fetch(`http://localhost:3000/api/classes/${classId}/students`);
+        return fetch(`${API_BASE_URL}/api/classes/${classId}/students`);
       })
       .then(res => res.json())
       .then(data => setStudents(data))

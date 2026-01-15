@@ -261,7 +261,7 @@ export default function StudentSchedule() {
 
   const fetchSchedule = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/students/${user.id}/classes`);
+      const res = await fetch(`${API_BASE_URL}/api/students/${user.id}/classes`);
       const data = await res.json();
       
       const generatedEvents = generateRecurringEvents(data);
