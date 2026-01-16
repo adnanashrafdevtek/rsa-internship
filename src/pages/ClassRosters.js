@@ -11,7 +11,7 @@ export default function ClassRosters() {
   const [newStudentId, setNewStudentId] = useState('');
   const [showAddStudent, setShowAddStudent] = useState(false);
   const { user } = useAuth();
-  const API_BASE_URL = process.env.API_BASE_URL;
+  const API_BASE_URL = "http://3.143.57.120:4000";
   // Helper: format only time in 12-hour format
   const formatTimeOnly = (dt) => {
     if (!dt) return '';

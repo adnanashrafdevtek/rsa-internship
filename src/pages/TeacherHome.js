@@ -10,7 +10,7 @@ export default function TeacherHome() {
   const [nextBreak, setNextBreak] = useState(null);
   const [currentTime, setCurrentTime] = useState(moment());
   const [loading, setLoading] = useState(true);
-  const API_BASE_URL = process.env.API_BASE_URL;
+  const API_BASE_URL = "http://3.143.57.120:4000";
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(moment());

@@ -5,7 +5,7 @@ import "./ActivationForm.css";
 export default function ActivationForm() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
-  const API_BASE_URL = process.env.API_BASE_URL;
+  const API_BASE_URL = "http://3.143.57.120:4000";
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
