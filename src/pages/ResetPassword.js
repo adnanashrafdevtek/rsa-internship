@@ -8,7 +8,7 @@ function ResetPassword() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
+  const API_BASE_URL = process.env.API_BASE_URL;
   const handleReset = async (e) => {
     e.preventDefault();
 

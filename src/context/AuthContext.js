@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState } from "react";
 
 const AuthContext = createContext();
-
+const API_BASE_URL = process.env.API_BASE_URL;
 const dummyUsers = [
   { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0 },
   { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1 },

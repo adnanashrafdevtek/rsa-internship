@@ -12,7 +12,7 @@ export default function AddUserPage() {
     address: "",
     role: "student", // default role
   });
-
+  const API_BASE_URL = process.env.API_BASE_URL;
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
