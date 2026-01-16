@@ -14,7 +14,7 @@ import enUS from "date-fns/locale/en-US";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import { useAuth } from "../context/AuthContext";
 import SidebarLayout from "../components/SidebarLayout";
-const API_BASE_URL = "http://3.143.57.120:4000";
+const API_BASE_URL = "http://3.143.57.120:3000";
 const localizer = dateFnsLocalizer({
   format,
   parse,

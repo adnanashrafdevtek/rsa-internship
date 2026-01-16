@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState } from "react";
 
 const AuthContext = createContext();
-const API_BASE_URL = "http://3.143.57.120:4000";
+const API_BASE_URL = "http://3.143.57.120:3000";
 const dummyUsers = [
   { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0 },
   { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1 },

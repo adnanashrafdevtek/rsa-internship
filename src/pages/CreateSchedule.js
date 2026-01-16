@@ -8,7 +8,7 @@ import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 
 // Add grades array at the top (it was missing)
 const grades = ["K", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "Not here?"];
-const API_BASE_URL = "http://3.143.57.120:4000";
+const API_BASE_URL = "http://3.143.57.120:3000";
 // Helper function to determine if a date is an A day or B day
 const getABDay = (date) => {
   const dayOfYear = moment(date).dayOfYear();

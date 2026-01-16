@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 
 // Inline utilities that were previously imported from a non-existent scheduleUtils
 const grades = ["K","1","2","3","4","5","6","7","8","9","10","11","12","Not here?"];
-const API_BASE_URL = "http://3.143.57.120:4000";
+const API_BASE_URL = "http://3.143.57.120:3000";
 function getABDay(date) {
   // Simple alternating week logic (even = A, odd = B) – adjust to real rules as needed
   return moment(date).week() % 2 === 0 ? 'A' : 'B';

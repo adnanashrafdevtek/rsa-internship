@@ -39,7 +39,7 @@ export default function Classes() {
 
   const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const navigate = useNavigate();
-  const API_BASE_URL = "http://3.143.57.120:4000";
+  const API_BASE_URL = "http://3.143.57.120:3000";
   // Role-based fetch: admin sees all, teacher sees their classes, student sees their classes
   const fetchClasses = () => {
     setLoading(true);
