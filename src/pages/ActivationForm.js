@@ -36,7 +36,7 @@ export default function ActivationForm() {
     setError("");
 
     try {
-      const res = await fetch("${API_BASE_URL}/api/activate", {
+      const res = await fetch(`${API_BASE_URL}/api/activate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password }),
@@ -52,9 +52,9 @@ setMessage("✅ Your account has been activated! Redirecting...");
 
 setTimeout(() => {
   if (data.role === "teacher") {
-    window.location.href = `http://localhost:3001/availability?user_id=${data.user_id}`;
+    window.location.href = `${API_BASE_URL}/availability?user_id=${data.user_id}`;
   } else {
-    window.location.href = "http://localhost:3001"; // login page
+    window.location.href = `${API_BASE_URL}`; // login page
   }
 }, 2000);
 

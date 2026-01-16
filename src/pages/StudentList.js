@@ -150,7 +150,7 @@ export default function StudentList() {
       setLoading(false);
     } else {
       // For admin users, fetch all students
-      fetch("${API_BASE_URL}/api/students")
+      fetch(`${API_BASE_URL}/api/students`)
         .then(res => res.json())
         .then(data => {
           setStudents(data || []);
@@ -351,7 +351,7 @@ export default function StudentList() {
 
     try {
       for (const event of eventsToAdd) {
-        await fetch("${API_BASE_URL}/api/calendar", {
+        await fetch(`${API_BASE_URL}/api/calendar`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(event),

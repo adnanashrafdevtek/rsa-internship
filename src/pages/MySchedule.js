@@ -275,7 +275,7 @@ export default function MySchedule() {
     const fetchMasterSchedule = async () => {
       try {
         // Fetch all classes and events for master schedule
-        const classRes = await fetch("${API_BASE_URL}/api/classes");
+        const classRes = await fetch(`${API_BASE_URL}/api/classes`);
         const allClasses = classRes.ok ? await classRes.json() : [];
         
         let allEvents = [];
@@ -292,7 +292,7 @@ export default function MySchedule() {
 
     const fetchTeachers = async () => {
       try {
-        const res = await fetch("${API_BASE_URL}/api/teachers");
+        const res = await fetch(`${API_BASE_URL}/api/teachers`);
         const teachersData = res.ok ? await res.json() : [];
         setTeachers(teachersData);
       } catch (err) {
@@ -303,7 +303,7 @@ export default function MySchedule() {
 
     const fetchStudents = async () => {
       try {
-        const res = await fetch("${API_BASE_URL}/api/students");
+        const res = await fetch(`${API_BASE_URL}/api/students`);
         const studentsData = res.ok ? await res.json() : [];
         setStudents(studentsData);
       } catch (err) {
@@ -329,7 +329,7 @@ export default function MySchedule() {
           // Fetch existing schedule events for create tab
           const fetchCreateEvents = async () => {
             try {
-              const res = await fetch("${API_BASE_URL}/api/classes");
+              const res = await fetch(`${API_BASE_URL}/api/classes`);
               const classes = res.ok ? await res.json() : [];
               
               let events = [];
@@ -484,7 +484,7 @@ export default function MySchedule() {
 
     try {
       for (const event of eventsToAdd) {
-        await fetch("${API_BASE_URL}/api/calendar", {
+        await fetch(`${API_BASE_URL}/api/calendar`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(event),

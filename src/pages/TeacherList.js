@@ -138,7 +138,7 @@ export default function TeacherList() {
   );
 
   useEffect(() => {
-    fetch("${API_BASE_URL}/api/teachers")
+    fetch(`${API_BASE_URL}/api/teachers`)
       .then((res) => res.json())
       .then((data) => {
         setTeachers(data);
@@ -335,7 +335,7 @@ export default function TeacherList() {
 
     try {
       for (const event of eventsToAdd) {
-        await fetch("${API_BASE_URL}/api/calendar", {
+        await fetch(`${API_BASE_URL}/api/calendar`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(event),

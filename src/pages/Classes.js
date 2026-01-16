@@ -43,7 +43,7 @@ export default function Classes() {
   // Role-based fetch: admin sees all, teacher sees their classes, student sees their classes
   const fetchClasses = () => {
     setLoading(true);
-    let url = '${API_BASE_URL}/api/classes';
+    let url = `${API_BASE_URL}/api/classes`;
     
     // Determine the URL based on user role
     if (user) {
@@ -68,7 +68,7 @@ export default function Classes() {
   };
 
   const fetchTeachers = () => {
-    fetch('${API_BASE_URL}/api/teachers')
+    fetch(`${API_BASE_URL}/api/teachers`)
       .then(res => res.json())
       .then(data => {
         setTeachers(data);
@@ -89,7 +89,7 @@ export default function Classes() {
 
   const fetchAllStudents = async () => {
     try {
-      const res = await fetch('${API_BASE_URL}/api/students');
+      const res = await fetch(`${API_BASE_URL}/api/students`);
       if (!res.ok) throw new Error();
       setAllStudents(await res.json());
     } catch {
@@ -275,7 +275,7 @@ export default function Classes() {
       const startDatetime = combineLocalDatetime(addForm.start_date, addForm.start_time);
       const endDatetime = combineLocalDatetime(addForm.end_date, addForm.end_time);
 
-      const res = await fetch('${API_BASE_URL}/api/classes', {
+      const res = await fetch(`${API_BASE_URL}/api/classes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -61,7 +61,7 @@ function generateRecurringEvents(cls) {
 // Backend persistence helpers; adjust endpoints if backend differs
 async function saveScheduleToDatabase(data) {
   try {
-    const res = await fetch('${API_BASE_URL}/api/schedules', {
+    const res = await fetch(`${API_BASE_URL}/api/schedules`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -280,7 +280,7 @@ export default function Schedules() {
   // Fetch current user's schedule (placeholder since roles other than admin limited now)
   const fetchMyScheduleEvents = async () => {
     try {
-      const res = await fetch('${API_BASE_URL}/api/schedules');
+      const res = await fetch(`${API_BASE_URL}/api/schedules`);
       const data = await res.json();
       const personalEvents = Array.isArray(data) ? data.map(event => ({
         id: event.idcalendar || event.id,
@@ -302,12 +302,12 @@ export default function Schedules() {
     const fetchMasterSchedule = async () => {
       try {
         // Connect to the actual backend running on port 3000
-        const response = await fetch('${API_BASE_URL}/api/schedules');
+        const response = await fetch(`${API_BASE_URL}/api/schedules`);
         const data = await response.json();
         console.log('Raw data from backend:', data[0]); // Debug log
         
         // Fetch availabilities to check conflicts dynamically
-        const availResponse = await fetch('${API_BASE_URL}/api/teacher-availabilities');
+        const availResponse = await fetch(`${API_BASE_URL}/api/teacher-availabilities`);
         const availabilityData = await availResponse.json();
         console.log('🔔 FETCH: Availabilities for conflict checking:', availabilityData);
         console.log(`🔔 FETCH: Total availability records: ${availabilityData ? availabilityData.length : 0}`);
@@ -426,7 +426,7 @@ export default function Schedules() {
     const fetchTeachers = async () => {
       try {
         console.log('Fetching teachers from ${API_BASE_URL}/api/teachers');
-        const res = await fetch("${API_BASE_URL}/api/teachers");
+        const res = await fetch(`${API_BASE_URL}/api/teachers`);
         console.log('Teachers API response status:', res.status, res.statusText);
         
         if (!res.ok) {
@@ -448,7 +448,7 @@ export default function Schedules() {
 
     const fetchStudents = async () => {
       try {
-        const res = await fetch("${API_BASE_URL}/api/students");
+        const res = await fetch(`${API_BASE_URL}/api/students`);
         const studentsData = res.ok ? await res.json() : [];
         setStudents(studentsData);
         console.log('Students loaded:', studentsData.length, 'students');
@@ -456,7 +456,7 @@ export default function Schedules() {
         console.error('Error fetching students - trying backup port:', err);
         // Try backup port 3001
         try {
-          const res = await fetch("http://localhost:3001/api/students");
+          const res = await fetch(`${API_BASE_URL}/api/students`);
           const studentsData = res.ok ? await res.json() : [];
           setStudents(studentsData);
           console.log('Students loaded from backup port:', studentsData.length, 'students');
@@ -470,7 +470,7 @@ export default function Schedules() {
     const fetchRooms = async () => {
       try {
         // Get rooms from existing schedules - only rooms that are actually being used
-        const response = await fetch('${API_BASE_URL}/api/schedules');
+        const response = await fetch(`${API_BASE_URL}/api/schedules`);
         if (!response.ok) {
           throw new Error(`API responded with status: ${response.status}`);
         }
@@ -509,7 +509,7 @@ export default function Schedules() {
   useEffect(() => {
   const fetchAvailabilities = async () => {
       try {
-        const res = await fetch("${API_BASE_URL}/api/teacher-availabilities");
+        const res = await fetch(`${API_BASE_URL}/api/teacher-availabilities`);
         const availData = res.ok ? await res.json() : [];
         setAllAvailabilities(availData);
         console.log('Teacher availability loaded from backend:', availData.length, 'records');

@@ -33,7 +33,7 @@ export default function AddUserPage() {
       role: formData.role.toLowerCase(),
     };
 
-    const res = await fetch("${API_BASE_URL}/api/user", {
+    const res = await fetch(`${API_BASE_URL}/api/user`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

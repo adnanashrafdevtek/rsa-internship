@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }) => {
     setUsersLoading(true);
     setUsersError(null);
     try {
-      const res = await fetch("${API_BASE_URL}/api/users");
+      const res = await fetch(`${API_BASE_URL}/api/users`);
       if (!res.ok) throw new Error("Failed to fetch users");
       const data = await res.json();
       setUsers(data);
@@ -76,7 +76,7 @@ export const AuthProvider = ({ children }) => {
 
     // If not found, try backend login
     try {
-      const response = await fetch("${API_BASE_URL}/login", {
+      const response = await fetch(`${API_BASE_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })

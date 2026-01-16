@@ -120,7 +120,7 @@ export default function TeacherAvailability() {
 
     console.log("📌 Sending payload:", { teacher_id: userId, events: formattedEvents });
 
-    const response = await fetch("${API_BASE_URL}/api/teacher-availability", {
+    const response = await fetch(`${API_BASE_URL}/api/teacher-availability`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ teacher_id: userId, events: formattedEvents }),
