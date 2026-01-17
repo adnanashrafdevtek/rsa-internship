@@ -115,6 +115,7 @@ const DragAndDropCalendar = withDragAndDrop(Calendar);
 // Unified header for both Create & Master schedule calendars
 const CustomHeader = ({ date }) => {
   const dayName = moment(date).format('dddd');
+  const dateNum = moment(date).format('M/D');
   const ab = getABLabelForHeader(date); // 'A' | 'B' | ''
   const isFriday = moment(date).day() === 5 && ab; // only show if we have A/B
   const bg = isFriday ? '#9b59b6' : (ab === 'A' ? '#3498db' : '#e74c3c');
@@ -136,14 +137,14 @@ const CustomHeader = ({ date }) => {
       position: 'relative',
       zIndex: 10
     }}>
-      {/* Day name on top */}
+      {/* Day name with date on top */}
       <div style={{
         fontSize: 14,
         fontWeight: 'bold',
         color: '#2c3e50',
         whiteSpace: 'nowrap',
         zIndex: 11
-      }}>{dayName}</div>
+      }}>{dayName} {dateNum}</div>
       
       {/* A/B Day label on bottom */}
       {label && (
@@ -301,6 +302,13 @@ export default function Schedules() {
         console.log('🔔 FETCH: Availabilities for conflict checking:', availabilityData);
         console.log(`🔔 FETCH: Total availability records: ${availabilityData ? availabilityData.length : 0}`);
         
+        if (!Array.isArray(data)) {
+          console.error('Expected array from API, got:', typeof data);
+          setMasterEvents([]);
+          setCreateEvents([]);
+          return;
+        }
+        
         const events = data.map(schedule => {
           // Parse the recurring_day if it exists
           const recurringDay = schedule.recurring_day !== undefined && schedule.recurring_day !== null 
@@ -315,11 +323,26 @@ export default function Schedules() {
           let title = subject;
           if (grade) title += ` (${grade})`;
           
+          // Parse the original time from database
+          const originalStart = moment(schedule.start_time);
+          const originalEnd = moment(schedule.end_time);
+          const startHour = originalStart.hour();
+          const startMinute = originalStart.minute();
+          const endHour = originalEnd.hour();
+          const endMinute = originalEnd.minute();
+          const dayOfWeek = originalStart.day(); // 0=Sunday, 1=Monday, etc.
+          
+          // Map this event to the current week
+          const currentWeekStart = moment().startOf('week');
+          const eventDate = currentWeekStart.clone().day(dayOfWeek);
+          const start = eventDate.clone().set({ hour: startHour, minute: startMinute, second: 0 }).toDate();
+          const end = eventDate.clone().set({ hour: endHour, minute: endMinute, second: 0 }).toDate();
+          
           const eventObj = {
             id: schedule.idcalendar,
             title: title,
-            start: new Date(schedule.start_time),
-            end: new Date(schedule.end_time),
+            start: start,
+            end: end,
             isClass: true,
             description: schedule.description,
             teacherId: schedule.user_id,
@@ -335,13 +358,13 @@ export default function Schedules() {
           
           // Dynamically check if event is within teacher availability
           // This ensures conflicts are flagged on every reload
-          const startTime = schedule.start_time ? moment(schedule.start_time).format('HH:mm:ss') : '';
-          const endTime = schedule.end_time ? moment(schedule.end_time).format('HH:mm:ss') : '';
-          const eventDay = schedule.start_time ? moment(schedule.start_time).day() : 0; // 0=Sunday, 1=Monday, etc
+          const startTime = moment(start).format('HH:mm:ss');
+          const endTime = moment(end).format('HH:mm:ss');
+          const eventDay = dayOfWeek; // Already calculated above
           
           // Check if this event is within teacher's availability
           let hasConflict = false;
-          console.log(`📋 Checking availability for Schedule ID: ${schedule.id}, Teacher: ${schedule.user_id}, Event Day: ${eventDay}`);
+          console.log(`📋 Checking availability for Schedule ID: ${schedule.idcalendar}, Teacher: ${schedule.user_id}, Event Day: ${eventDay}`);
           console.log(`   Available availability records total: ${availabilityData ? availabilityData.length : 0}`);
           
           if (availabilityData && Array.isArray(availabilityData)) {
@@ -873,22 +896,32 @@ export default function Schedules() {
           const event1 = events[i];
           const event2 = events[j];
           
+          // Skip if events don't have valid start/end times
+          if (!event1 || !event2 || !event1.start || !event1.end || !event2.start || !event2.end) {
+            continue;
+          }
+          
           // Check if events overlap in time
           const start1 = moment(event1.start);
           const end1 = moment(event1.end);
           const start2 = moment(event2.start);
           const end2 = moment(event2.end);
           
+          // Validate moment objects
+          if (!start1.isValid() || !end1.isValid() || !start2.isValid() || !end2.isValid()) {
+            continue;
+          }
+          
           const timeOverlap = start1.isBefore(end2) && start2.isBefore(end1);
           
           if (timeOverlap) {
-            // Check for same teacher or same room conflicts
-            const sameTeacher = event1.teacherId && event2.teacherId && 
-              event1.teacherId.toString() === event2.teacherId.toString();
+            // Flag conflict if same room OR same teacher at same time
             const sameRoom = event1.room && event2.room && 
               event1.room.toString().trim().toLowerCase() === event2.room.toString().trim().toLowerCase();
+            const sameTeacher = event1.teacherId && event2.teacherId && 
+              event1.teacherId.toString() === event2.teacherId.toString();
             
-            if (sameTeacher || sameRoom) {
+            if (sameRoom || sameTeacher) {
               ids.add(event1.id);
               ids.add(event2.id);
             }
@@ -902,40 +935,34 @@ export default function Schedules() {
 
     // Enhanced event style getter for master schedule
     const masterEventStyleGetter = (event) => {
-      let backgroundColor;
+      let backgroundColor = "#4a90e2"; // Default blue
       let opacity = 1;
       let borderStyle = "none";
+      let boxShadow = "0 2px 4px rgba(0,0,0,0.08)";
       
       if (event.availability) {
         // Availability events - use teacher color with transparency
         backgroundColor = event.color || getTeacherColor(event.teacher_id);
-        opacity = 0.3; // Make availability transparent
-        borderStyle = `2px dashed ${backgroundColor}`;
-      } else if (event.isClass) {
-        // All class events use the same color for consistency
-        backgroundColor = "#3498db"; // Blue color for all classes
-        
-        // Check if class has conflict or hasConflicts flag - red outline
-        if (event.hasConflict || event.hasConflicts) {
-          borderStyle = "3px solid #e74c3c";
-        }
-      } else {
-        // Other events
-        const colors = ["#3498db", "#9b59b6", "#f39c12", "#e74c3c", "#1abc9c"];
+        opacity = 0.25; // Make availability transparent
+        borderStyle = `1px dashed ${backgroundColor}`;
+        boxShadow = "none";
+      } else if (!event.isClass) {
+        // Other non-class events - use varied colors
+        const colors = ["#4a90e2", "#9b59b6", "#f39c12", "#e74c3c", "#1abc9c"];
         const colorIndex = event.id ? String(event.id).length % colors.length : 0;
         backgroundColor = colors[colorIndex];
       }
 
-      // Highlight conflicts (overlapping events on master schedule)
+      // Check for conflicts - flag orange if same room or same teacher at same time
       if (overlappingEventIds.includes(event.id) && !event.availability) {
-        borderStyle = "3px solid #c0392b"; // Dark red outline for overlaps
-        opacity = 1;
+        backgroundColor = "#e67e22"; // Orange for conflicts
+        boxShadow = "0 3px 8px rgba(230,126,34,0.4), inset 0 0 0 1px rgba(255,255,255,0.15)";
       }
 
       // Highlight selected events in delete mode
       if (deleteMode && selectedToDelete.includes(event.id)) {
-        borderStyle = "3px solid #9b59b6";
-        opacity = 1;
+        borderStyle = "2px solid #9b59b6";
+        boxShadow = "0 4px 12px rgba(155,89,182,0.4)";
       }
       
       return {
@@ -943,20 +970,17 @@ export default function Schedules() {
           backgroundColor,
           opacity,
           color: "white",
-          borderRadius: 4,
+          borderRadius: 6,
           border: borderStyle,
-          fontSize: "13px",
-          fontWeight: 500,
-          boxShadow: event.availability 
-            ? "0 1px 2px rgba(0,0,0,0.1)" 
-            : "0 1px 3px rgba(0,0,0,0.1)",
+          fontSize: "12px",
+          fontWeight: 600,
+          boxShadow,
           cursor: event.availability ? "default" : (deleteMode ? "pointer" : "move"),
           zIndex: event.availability ? 1 : 10,
           pointerEvents: event.availability ? 'none' : 'auto',
           overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          padding: "4px 6px"
+          padding: "6px 8px",
+          lineHeight: 1.3
         },
       };
     };
@@ -1106,7 +1130,7 @@ export default function Schedules() {
     };
 
     const MasterToolbar = ({ label }) => (
-      <div className="rbc-toolbar" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, gap: 12 }}>
+      <div className="rbc-toolbar" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, gap: 12, flexWrap: 'wrap' }}>
         <span className="rbc-btn-group" style={{ display: 'flex', gap: 4 }}>
           {[
             { id: 'all', label: 'All' },
@@ -1137,8 +1161,184 @@ export default function Schedules() {
           ))}
         </span>
         
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {/* View/Edit Mode Toggle Buttons - Same style as school level filters */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Navigation Buttons */}
+          <span className="rbc-btn-group" style={{ display: 'flex', gap: 4 }}>
+            <button
+              type="button"
+              onClick={() => setDate(moment(date).subtract(1, 'week').toDate())}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                border: '1px solid #d0d7de',
+                background: '#fff',
+                color: '#2c3e50',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s'
+              }}
+            >
+              ◀ Previous Week
+            </button>
+            <button
+              type="button"
+              onClick={() => setDate(new Date())}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                border: '1px solid #d0d7de',
+                background: '#fff',
+                color: '#2c3e50',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s'
+              }}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => setDate(moment(date).add(1, 'week').toDate())}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                border: '1px solid #d0d7de',
+                background: '#fff',
+                color: '#2c3e50',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s'
+              }}
+            >
+              Next Week ▶
+            </button>
+          </span>
+          
+          {/* Action Buttons */}
+          {isEditMode && (
+            <span className="rbc-btn-group" style={{ display: 'flex', gap: 4 }}>
+              {pendingChanges.length > 0 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!window.confirm(`Save ${pendingChanges.length} change(s)?`)) return;
+                    
+                    setLoading(true);
+                    let successCount = 0;
+                    
+                    for (const change of pendingChanges) {
+                      try {
+                        const result = await updateScheduleInDatabase(change.databaseId, {
+                          start_time: moment(change.start).format('YYYY-MM-DD HH:mm:ss'),
+                          end_time: moment(change.end).format('YYYY-MM-DD HH:mm:ss'),
+                          user_id: change.teacherId,
+                          subject: change.subject,
+                          grade: change.grade,
+                          room: change.room,
+                          ab_day: change.abDay,
+                          recurring_day: change.recurringDays.length > 0 ? change.recurringDays[0] : null
+                        });
+                        
+                        if (result.success) successCount++;
+                      } catch (error) {
+                        console.error('Error saving change:', error);
+                      }
+                    }
+                    
+                    setLoading(false);
+                    setPendingChanges([]);
+                    alert(`Successfully saved ${successCount} of ${pendingChanges.length} changes!`);
+                    fetchMasterSchedule();
+                  }}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: 20,
+                    border: '2px solid #27ae60',
+                    background: '#27ae60',
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    boxShadow: '0 2px 6px rgba(39,174,96,0.3)'
+                  }}
+                >
+                  💾 Save Changes ({pendingChanges.length})
+                </button>
+              )}
+              
+              <button
+                type="button"
+                onClick={() => {
+                  if (!deleteMode) {
+                    setDeleteMode(true);
+                    setSelectedToDelete([]);
+                  } else {
+                    setDeleteMode(false);
+                    setSelectedToDelete([]);
+                  }
+                }}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 20,
+                  border: deleteMode ? '2px solid #e74c3c' : '1px solid #d0d7de',
+                  background: deleteMode ? '#e74c3c' : '#fff',
+                  color: deleteMode ? '#fff' : '#e74c3c',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s'
+                }}
+              >
+                {deleteMode ? '✖ Cancel Delete' : '🗑️ Delete Mode'}
+              </button>
+              
+              {deleteMode && selectedToDelete.length > 0 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!window.confirm(`Delete ${selectedToDelete.length} event(s)?`)) return;
+                    
+                    setLoading(true);
+                    let successCount = 0;
+                    
+                    for (const eventId of selectedToDelete) {
+                      const event = masterEvents.find(e => e.id === eventId);
+                      if (event && event.databaseId) {
+                        const result = await deleteScheduleFromDatabase(event.databaseId);
+                        if (result.success) successCount++;
+                      }
+                    }
+                    
+                    setLoading(false);
+                    setDeleteMode(false);
+                    setSelectedToDelete([]);
+                    alert(`Successfully deleted ${successCount} of ${selectedToDelete.length} events!`);
+                    fetchMasterSchedule();
+                  }}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: 20,
+                    border: '2px solid #c0392b',
+                    background: '#c0392b',
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    boxShadow: '0 2px 6px rgba(192,57,43,0.3)'
+                  }}
+                >
+                  🗑️ Confirm Delete ({selectedToDelete.length})
+                </button>
+              )}
+            </span>
+          )}
+          
+          {/* View/Edit Mode Toggle Buttons */}
           <span className="rbc-btn-group" style={{ display: 'flex', gap: 4 }}>
             <button
               type="button"
@@ -1147,10 +1347,14 @@ export default function Schedules() {
                   if (window.confirm('You have unsaved changes. Discard them?')) {
                     setIsEditMode(false);
                     setPendingChanges([]);
-                    fetchMasterSchedule(); // Reload to discard changes
+                    setDeleteMode(false);
+                    setSelectedToDelete([]);
+                    fetchMasterSchedule();
                   }
                 } else {
                   setIsEditMode(false);
+                  setDeleteMode(false);
+                  setSelectedToDelete([]);
                 }
               }}
               style={{
@@ -1357,24 +1561,57 @@ export default function Schedules() {
             event: ({ event }) => (
               <div
                 style={{
-                  padding: '4px 6px',
-                  borderRadius: '4px',
+                  height: '100%',
                   display: 'flex',
                   flexDirection: 'column',
+                  justifyContent: 'center',
                   gap: '2px',
-                  fontSize: event.availability ? '11px' : '12px',
-                  fontWeight: event.availability ? 400 : 500,
-                  cursor: 'pointer',
-                  color: 'white'
+                  overflow: 'hidden'
                 }}
               >
-                <span style={{ fontWeight: 600 }}>{event.title || event.subject || 'Event'}</span>
-                {event.isClass && event.teacher && (
-                  <span style={{ fontSize: '10px', opacity: 0.85, fontWeight: 400 }}>
+                <div style={{ 
+                  fontWeight: 700, 
+                  fontSize: '13px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {event.subject || event.title}
+                </div>
+                <div style={{ 
+                  fontSize: '11px', 
+                  opacity: 0.95,
+                  display: 'flex',
+                  gap: '6px',
+                  alignItems: 'center',
+                  flexWrap: 'wrap'
+                }}>
+                  {event.grade && (
+                    <span style={{ 
+                      background: 'rgba(255,255,255,0.25)',
+                      padding: '2px 6px',
+                      borderRadius: 3,
+                      fontWeight: 600,
+                      fontSize: '10px'
+                    }}>
+                      Gr {event.grade}
+                    </span>
+                  )}
+                  {event.room && (
+                    <span style={{ fontSize: '10px', fontWeight: 600 }}>Rm {event.room}</span>
+                  )}
+                </div>
+                {event.teacher && (
+                  <div style={{ 
+                    fontSize: '10px', 
+                    opacity: 0.85,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
                     {event.teacher}
-                  </span>
+                  </div>
                 )}
-                {event.availability && <span style={{ fontSize: '10px', opacity: 0.9 }}>⏰</span>}
               </div>
             ),
           }}
