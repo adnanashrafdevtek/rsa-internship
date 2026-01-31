@@ -556,7 +556,7 @@ export default function Schedules() {
     };
 
     fetchData();
-  }, [user, activeTab, isStudent, isTeacher]);
+  }, [user, activeTab]);
 
   // Cleanup duplicates periodically
   useEffect(() => {
@@ -615,17 +615,6 @@ export default function Schedules() {
   }, [pendingChanges]);
 
   // Script injection moved to Sidebar.js for global availability
-  
-  // Role check - admin only for full access (after all hooks)
-  if (!user || user.role !== "admin") {
-    return (
-      <SidebarLayout onLogout={handleLogout}>
-        <div style={{ backgroundColor: "#f8f9fa", padding: 40 }}>
-          <h2>Only admins can access the unified schedule management. Please log in as admin.</h2>
-        </div>
-      </SidebarLayout>
-    );
-  }
 
   // Fetch teacher-specific events
   const fetchTeacherEvents = async (teacherId) => {
@@ -3354,6 +3343,17 @@ export default function Schedules() {
       ))}
     </div>
   );
+
+  // Role check - admin only for full access (after all hooks)
+  if (!user || user.role !== "admin") {
+    return (
+      <SidebarLayout onLogout={handleLogout}>
+        <div style={{ backgroundColor: "#f8f9fa", padding: 40 }}>
+          <h2>Only admins can access the unified schedule management. Please log in as admin.</h2>
+        </div>
+      </SidebarLayout>
+    );
+  }
 
   return (
     <SidebarLayout onLogout={handleLogout}>

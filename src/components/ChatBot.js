@@ -37,6 +37,7 @@ export default function ChatBot() {
   const isAdmin = user?.role === 'admin';
   
   if (!user || !isAdmin) return null;
+  if (!chatScriptLoaded) return null;
 
   return (
     <div style={{
