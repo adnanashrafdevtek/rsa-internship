@@ -12,9 +12,9 @@ import ClassRosters from "./pages/ClassRosters";
 import AddUserPage from "./pages/AddUserPage";
 import ActivationForm from "./pages/ActivationForm";
 import ProtectedRoute from "./components/ProtectedRoute";
-import ChatBot from "./components/ChatBot";
 import { AuthProvider } from "./context/AuthContext";
 import { SidebarProvider } from "./context/SidebarContext";
+import ChatBot from "./components/ChatBot";
 import './App.css';
 
 import MySchedule from "./pages/MySchedule";
