@@ -7,7 +7,7 @@ const SidebarLayout = ({ children, onLogout }) => {
   const effectiveWidth = getEffectiveWidth();
 
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
+    <div style={{ display: "flex", height: "100vh", minWidth: 0 }}>
       <Sidebar onLogout={onLogout} />
       <div style={{ 
         flex: 1, 
@@ -15,7 +15,9 @@ const SidebarLayout = ({ children, onLogout }) => {
         padding: 16, 
         marginLeft: effectiveWidth + 20,
         transition: 'margin-left 0.3s ease',
-        width: `calc(100vw - ${effectiveWidth + 20}px)`,
+        width: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
         overflowX: 'auto'
       }}>
         {children}

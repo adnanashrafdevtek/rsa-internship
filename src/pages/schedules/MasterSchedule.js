@@ -802,6 +802,9 @@ export default function MasterSchedule({
             data-filter-sidebar
             style={{
               width: sidebarWidth,
+              maxWidth: "36vw",
+              minWidth: 220,
+              flexShrink: 1,
               backgroundColor: "white",
               borderRadius: "12px",
               padding: "20px",
