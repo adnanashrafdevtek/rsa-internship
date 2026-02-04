@@ -108,9 +108,9 @@ const ChatBot = () => {
       <div
         style={{
           width: isCollapsed ? '72px' : `${panelWidth}px`,
-          background: '#0d0e10',
-          color: '#e5e7eb',
-          borderLeft: '1px solid #1f2933',
+          background: '#ffffff',
+          color: '#1f2937',
+          borderLeft: '1px solid #e5e7eb',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -126,10 +126,10 @@ const ChatBot = () => {
             alignItems: 'center',
             justifyContent: isCollapsed ? 'center' : 'space-between',
             padding: isCollapsed ? '12px 8px' : '12px 16px',
-            backgroundColor: '#111214',
-            color: '#f8fafc',
+            backgroundColor: '#ffffff',
+            color: '#111827',
             gap: '8px',
-            borderBottom: '1px solid #1f2933',
+            borderBottom: '1px solid #e5e7eb',
           }}
         >
           {!isCollapsed && (
@@ -145,9 +145,9 @@ const ChatBot = () => {
             <button
               onClick={() => setIsCollapsed((prev) => !prev)}
               style={{
-                border: '1px solid #2a2f35',
-                background: '#15171a',
-                color: '#e5e7eb',
+                border: '1px solid #d1d5db',
+                background: '#f9fafb',
+                color: '#111827',
                 borderRadius: '8px',
                 padding: '6px 8px',
                 cursor: 'pointer',
@@ -165,9 +165,9 @@ const ChatBot = () => {
             <button
               onClick={() => setIsCollapsed(false)}
               style={{
-                border: '1px solid #2a2f35',
-                background: '#15171a',
-                color: '#e5e7eb',
+                border: '1px solid #d1d5db',
+                background: '#f9fafb',
+                color: '#111827',
                 width: '40px',
                 height: '40px',
                 borderRadius: '12px',
@@ -184,16 +184,16 @@ const ChatBot = () => {
             <div
               style={{
                 padding: '12px 16px',
-                borderBottom: '1px solid #1f2933',
-                backgroundColor: '#0f1113',
+                borderBottom: '1px solid #e5e7eb',
+                backgroundColor: '#ffffff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: '10px',
               }}
             >
-              <div style={{ fontSize: '12px', color: '#94a3b8' }}>Assistant</div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>AI chat</div>
+              <div style={{ fontSize: '12px', color: '#6b7280' }}>Assistant</div>
+              <div style={{ fontSize: '11px', color: '#9ca3af' }}>AI chat</div>
             </div>
 
             <div
@@ -201,13 +201,13 @@ const ChatBot = () => {
                 flex: 1,
                 overflowY: 'auto',
                 padding: '16px',
-                background: '#0b0c0e',
+                background: '#f9fafb',
               }}
             >
               {messages.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#94a3b8', marginTop: '24px' }}>
+                <div style={{ textAlign: 'center', color: '#6b7280', marginTop: '24px' }}>
                   <p style={{ margin: 0, fontSize: '15px' }}>Hello. Need help?</p>
-                  <p style={{ fontSize: '13px', marginTop: '6px', color: '#64748b' }}>
+                  <p style={{ fontSize: '13px', marginTop: '6px', color: '#9ca3af' }}>
                     Ask about schedules, rooms, or teachers.
                   </p>
                 </div>
@@ -226,9 +226,9 @@ const ChatBot = () => {
                         maxWidth: '82%',
                         padding: '10px 14px',
                         borderRadius: '12px',
-                        backgroundColor: msg.type === 'user' ? '#f8fafc' : msg.type === 'error' ? '#b91c1c' : '#1a1d22',
-                        color: msg.type === 'user' ? '#0f172a' : '#e5e7eb',
-                        border: '1px solid #22262c',
+                        backgroundColor: msg.type === 'user' ? '#111827' : msg.type === 'error' ? '#b91c1c' : '#ffffff',
+                        color: msg.type === 'user' || msg.type === 'error' ? '#ffffff' : '#111827',
+                        border: '1px solid #e5e7eb',
                         wordWrap: 'break-word',
                         whiteSpace: 'pre-wrap',
                         fontSize: '13px',
@@ -240,7 +240,7 @@ const ChatBot = () => {
                 ))
               )}
               {loading && (
-                <div style={{ textAlign: 'center', color: '#64748b', fontSize: '12px' }}>
+                <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>
                   <span>typing...</span>
                 </div>
               )}
@@ -250,8 +250,8 @@ const ChatBot = () => {
             <div
               style={{
                 padding: '16px',
-                borderTop: '1px solid #1f2933',
-                backgroundColor: '#0f1113',
+                borderTop: '1px solid #e5e7eb',
+                backgroundColor: '#ffffff',
                 display: 'flex',
                 gap: '10px',
               }}
@@ -266,12 +266,12 @@ const ChatBot = () => {
                 style={{
                   flex: 1,
                   padding: '10px 12px',
-                  border: '1px solid #2a2f35',
+                  border: '1px solid #d1d5db',
                   borderRadius: '12px',
                   outline: 'none',
                   fontSize: '13px',
-                  background: '#0b0c0e',
-                  color: '#e5e7eb',
+                  background: '#ffffff',
+                  color: '#111827',
                 }}
               />
               <button
@@ -279,9 +279,9 @@ const ChatBot = () => {
                 disabled={loading || !inputValue.trim()}
                 style={{
                   padding: '10px 16px',
-                  backgroundColor: loading || !inputValue.trim() ? '#2a2f35' : '#f8fafc',
-                  color: loading || !inputValue.trim() ? '#94a3b8' : '#0f172a',
-                  border: '1px solid #2a2f35',
+                  backgroundColor: loading || !inputValue.trim() ? '#e5e7eb' : '#111827',
+                  color: loading || !inputValue.trim() ? '#9ca3af' : '#ffffff',
+                  border: '1px solid #111827',
                   borderRadius: '12px',
                   cursor: loading || !inputValue.trim() ? 'not-allowed' : 'pointer',
                   fontSize: '13px',
@@ -304,7 +304,7 @@ const ChatBot = () => {
               width: '6px',
               height: '100%',
               cursor: 'col-resize',
-              background: 'linear-gradient(90deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0))',
+              background: 'linear-gradient(90deg, rgba(17, 24, 39, 0.08), rgba(17, 24, 39, 0))',
             }}
             title="Drag to resize"
           />

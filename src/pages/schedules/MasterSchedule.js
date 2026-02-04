@@ -77,16 +77,15 @@ export default function MasterSchedule({
     return (
       <div style={{
         textAlign: "center",
-        padding: "8px 6px",
-        minHeight: 64,
+        padding: "6px 6px",
+        minHeight: 52,
         width: "100%",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 6,
+        gap: 4,
         background: "transparent",
-        borderBottom: "1px solid #e5e7eb",
         boxSizing: "border-box",
         position: "relative",
         zIndex: 10
@@ -102,18 +101,15 @@ export default function MasterSchedule({
         {label && (
           <div style={{
             fontSize: 10,
-            padding: "2px 10px",
+            padding: "2px 8px",
             backgroundColor: bg,
             color: "#fff",
             borderRadius: 999,
             fontWeight: 600,
-            lineHeight: 1.4,
+            lineHeight: 1.2,
             whiteSpace: "nowrap",
             textAlign: "center",
-            border: "1px solid rgba(255,255,255,0.25)",
-            boxShadow: "none",
-            textTransform: "uppercase",
-            letterSpacing: "0.6px"
+            boxShadow: "none"
           }}>{label}</div>
         )}
       </div>
@@ -372,8 +368,8 @@ export default function MasterSchedule({
 
   const MasterToolbar = ({ label }) => (
     <div className="rbc-toolbar" style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <span className="rbc-btn-group" style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span className="rbc-btn-group" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {[
             { id: "all", label: "All" },
             { id: "elementary", label: "Elementary" },
@@ -403,8 +399,8 @@ export default function MasterSchedule({
           ))}
         </span>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span className="rbc-btn-group" style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto" }}>
+          <span className="rbc-btn-group" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <button
               type="button"
               onClick={() => setDate(moment(date).subtract(1, "week").toDate())}
