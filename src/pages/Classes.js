@@ -58,7 +58,12 @@ export default function Classes() {
     fetch(url)
       .then(res => res.json())
       .then(data => {
-        setClasses(data);
+        if (Array.isArray(data)) {
+          setClasses(data);
+        } else {
+          console.error('Classes API returned non-array:', data);
+          setClasses([]);
+        }
         setLoading(false);
       })
       .catch(err => {
@@ -406,7 +411,7 @@ export default function Classes() {
                 margin: '0 auto',
               }}
             >
-              {classes.length === 0 && (
+              {(Array.isArray(classes) ? classes : []).length === 0 && (
                 <div style={{
                   fontSize: 18,
                   color: '#888',
@@ -417,7 +422,7 @@ export default function Classes() {
                   No classes found.
                 </div>
               )}
-              {classes.map(c => (
+              {(Array.isArray(classes) ? classes : []).map(c => (
                 <div
                   key={c.id}
                   style={{
@@ -553,7 +558,7 @@ export default function Classes() {
                 </tr>
               </thead>
               <tbody>
-                {classes.map(c =>
+                {(Array.isArray(classes) ? classes : []).map(c =>
                   (editingId === c.id) ? (
                     <tr
                       key={c.id}
