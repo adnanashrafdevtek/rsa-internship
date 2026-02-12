@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from "../context/AuthContext";
+import { apiUrl } from "../constants/apiConstants";
 
 
 
@@ -39,7 +40,7 @@ export default function Classes() {
 
   const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const navigate = useNavigate();
-  const API_BASE_URL = "http://3.143.57.120:3000";
+  const API_BASE_URL = apiUrl;
   // Role-based fetch: admin sees all, teacher sees their classes, student sees their classes
   const fetchClasses = () => {
     setLoading(true);

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from "../constants/apiConstants";
 
 export default function ClassRosters() {
   const { classId } = useParams();
@@ -11,7 +12,7 @@ export default function ClassRosters() {
   const [newStudentId, setNewStudentId] = useState('');
   const [showAddStudent, setShowAddStudent] = useState(false);
   const { user } = useAuth();
-  const API_BASE_URL = "http://3.143.57.120:3000";
+  const API_BASE_URL = apiUrl;
   // Helper: format only time in 12-hour format
   const formatTimeOnly = (dt) => {
     if (!dt) return '';

@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState } from "react";
+import { apiUrl } from "../constants/apiConstants";
 
 const AuthContext = createContext();
-const API_BASE_URL = "http://3.143.57.120:3000";
+const API_BASE_URL = process.env.API_URL || apiUrl;
 const dummyUsers = [
   { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0 },
   { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1 },
@@ -10,6 +11,7 @@ const dummyUsers = [
 ];
 
 export const AuthProvider = ({ children }) => {
+
   const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem("user");
     return storedUser ? JSON.parse(storedUser) : null;

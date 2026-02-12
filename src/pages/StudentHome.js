@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { useAuth } from '../context/AuthContext';
 import moment from 'moment';
+import { apiUrl } from "../constants/apiConstants";
 
 export default function StudentHome() {
   const { user } = useAuth();
@@ -10,7 +11,7 @@ export default function StudentHome() {
   const [nextBreak, setNextBreak] = useState(null);
   const [currentTime, setCurrentTime] = useState(moment());
   const [loading, setLoading] = useState(true);
-  const API_BASE_URL = "http://3.143.57.120:3000";
+  const API_BASE_URL = apiUrl;
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(moment());
