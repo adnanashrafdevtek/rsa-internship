@@ -52,7 +52,7 @@ export default function AddUserPage() {
       setMessage(`⚠️ User ${data.firstName} added, but email failed to send.`);
     }
 
-    setTimeout(() => navigate("/student"), 2000); // redirect after success
+    // setTimeout(() => navigate("/student"), 2000); // redirect after success
   } catch (err) {
     setMessage(`❌ ${err.message}`);
   } finally {
