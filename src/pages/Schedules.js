@@ -669,7 +669,7 @@ export default function Schedules() {
       console.error('Error fetching student events:', err);
       // Try backup port
       try {
-        const res = await fetch(`http://localhost:3001/api/students/${studentId}/classes`);
+        const res = await fetch(`${API_BASE_URL}/api/students/${studentId}/classes`);
         const classes = res.ok ? await res.json() : [];
         let events = [];
         classes.forEach(cls => {

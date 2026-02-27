@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { apiUrl } from "../constants/apiConstants";
 
 function ResetPassword() {
   const [email, setEmail] = useState("");
@@ -8,7 +9,7 @@ function ResetPassword() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const API_BASE_URL = "http://3.143.57.120:3000";
+  const API_BASE_URL = apiUrl;
   const handleReset = async (e) => {
     e.preventDefault();
 

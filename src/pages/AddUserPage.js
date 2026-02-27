@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SidebarLayout from "../components/SidebarLayout";
+import { apiUrl } from "../constants/apiConstants";
 
 export default function AddUserPage() {
   const navigate = useNavigate();
@@ -12,7 +13,7 @@ export default function AddUserPage() {
     address: "",
     role: "student", // default role
   });
-  const API_BASE_URL = "http://3.143.57.120:3000";
+  const API_BASE_URL = apiUrl;
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -51,7 +52,7 @@ export default function AddUserPage() {
       setMessage(`⚠️ User ${data.firstName} added, but email failed to send.`);
     }
 
-    setTimeout(() => navigate("/student"), 2000); // redirect after success
+    // setTimeout(() => navigate("/student"), 2000); // redirect after success
   } catch (err) {
     setMessage(`❌ ${err.message}`);
   } finally {

@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import "./ActivationForm.css";
+import { apiUrl } from "../constants/apiConstants";
 
 export default function ActivationForm() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
-  const API_BASE_URL = "http://3.143.57.120:3000";
+  const API_BASE_URL = apiUrl;
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
