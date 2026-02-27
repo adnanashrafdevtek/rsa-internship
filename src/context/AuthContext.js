@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState } from "react";
+import { setToken } from "../lib/jwt";
 
 const AuthContext = createContext();
-const API_BASE_URL = "http://3.143.57.120:3000";
+const API_BASE_URL = "http://localhost:3000";
 const dummyUsers = [
   { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0 },
   { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1 },
@@ -71,6 +72,7 @@ export const AuthProvider = ({ children }) => {
     if (foundUser) {
       setUser(foundUser);
       localStorage.setItem("user", JSON.stringify(foundUser));
+      setToken("dummy-token"); // set a fake JWT so frontend behaves consistently
       return true;
     }
 
@@ -87,6 +89,7 @@ export const AuthProvider = ({ children }) => {
       if (response.ok && data.user) {
         setUser(data.user);
         localStorage.setItem("user", JSON.stringify(data.user));
+        if (data.token) setToken(data.token);
         return true;
       } else {
         console.error("Login failed:", data.error);
