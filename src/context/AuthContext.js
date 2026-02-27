@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState } from "react";
+import { setToken } from "../lib/jwt";
 
 const AuthContext = createContext();
-
+const API_BASE_URL = "http://localhost:3000";
 const dummyUsers = [
   { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0 },
   { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1 },
@@ -23,7 +24,7 @@ export const AuthProvider = ({ children }) => {
     setUsersLoading(true);
     setUsersError(null);
     try {
-      const res = await fetch("http://localhost:3000/api/users");
+      const res = await fetch(`${API_BASE_URL}/api/users`);
       if (!res.ok) throw new Error("Failed to fetch users");
       const data = await res.json();
       setUsers(data);
@@ -38,7 +39,7 @@ export const AuthProvider = ({ children }) => {
   // Change user password (admin only)
   const changeUserPassword = async (username, newPassword) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/users/${username}/password`, {
+      const res = await fetch(`${API_BASE_URL}/api/users/${username}/password`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: newPassword })
@@ -53,7 +54,7 @@ export const AuthProvider = ({ children }) => {
   // Toggle user active status (admin only)
   const toggleUserActiveStatus = async (username) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/users/${username}/toggle-active`, {
+      const res = await fetch(`${API_BASE_URL}/api/users/${username}/toggle-active`, {
         method: "PUT"
       });
       if (!res.ok) throw new Error("Failed to toggle user status");
@@ -71,12 +72,13 @@ export const AuthProvider = ({ children }) => {
     if (foundUser) {
       setUser(foundUser);
       localStorage.setItem("user", JSON.stringify(foundUser));
+      setToken("dummy-token"); // set a fake JWT so frontend behaves consistently
       return true;
     }
 
     // If not found, try backend login
     try {
-      const response = await fetch("http://localhost:3000/login", {
+      const response = await fetch(`${API_BASE_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
@@ -87,6 +89,7 @@ export const AuthProvider = ({ children }) => {
       if (response.ok && data.user) {
         setUser(data.user);
         localStorage.setItem("user", JSON.stringify(data.user));
+        if (data.token) setToken(data.token);
         return true;
       } else {
         console.error("Login failed:", data.error);
