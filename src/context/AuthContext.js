@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState } from "react";
+import { setToken, removeToken } from "../lib/jwt";
 
 const AuthContext = createContext();
-
+const API_BASE_URL = "http://localhost:3000";
 const dummyUsers = [
   { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0 },
   { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1 },
@@ -85,6 +86,10 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (response.ok && data.user) {
+        // persist JWT if backend provided it
+        if (data.token) {
+          setToken(data.token);
+        }
         setUser(data.user);
         localStorage.setItem("user", JSON.stringify(data.user));
         return true;
@@ -101,6 +106,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setUser(null);
     localStorage.removeItem("user");
+    removeToken();
   };
 
   // Only fetch once per admin login
