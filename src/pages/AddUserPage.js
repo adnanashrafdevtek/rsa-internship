@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SidebarLayout from "../components/SidebarLayout";
+import { apiUrl } from "../constants/apiConstants";
 
 export default function AddUserPage() {
   const navigate = useNavigate();
@@ -12,7 +13,7 @@ export default function AddUserPage() {
     address: "",
     role: "student", // default role
   });
-
+  const API_BASE_URL = apiUrl;
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -25,7 +26,6 @@ export default function AddUserPage() {
   e.preventDefault();
   setMessage("");
   setIsLoading(true);
-  //testing
 
   try {
     // make role lowercase before sending
@@ -34,7 +34,7 @@ export default function AddUserPage() {
       role: formData.role.toLowerCase(),
     };
 
-    const res = await fetch("http://localhost:3000/api/user", {
+    const res = await fetch(`${API_BASE_URL}/api/user`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

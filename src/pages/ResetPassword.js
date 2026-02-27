@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { apiUrl } from "../constants/apiConstants";
 
 function ResetPassword() {
   const [email, setEmail] = useState("");
@@ -8,7 +9,7 @@ function ResetPassword() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
+  const API_BASE_URL = apiUrl;
   const handleReset = async (e) => {
     e.preventDefault();
 
@@ -42,7 +43,7 @@ function ResetPassword() {
 
     // Call backend API
     try {
-      const response = await fetch("http://localhost:3000/api/reset-password", {
+      const response = await fetch(`${API_BASE_URL}/api/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, newPassword }),
