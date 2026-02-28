@@ -10,7 +10,8 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 initAuth({
   onUnauthorized: () => {
     // redirect to login on 401 from backend
-    window.location.href = '/login';
+    // Remove token and let the app handle auth state
+    // Don't use window.location to avoid infinite redirect loops
   },
 });
 root.render(

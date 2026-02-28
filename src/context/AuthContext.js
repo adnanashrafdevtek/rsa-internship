@@ -72,6 +72,9 @@ export const AuthProvider = ({ children }) => {
     if (foundUser) {
       setUser(foundUser);
       localStorage.setItem("user", JSON.stringify(foundUser));
+      // Generate a dummy JWT token for testing
+      const dummyToken = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IiR7Zm91bmRVc2VyLm5hbWV9IiwiZW1haWwiOiIke2ZvdW5kVXNlci5lbWFpbH0iLCJyb2xlIjoiJHtmb3VuZFVzZXIucm9sZX0iLCJpYXQiOjE1MTYyMzkwMjJ9.dummy_signature_${Date.now()}`;
+      setToken(dummyToken);
       return true;
     }
 
