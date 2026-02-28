@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import SidebarLayout from "../components/SidebarLayout";
 import { useNavigate } from "react-router-dom";
+import { apiUrl } from "../constants/apiConstants";
 
 export default function Users() {
   const {
@@ -21,6 +22,8 @@ export default function Users() {
   const [message, setMessage] = useState("");
 
   const { users, usersLoading, usersError } = useAuth();
+  const API_BASE_URL = apiUrl;
+ const [resendLoading, setResendLoading] = useState({});
 
   // Add the handler for password change
   const handlePasswordChange = async (username) => {
@@ -50,6 +53,45 @@ export default function Users() {
 
   // Always use a safe array
   const safeUsers = Array.isArray(users) ? users : [];
+
+  const handleResendEmail = async (u) => {
+    if (!u) return;
+    setMessage("");
+    setResendLoading((prev) => ({ ...prev, [u.username]: true }));
+    try {
+      // send minimal info to trigger activation mail
+      // include all fields required by backend user creation
+      const payload = {
+        firstName: u.first_name || "",
+        lastName: u.last_name || "",
+        emailAddress: u.username || u.email || "",
+        address: u.address || "",
+        role: u.role || "",
+      };
+      const res = await fetch(`${API_BASE_URL}/api/user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const text = await res.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+
+      if (!res.ok) {
+        const serverMsg = (data && (data.error || data.message)) || text;
+        throw new Error(serverMsg || `Failed to resend email (${res.status})`);
+      }
+      if (data && (data.emailSent || data.success)) {
+        setMessage(`✅ Activation email resent to ${u.username}`);
+      } else {
+        setMessage(`✅ Request sent; check server response.`);
+      }
+    } catch (err) {
+      setMessage(`❌ ${err.message}`);
+    } finally {
+      setResendLoading((prev) => ({ ...prev, [u.username]: false }));
+    }
+  };
 
   let content = null;
   if (usersLoading) {
@@ -108,6 +150,7 @@ export default function Users() {
               <th style={thStyle}>New Password</th>
               <th style={thStyle}></th>
               <th style={thStyle}></th>
+              <th style={thStyle}>Resend</th>
             </tr>
           </thead>
           <tbody>
@@ -145,6 +188,16 @@ export default function Users() {
                     <button onClick={() => toggleUserActiveStatus(u.username)}>
                       {u.active ? "Inactivate" : "Activate"}
                     </button>
+                  </td>
+                  <td style={tdStyle}>
+                    {!u.active && (
+                      <button
+                        onClick={() => handleResendEmail(u)}
+                        disabled={resendLoading[u.username]}
+                      >
+                        {resendLoading[u.username] ? "Sending..." : "Resend Email"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))
@@ -189,6 +242,16 @@ export default function Users() {
                   <button onClick={() => toggleUserActiveStatus(u.username)}>
                     {u.active ? "Inactivate" : "Activate"}
                   </button>
+                </td>
+                <td style={tdStyle}>
+                  {!u.active && (
+                    <button
+                      onClick={() => handleResendEmail(u)}
+                      disabled={resendLoading[u.username]}
+                    >
+                      {resendLoading[u.username] ? "Sending..." : "Resend Email"}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
