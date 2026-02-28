@@ -3,8 +3,17 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import initAuth from './lib/initAuth';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
+// initialize JWT fetch interceptor before app mounts
+initAuth({
+  onUnauthorized: () => {
+    // redirect to login on 401 from backend
+    // Remove token and let the app handle auth state
+    // Don't use window.location to avoid infinite redirect loops
+  },
+});
 root.render(
   <React.StrictMode>
     <App />
@@ -18,3 +27,7 @@ root.render(
 // TODO: Change the home page to say Welcome, (username)
 // TODO: Make admin have different buttons than teacher
 reportWebVitals();
+
+
+
+
