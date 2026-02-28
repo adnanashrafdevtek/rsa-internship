@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
@@ -25,6 +25,14 @@ import TeacherHome from "./pages/TeacherHome";
 import StudentHome from "./pages/StudentHome";
 import TeacherSchedule from "./pages/TeacherSchedule";
 import StudentSchedule from "./pages/StudentSchedule";
+
+function ChatBotGate({ user }) {
+  const location = useLocation();
+  const publicPaths = ["/", "/login", "/reset-password", "/activation-form"];
+  const shouldShowChatBot = Boolean(user) && !publicPaths.includes(location.pathname);
+
+  return shouldShowChatBot ? <ChatBot /> : null;
+}
 
 function AppShell() {
   const { user } = useAuth();
@@ -153,7 +161,7 @@ function AppShell() {
             <Route path="/availability" element={<TeacherAvailability />} />
           </Routes>
         </div>
-        {user && <ChatBot />}
+        <ChatBotGate user={user} />
       </div>
     </Router>
   );

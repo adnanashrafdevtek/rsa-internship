@@ -70,6 +70,7 @@ const ChatBot = () => {
         body: JSON.stringify({
           input_value: userMessage,
           output_type: 'chat',
+          jwt: 'hello',
           input_type: 'chat',
         }),
       });
