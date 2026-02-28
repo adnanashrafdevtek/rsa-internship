@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import masterFlow from '../pages/Master Flow.json';
 
 const ChatBot = () => {
   const defaultPanelWidth = 280;
@@ -12,7 +13,7 @@ const ChatBot = () => {
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(defaultPanelWidth);
 
-  const flowId = '3fd40497-ce2c-4d71-ac65-208bba9e3839';
+  const flowId = masterFlow?.id || '3fd40497-ce2c-4d71-ac65-208bba9e3839';
   const apiKey = 'sk-Fc1IxA_guUpPwB-gR8r77JvV_JB92TBrDj26LYd1DBM';
 
   useEffect(() => {
