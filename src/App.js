@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
@@ -12,8 +12,9 @@ import ClassRosters from "./pages/ClassRosters";
 import AddUserPage from "./pages/AddUserPage";
 import ActivationForm from "./pages/ActivationForm";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import { SidebarProvider } from "./context/SidebarContext";
+import ChatBot from "./components/ChatBot";
 import './App.css';
 
 import MySchedule from "./pages/MySchedule";
@@ -25,132 +26,153 @@ import StudentHome from "./pages/StudentHome";
 import TeacherSchedule from "./pages/TeacherSchedule";
 import StudentSchedule from "./pages/StudentSchedule";
 
+function ChatBotGate({ user }) {
+  const location = useLocation();
+  const publicPaths = ["/", "/login", "/reset-password", "/activation-form"];
+  const shouldShowChatBot = Boolean(user) && !publicPaths.includes(location.pathname);
+
+  return shouldShowChatBot ? <ChatBot /> : null;
+}
+
+function AppShell() {
+  const { user } = useAuth();
+
+  return (
+    <Router>
+      <div style={{ display: "flex", minHeight: "100vh", background: "#0b0c0e" }}>
+        <div style={{ flex: 1, minWidth: 0, background: "white" }}>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/home"
+              element={
+                <ProtectedRoute>
+                  <Home />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/class"
+              element={
+                <ProtectedRoute>
+                  <Classes />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/student"
+              element={
+                <ProtectedRoute>
+                  <Student />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/schedule"
+              element={
+                <ProtectedRoute>
+                  <Schedules />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/teacher-list"
+              element={
+                <ProtectedRoute>
+                  <TeacherList />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/student-list"
+              element={
+                <ProtectedRoute>
+                  <StudentList />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reset-password"
+              element={<ResetPassword />}
+            />
+            <Route
+              path="/rosters/:classId"
+              element={
+                <ProtectedRoute>
+                  <ClassRosters />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/add-user"
+              element={
+                <ProtectedRoute>
+                  <AddUserPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/activation-form"
+              element={<ActivationForm />}
+            />
+            <Route
+              path="/my-schedule"
+              element={
+                <ProtectedRoute>
+                  <MySchedule />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/teacher-dashboard"
+              element={
+                <ProtectedRoute>
+                  <TeacherHome />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/student-dashboard"
+              element={
+                <ProtectedRoute>
+                  <StudentHome />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/teacher-schedule"
+              element={
+                <ProtectedRoute>
+                  <TeacherSchedule />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/student-schedule"
+              element={
+                <ProtectedRoute>
+                  <StudentSchedule />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/schedules" element={<Schedules />} />
+            <Route path="/create-schedule" element={<ProtectedRoute><CreateSchedule /></ProtectedRoute>} />
+            <Route path="/availability" element={<TeacherAvailability />} />
+          </Routes>
+        </div>
+        <ChatBotGate user={user} />
+      </div>
+    </Router>
+  );
+}
+
 
 function App() {
   return (
     <AuthProvider>
       <SidebarProvider>
-        <Router>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/home"
-            element={
-              <ProtectedRoute>
-                <Home />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/class"
-            element={
-              <ProtectedRoute>
-                <Classes />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/student"
-            element={
-              <ProtectedRoute>
-                <Student />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/schedule"
-            element={
-              <ProtectedRoute>
-                <Schedules />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/teacher-list"
-            element={
-              <ProtectedRoute>
-                <TeacherList />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/student-list"
-            element={
-              <ProtectedRoute>
-                <StudentList />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/reset-password"
-            element={<ResetPassword />}
-          />
-          <Route
-            path="/rosters/:classId"
-            element={
-              <ProtectedRoute>
-                <ClassRosters />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/add-user"
-            element={
-              <ProtectedRoute>
-                <AddUserPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/activation-form"
-            element={<ActivationForm />}
-          />
-          <Route
-            path="/my-schedule"
-            element={
-              <ProtectedRoute>
-                <MySchedule />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/teacher-dashboard"
-            element={
-              <ProtectedRoute>
-                <TeacherHome />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/student-dashboard"
-            element={
-              <ProtectedRoute>
-                <StudentHome />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/teacher-schedule"
-            element={
-              <ProtectedRoute>
-                <TeacherSchedule />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/student-schedule"
-            element={
-              <ProtectedRoute>
-                <StudentSchedule />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/schedules" element={<Schedules />} />
-          <Route path="/create-schedule" element={<ProtectedRoute><CreateSchedule /></ProtectedRoute>} />
-          <Route path="/availability" element={<TeacherAvailability />} />
-        </Routes>
-      </Router>
+        <AppShell />
       </SidebarProvider>
     </AuthProvider>
   );
