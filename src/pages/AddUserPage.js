@@ -43,7 +43,19 @@ export default function AddUserPage() {
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.error || "Failed to add user");
+      // Backend may return a generic SQL/DB error when the email is duplicated.
+      // Normalize that into a friendly message so the UI can show it consistently.
+      let errMsg = data.error || "Failed to add user";
+      const lower = errMsg.toLowerCase();
+      if (
+        res.status === 409 ||
+        lower.includes("duplicate") ||
+        lower.includes("unique") ||
+        lower.includes("already exists")
+      ) {
+        errMsg = "Email already exists";
+      }
+      throw new Error(errMsg);
     }
 
     if (data.emailSent) {
