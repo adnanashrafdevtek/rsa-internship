@@ -88,7 +88,7 @@ export default function Sidebar({ onWidthChange }) {
         width: `${effectiveWidth}px`,
         backgroundColor: "#2c3e50",
         color: "white",
-        padding: isCollapsed ? "24px 8px" : "24px 20px",
+        padding: isCollapsed ? "24px 9px" : "24px 20px",
         display: "flex",
         flexDirection: "column",
         height: "100vh",
@@ -195,7 +195,7 @@ export default function Sidebar({ onWidthChange }) {
         style={{
           ...logoutStyle,
           marginLeft: "4px",
-          marginBottom: "20px",
+          marginBottom: "-20px",
           display: 'flex',
           alignItems: 'center',
           justifyContent: isCollapsed ? 'center' : 'flex-start',
