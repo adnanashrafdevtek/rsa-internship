@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState } from "react";
 import { setToken, removeToken } from "../lib/jwt";
+import { apiUrl } from "../constants/apiConstants";
 
 const AuthContext = createContext();
-const API_BASE_URL = "http://localhost:3000";
+const API_BASE_URL = process.env.REACT_APP_API_URL || apiUrl;
 const dummyUsers = [
   { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0 },
   { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1 },
@@ -11,6 +12,7 @@ const dummyUsers = [
 ];
 
 export const AuthProvider = ({ children }) => {
+
   const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem("user");
     return storedUser ? JSON.parse(storedUser) : null;
@@ -24,7 +26,7 @@ export const AuthProvider = ({ children }) => {
     setUsersLoading(true);
     setUsersError(null);
     try {
-      const res = await fetch("http://localhost:3000/api/users");
+      const res = await fetch(`${API_BASE_URL}/api/users`);
       if (!res.ok) throw new Error("Failed to fetch users");
       const data = await res.json();
       setUsers(data);
@@ -39,7 +41,7 @@ export const AuthProvider = ({ children }) => {
   // Change user password (admin only)
   const changeUserPassword = async (username, newPassword) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/users/${username}/password`, {
+      const res = await fetch(`${API_BASE_URL}/api/users/${username}/password`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: newPassword })
@@ -54,7 +56,7 @@ export const AuthProvider = ({ children }) => {
   // Toggle user active status (admin only)
   const toggleUserActiveStatus = async (username) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/users/${username}/toggle-active`, {
+      const res = await fetch(`${API_BASE_URL}/api/users/${username}/toggle-active`, {
         method: "PUT"
       });
       if (!res.ok) throw new Error("Failed to toggle user status");
@@ -72,15 +74,13 @@ export const AuthProvider = ({ children }) => {
     if (foundUser) {
       setUser(foundUser);
       localStorage.setItem("user", JSON.stringify(foundUser));
-      // Generate a dummy JWT token for testing
-      const dummyToken = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IiR7Zm91bmRVc2VyLm5hbWV9IiwiZW1haWwiOiIke2ZvdW5kVXNlci5lbWFpbH0iLCJyb2xlIjoiJHtmb3VuZFVzZXIucm9sZX0iLCJpYXQiOjE1MTYyMzkwMjJ9.dummy_signature_${Date.now()}`;
-      setToken(dummyToken);
+      setToken("dummy-token"); // set a fake JWT so frontend behaves consistently
       return true;
     }
 
     // If not found, try backend login
     try {
-      const response = await fetch("http://localhost:3000/login", {
+      const response = await fetch(`${API_BASE_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
@@ -95,6 +95,7 @@ export const AuthProvider = ({ children }) => {
         }
         setUser(data.user);
         localStorage.setItem("user", JSON.stringify(data.user));
+        if (data.token) setToken(data.token);
         return true;
       } else {
         console.error("Login failed:", data.error);

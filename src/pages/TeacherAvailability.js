@@ -14,7 +14,7 @@ import enUS from "date-fns/locale/en-US";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import { useAuth } from "../context/AuthContext";
 import SidebarLayout from "../components/SidebarLayout";
-
+const API_BASE_URL = "http://3.143.57.120:3000";
 const localizer = dateFnsLocalizer({
   format,
   parse,
@@ -59,7 +59,7 @@ export default function TeacherAvailability() {
     if (!userId) return;
     setLoading(true);
 
-    fetch(`http://localhost:3000/api/teacher-availability/${userId}`)
+    fetch(`${API_BASE_URL}/api/teacher-availability/${userId}`)
       .then((res) => res.json())
       .then((data) => {
         const parsedEvents = (data || []).map((e) => ({
@@ -120,7 +120,7 @@ export default function TeacherAvailability() {
 
     console.log("📌 Sending payload:", { teacher_id: userId, events: formattedEvents });
 
-    const response = await fetch("http://localhost:3000/api/teacher-availability", {
+    const response = await fetch(`${API_BASE_URL}/api/teacher-availability`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ teacher_id: userId, events: formattedEvents }),

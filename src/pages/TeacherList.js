@@ -5,10 +5,11 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import Sidebar from "./Sidebar";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { apiUrl } from "../constants/apiConstants";
 
 const localizer = momentLocalizer(moment);
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
+const API_BASE_URL = apiUrl;
 function generateRecurringEvents(classObj, weeks = 8) {
   const daysMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   const events = [];
@@ -138,7 +139,7 @@ export default function TeacherList() {
   );
 
   useEffect(() => {
-    fetch("http://localhost:3000/api/teachers")
+    fetch(`${API_BASE_URL}/api/teachers`)
       .then((res) => {
         if (!res.ok) throw new Error(`API error: ${res.status}`);
         return res.json();
@@ -157,7 +158,7 @@ export default function TeacherList() {
   const fetchEventsForTeacher = async (teacherId) => {
     try {
       // Classes
-      const classRes = await fetch(`http://localhost:3000/api/teachers/${teacherId}/classes`);
+      const classRes = await fetch(`${API_BASE_URL}/api/teachers/${teacherId}/classes`);
       const classes = classRes.ok ? await classRes.json() : [];
       let classEvents = [];
       classes.forEach(cls => {
@@ -165,7 +166,7 @@ export default function TeacherList() {
       });
 
       // Personal events
-      const res = await fetch(`http://localhost:3000/myCalendar?userId=${teacherId}`);
+      const res = await fetch(`${API_BASE_URL}/myCalendar?userId=${teacherId}`);
       const personalEventsRaw = res.ok ? await res.json() : [];
       const personalEvents = personalEventsRaw.map(event => ({
         id: Number(event.id),
@@ -339,7 +340,7 @@ export default function TeacherList() {
 
     try {
       for (const event of eventsToAdd) {
-        await fetch("http://localhost:3000/api/calendar", {
+        await fetch(`${API_BASE_URL}/api/calendar`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(event),
@@ -369,7 +370,7 @@ export default function TeacherList() {
     setDeleting(true);
     try {
       for (const eventId of selectedEvents) {
-        await fetch(`http://localhost:3000/api/calendar/${eventId}`, { method: "DELETE" });
+        await fetch(`${API_BASE_URL}/api/calendar/${eventId}`, { method: "DELETE" });
       }
       // Refresh events
       fetchEventsForTeacher(selectedTeacher.id);
