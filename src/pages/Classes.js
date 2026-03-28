@@ -56,22 +56,33 @@ export default function Classes() {
     }
     
     fetch(url)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        return res.json();
+      })
       .then(data => {
-        setClasses(data);
+        setClasses(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch(err => {
         console.error('Error fetching classes:', err);
+        setClasses([]);
         setLoading(false);
       });
   };
 
   const fetchTeachers = () => {
     fetch('http://localhost:3000/api/teachers')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        return res.json();
+      })
       .then(data => {
-        setTeachers(data);
+        setTeachers(Array.isArray(data) ? data : []);
+      })
+      .catch(err => {
+        console.error('Error fetching teachers:', err);
+        setTeachers([]);
       });
   };
 

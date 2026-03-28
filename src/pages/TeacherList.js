@@ -139,13 +139,17 @@ export default function TeacherList() {
 
   useEffect(() => {
     fetch("http://localhost:3000/api/teachers")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
-        setTeachers(data);
+        setTeachers(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch((err) => {
         console.error("Error fetching teachers:", err);
+        setTeachers([]);
         setLoading(false);
       });
   }, []);

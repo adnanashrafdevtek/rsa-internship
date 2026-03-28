@@ -154,8 +154,11 @@ export default function SchedulesPage() {
 
   const fetchMyScheduleEvents = async () => {
     try {
-      const res = await fetch("http://localhost:3000/api/schedules");
-      const data = await res.json();
+      const response = await fetch("http://localhost:3000/api/schedules");
+      if (!response.ok) {
+        throw new Error(`API responded with status: ${response.status}`);
+      }
+      const data = await response.json();
       const personalEvents = Array.isArray(data) ? data.map(event => ({
         id: event.idcalendar || event.id,
         title: event.event_title || event.title || "Event",
@@ -176,9 +179,15 @@ export default function SchedulesPage() {
   const fetchMasterSchedule = async () => {
     try {
       const response = await fetch("http://localhost:3000/api/schedules");
+      if (!response.ok) {
+        throw new Error(`API responded with status: ${response.status}`);
+      }
       const data = await response.json();
 
       const availResponse = await fetch("http://localhost:3000/api/teacher-availabilities");
+      if (!availResponse.ok) {
+        throw new Error(`API responded with status: ${availResponse.status}`);
+      }
       const availabilityData = await availResponse.json();
 
       if (!Array.isArray(data)) {
@@ -419,8 +428,11 @@ export default function SchedulesPage() {
   const fetchTeacherEvents = async (teacherId) => {
     try {
       const response = await fetch(`http://localhost:3000/api/teachers/${teacherId}/schedules`);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
       const data = await response.json();
-      const events = data.map(schedule => {
+      const events = Array.isArray(data) ? data.map(schedule => {
         const recurringDay = schedule.recurring_day !== undefined && schedule.recurring_day !== null
           ? parseInt(schedule.recurring_day, 10)
           : null;
@@ -441,7 +453,7 @@ export default function SchedulesPage() {
           abDay: schedule.ab_day || "",
           databaseId: schedule.idcalendar
         };
-      });
+      }) : [];
       setTeacherEvents(events);
     } catch (error) {
       console.error("Error fetching teacher events:", error);

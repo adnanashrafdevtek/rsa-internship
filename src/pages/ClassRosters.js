@@ -46,21 +46,39 @@ export default function ClassRosters() {
 
     // Fetch class details
     fetch(`http://localhost:3000/api/classes/${classId}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        return res.json();
+      })
       .then(data => setClassInfo(data))
-      .catch(err => console.error('Failed to load class info:', err));
+      .catch(err => {
+        console.error('Failed to load class info:', err);
+        setClassInfo(null);
+      });
 
     // Fetch students in this class
     fetch(`http://localhost:3000/api/classes/${classId}/students`)
-      .then(res => res.json())
-      .then(data => setStudents(data))
-      .catch(err => console.error('Failed to load students:', err));
+      .then(res => {
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        return res.json();
+      })
+      .then(data => setStudents(Array.isArray(data) ? data : []))
+      .catch(err => {
+        console.error('Failed to load students:', err);
+        setStudents([]);
+      });
 
     // Fetch all students for adding new ones (admin/teacher only)
     fetch('http://localhost:3000/api/students')
-      .then(res => res.json())
-      .then(data => setAllStudents(data))
-      .catch(err => console.error('Failed to load all students:', err));
+      .then(res => {
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        return res.json();
+      })
+      .then(data => setAllStudents(Array.isArray(data) ? data : []))
+      .catch(err => {
+        console.error('Failed to load all students:', err);
+        setAllStudents([]);
+      });
   }, [classId]);
 
   // Student UI
@@ -214,8 +232,11 @@ export default function ClassRosters() {
         setNewStudentId('');
         return fetch(`http://localhost:3000/api/classes/${classId}/students`);
       })
-      .then(res => res.json())
-      .then(data => setStudents(data))
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch students');
+        return res.json();
+      })
+      .then(data => setStudents(Array.isArray(data) ? data : []))
       .catch(err => alert(err.message));
   };
 

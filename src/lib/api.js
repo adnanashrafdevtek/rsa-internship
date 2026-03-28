@@ -1,24 +1,3 @@
-import { getAuthHeader, removeToken } from './jwt';
-
-export async function apiFetch(input, init = {}) {
-  const headers = { ...(init.headers || {}), ...getAuthHeader() };
-  const res = await fetch(input, { ...init, headers });
-  if (res.status === 401) {
-    removeToken();
-    window.dispatchEvent(new CustomEvent('jwt:unauthorized'));
-  }
-  return res;
-}
-
-export async function apiJson(input, init = {}) {
-  const res = await apiFetch(input, init);
-  const text = await res.text();
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    return text;
-  }
-}
 import { getToken, removeToken } from './jwt';
 
 const API_BASE = process.env.REACT_APP_API_BASE || '';
@@ -49,6 +28,7 @@ export async function apiJson(input, init = {}) {
     const data = text ? JSON.parse(text) : null;
     return { ok: res.ok, status: res.status, data };
   } catch (e) {
+    console.error('JSON parse error for URL:', input, 'Response text:', text);
     return { ok: res.ok, status: res.status, data: text };
   }
 }
