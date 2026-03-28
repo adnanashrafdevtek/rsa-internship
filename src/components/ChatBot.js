@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import masterFlow from '../pages/Master Flow.json';
+import { sendMessage as sendLangflowMessage } from '../lib/langflowService';
 
 const ChatBot = () => {
   const defaultPanelWidth = 280;
@@ -12,9 +12,6 @@ const ChatBot = () => {
   const resizingRef = useRef(false);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(defaultPanelWidth);
-
-  const flowId = masterFlow?.id || '3fd40497-ce2c-4d71-ac65-208bba9e3839';
-  const apiKey = 'sk-Fc1IxA_guUpPwB-gR8r77JvV_JB92TBrDj26LYd1DBM';
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -58,39 +55,21 @@ const ChatBot = () => {
     const userMessage = inputValue.trim();
     setInputValue('');
     setMessages(prev => [...prev, { type: 'user', text: userMessage }]);
+
     setLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:7860/api/v1/run/${flowId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          input_value: userMessage,
-          output_type: 'chat',
-          jwt: 'hello',
-          input_type: 'chat',
-        }),
-      });
+      const result = await sendLangflowMessage(userMessage);
 
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}: ${response.statusText}`);
+      if (!result.ok) {
+        throw new Error(result.error || 'Unable to send message to Langflow.');
       }
-
-      const data = await response.json();
-      const botMessage = data?.outputs?.[0]?.outputs?.[0]?.results?.message?.text || 
-                         data?.outputs?.[0]?.outputs?.[0]?.results?.text?.text ||
-                         data?.result || 
-                         'No response received';
-
-      setMessages(prev => [...prev, { type: 'bot', text: botMessage }]);
+      setMessages(prev => [...prev, { type: 'bot', text: result.text }]);
     } catch (err) {
       console.error('Error sending message:', err);
       setMessages(prev => [...prev, { 
         type: 'error', 
-        text: `Error: ${err.message}\n\nPlease check:\n• Langflow is running on port 7860\n• The flow ID exists and is correct\n• The API key is valid\n• The flow is properly configured` 
+        text: `Error: ${err.message}` 
       }]);
     } finally {
       setLoading(false);

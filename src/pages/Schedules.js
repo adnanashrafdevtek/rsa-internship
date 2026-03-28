@@ -1,1 +1,3 @@
-export { default } from "./schedules/SchedulesPage";
+import SchedulesPage from "./schedules/SchedulesPage.js";
+
+export default SchedulesPage;
