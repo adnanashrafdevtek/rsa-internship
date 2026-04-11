@@ -121,9 +121,9 @@ export default function SchedulesPage() {
   const [selectedGrades, setSelectedGrades] = useState([]);
   const [selectedRooms, setSelectedRooms] = useState([]);
   const [availableRooms, setAvailableRooms] = useState([]);
-  const [teacherFilterExpanded, setTeacherFilterExpanded] = useState(true);
-  const [gradeFilterExpanded, setGradeFilterExpanded] = useState(true);
-  const [roomFilterExpanded, setRoomFilterExpanded] = useState(true);
+  const [teacherFilterExpanded, setTeacherFilterExpanded] = useState(false);
+  const [gradeFilterExpanded, setGradeFilterExpanded] = useState(false);
+  const [roomFilterExpanded, setRoomFilterExpanded] = useState(false);
   const [details, setDetails] = useState(initialDetails);
   const [sidebarWidth, setSidebarWidth] = useState(320);
 
