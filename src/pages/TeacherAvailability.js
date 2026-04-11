@@ -13,6 +13,7 @@ import {
 import enUS from "date-fns/locale/en-US";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import { useAuth } from "../context/AuthContext";
+import { getToken } from "../lib/jwt";
 import SidebarLayout from "../components/SidebarLayout";
 const API_BASE_URL = "http://3.143.57.120:3000";
 const localizer = dateFnsLocalizer({
@@ -35,8 +36,10 @@ const CustomHeader = ({ date, label }) => {
 export default function TeacherAvailability() {
   const { user, logout } = useAuth();
   const urlUserId = new URLSearchParams(window.location.search).get("user_id");
-  const userId = urlUserId || user?.id;
+  const [selectedTeacherId, setSelectedTeacherId] = useState(urlUserId || null);
+  const userId = selectedTeacherId || user?.id;
 
+  const [teacherList, setTeacherList] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -56,10 +59,24 @@ export default function TeacherAvailability() {
   };
 
   useEffect(() => {
+    if (user?.role !== "admin") return;
+    const token = getToken();
+    fetch(`${API_BASE_URL}/api/teachers`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => res.json())
+      .then((data) => setTeacherList(data || []))
+      .catch(console.error);
+  }, [user]);
+
+  useEffect(() => {
     if (!userId) return;
     setLoading(true);
+    const token = getToken();
 
-    fetch(`${API_BASE_URL}/api/teacher-availability/${userId}`)
+    fetch(`${API_BASE_URL}/api/teacher-availability/${userId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then((res) => res.json())
       .then((data) => {
         const parsedEvents = (data || []).map((e) => ({
@@ -120,9 +137,13 @@ export default function TeacherAvailability() {
 
     console.log("📌 Sending payload:", { teacher_id: userId, events: formattedEvents });
 
+    const token = getToken();
     const response = await fetch(`${API_BASE_URL}/api/teacher-availability`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ teacher_id: userId, events: formattedEvents }),
     });
 
@@ -155,9 +176,33 @@ export default function TeacherAvailability() {
           display: "flex",
           justifyContent: "space-between",
           marginBottom: 20,
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
-        <h2>Set Your Availability</h2>
+        <div>
+          <h2>Set Teacher Availability</h2>
+          {user?.role === "admin" && (
+            <select
+              value={selectedTeacherId || ""}
+              onChange={(e) => setSelectedTeacherId(e.target.value || null)}
+              style={{
+                marginTop: 8,
+                padding: 10,
+                borderRadius: 8,
+                border: "1px solid #ccc",
+                minWidth: 260,
+              }}
+            >
+              <option value="">Select a Teacher</option>
+              {teacherList.map((teacher) => (
+                <option key={teacher.id} value={teacher.id}>
+                  {teacher.first_name} {teacher.last_name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
         <button
           onClick={handleDone}
           style={{

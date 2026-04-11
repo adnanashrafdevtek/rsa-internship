@@ -634,6 +634,17 @@ export default function TeacherList() {
                   </HoverButton>
 
                   <HoverButton
+                    style={{
+                      backgroundColor: "#2980b9",
+                      color: "white",
+                      border: "2px solid transparent"
+                    }}
+                    onClick={() => navigate(`/availability?user_id=${selectedTeacher.id}`)}
+                  >
+                    ⏰ Edit Availability
+                  </HoverButton>
+
+                  <HoverButton
                     style={{ 
                       backgroundColor: showCheckboxes ? "#95a5a6" : "#e74c3c", 
                       color: "white",

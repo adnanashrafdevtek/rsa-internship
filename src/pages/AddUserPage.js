@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SidebarLayout from "../components/SidebarLayout";
 import { apiUrl } from "../constants/apiConstants";
+import { getToken } from "../lib/jwt";
 
 export default function AddUserPage() {
   const navigate = useNavigate();
@@ -26,27 +27,34 @@ export default function AddUserPage() {
   e.preventDefault();
   setMessage("");
   setIsLoading(true);
-  //testing
 
   try {
-    // make role lowercase before sending
     const payload = {
-      ...formData,
+      first_name: formData.firstName,
+      last_name: formData.lastName,
+      email: formData.emailAddress,
+      address: formData.address,
       role: formData.role.toLowerCase(),
     };
 
+    const token = getToken();
+    console.log("Adding user with payload:", payload);
+    console.log("Authorization token:", token ? "present" : "missing");
+
     const res = await fetch(`${API_BASE_URL}/api/user`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(payload),
     });
 
     const data = await res.json();
+    console.log("Backend response:", { status: res.status, data });
 
     if (!res.ok) {
-      // Backend may return a generic SQL/DB error when the email is duplicated.
-      // Normalize that into a friendly message so the UI can show it consistently.
-      let errMsg = data.error || "Failed to add user";
+      let errMsg = data.error || data.message || "Failed to add user";
       const lower = errMsg.toLowerCase();
       if (
         res.status === 409 ||
@@ -60,14 +68,19 @@ export default function AddUserPage() {
     }
 
     if (data.emailSent) {
-      setMessage(`✅ User ${data.firstName} added! Activation email sent.`);
+      setMessage(`User ${data.firstName} added! Activation email sent.`);
     } else {
-      setMessage(`⚠️ User ${data.firstName} added, but email failed to send.`);
+      setMessage(`User ${data.firstName} added, but email failed to send.`);
     }
 
-    // setTimeout(() => navigate("/student"), 2000); // redirect after success
+    const teacherId = data.user_id || data.id || data.teacher_id;
+    if (payload.role === "teacher" && teacherId) {
+      navigate(`/availability?user_id=${teacherId}`);
+      return;
+    }
+
   } catch (err) {
-    setMessage(`❌ ${err.message}`);
+    setMessage(`Error: ${err.message}`);
   } finally {
     setIsLoading(false);
   }
@@ -79,7 +92,7 @@ export default function AddUserPage() {
         <h1>Add New User</h1>
 
         {message && <p>{message}</p>}
-        {isLoading && <p>⏳ Processing...</p>}
+        {isLoading && <p>Processing...</p>}
 
         <form
           onSubmit={handleSubmit}
