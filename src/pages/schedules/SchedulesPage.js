@@ -93,6 +93,12 @@ export default function SchedulesPage() {
   const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentEvents, setStudentEvents] = useState([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  
+  // ADD THESE NEW STATES:
+  const [calendarHeight, setCalendarHeight] = useState("calc(100vh - 140px)"); // Automatically fills screen minus header gap
+  const [isResizingHeight, setIsResizingHeight] = useState(false);
   const [createEvents, setCreateEvents] = useState([]);
   const [allAvailabilities, setAllAvailabilities] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -115,13 +121,11 @@ export default function SchedulesPage() {
   const [selectedGrades, setSelectedGrades] = useState([]);
   const [selectedRooms, setSelectedRooms] = useState([]);
   const [availableRooms, setAvailableRooms] = useState([]);
-  const [teacherFilterExpanded, setTeacherFilterExpanded] = useState(true);
-  const [gradeFilterExpanded, setGradeFilterExpanded] = useState(true);
-  const [roomFilterExpanded, setRoomFilterExpanded] = useState(true);
+  const [teacherFilterExpanded, setTeacherFilterExpanded] = useState(false);
+  const [gradeFilterExpanded, setGradeFilterExpanded] = useState(false);
+  const [roomFilterExpanded, setRoomFilterExpanded] = useState(false);
   const [details, setDetails] = useState(initialDetails);
   const [sidebarWidth, setSidebarWidth] = useState(320);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
 
   const cleanupDuplicateExceptions = () => {
     setCreateEvents(prev => {
@@ -315,7 +319,30 @@ export default function SchedulesPage() {
       }
     }
   };
+// NEW EFFECT FOR VERTICAL RESIZING
+  useEffect(() => {
+    if (!isResizingHeight) return;
 
+    const handleMouseMove = (e) => {
+      // e.clientY is the mouse pixel position. We subtract ~120px to account for the top navbar/tabs.
+      const newHeight = e.clientY - 120; 
+      if (newHeight >= 400) { // Enforce a minimum height of 400px
+        setCalendarHeight(`${newHeight}px`);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingHeight(false);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizingHeight]);
   const fetchRooms = async () => {
     try {
       const response = await fetch("http://localhost:3000/api/schedules");
@@ -1249,16 +1276,20 @@ export default function SchedulesPage() {
         backgroundColor: "white",
         borderRadius: "12px",
         padding: "24px",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.05)"
+        boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
+        height: "100%", // Added: stretch to container
+        display: "flex", // Added: to allow internal calendar to flex
+        flexDirection: "column" // Added
       }}>
         <Calendar
           localizer={localizer}
           events={events}
           startAccessor="start"
           endAccessor="end"
-          style={{ height: 600 }}
+          style={{ flex: 1, minHeight: 0 }} // CHANGED from style={{ height: 600 }}
           views={isRestricted ? ["work_week"] : ["month", "week", "day"]}
           view={isRestricted ? "work_week" : view}
+// ... rest of the Calendar props remain the same
           onView={isRestricted ? undefined : setView}
           date={date}
           onNavigate={setDate}
@@ -1354,8 +1385,49 @@ export default function SchedulesPage() {
 
   return (
     <SidebarLayout onLogout={handleLogout}>
-      <TabNavigation />
-      {renderTabContent()}
+      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <TabNavigation />
+        
+        {/* Dynamic Resizable Container */}
+        <div
+          style={{
+            height: calendarHeight,
+            minHeight: "400px",
+            display: "flex",
+            flexDirection: "column",
+            position: "relative",
+            paddingBottom: "12px", // Space for the resize handle
+            marginBottom: "20px"
+          }}
+        >
+          {/* Main Calendar Content */}
+          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            {renderTabContent()}
+          </div>
+
+          {/* Draggable Resize Handle */}
+          <div
+            onMouseDown={() => setIsResizingHeight(true)}
+            style={{
+              height: "8px",
+              width: "100%",
+              cursor: "row-resize",
+              position: "absolute",
+              bottom: 0,
+              backgroundColor: isResizingHeight ? "#3498db" : "transparent",
+              borderBottom: "2px solid #ccc",
+              transition: "background-color 0.2s ease",
+              borderRadius: "4px"
+            }}
+            onMouseEnter={(e) => {
+              if (!isResizingHeight) e.target.style.backgroundColor = "#e8e8e8";
+            }}
+            onMouseLeave={(e) => {
+              if (!isResizingHeight) e.target.style.backgroundColor = "transparent";
+            }}
+          />
+        </div>
+      </div>
 
       <ScheduleModals
         modalOpen={modalOpen}

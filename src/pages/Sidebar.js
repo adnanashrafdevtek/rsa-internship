@@ -167,6 +167,7 @@ export default function Sidebar({ onWidthChange }) {
             <SidebarLink to="/home">Home</SidebarLink>
             <SidebarLink to="/class">Classes</SidebarLink>
             <SidebarLink to="/schedules" iconOverride="📅">Schedule</SidebarLink>
+            <SidebarLink to="/availability" iconOverride="⏰">Teacher Availability</SidebarLink>
             <SidebarLink to="/student">Users</SidebarLink>
             <SidebarLink to="/add-user" style={{ backgroundColor: "#16a085" }} iconOverride="➕">
               Add User

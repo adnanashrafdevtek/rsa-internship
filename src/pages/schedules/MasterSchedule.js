@@ -78,7 +78,7 @@ export default function MasterSchedule({
       <div style={{
         textAlign: "center",
         padding: "6px 6px",
-        minHeight: 52,
+        minHeight: "100%",
         width: "100%",
         display: "flex",
         flexDirection: "column",
@@ -504,6 +504,7 @@ export default function MasterSchedule({
                     cursor: "pointer",
                     transition: "all 0.15s",
                     boxShadow: "none"
+                    
                   }}
                 >
                   Save ({pendingChanges.length})
@@ -644,7 +645,7 @@ export default function MasterSchedule({
 
   return (
     <>
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }} data-master-schedule-container>
+      <div style={{ display: "flex", gap: 16, alignItems: "stretch", height: "100%" }} data-master-schedule-container>
         <div
           style={{
             backgroundColor: "white",
@@ -652,7 +653,10 @@ export default function MasterSchedule({
             padding: "24px",
             boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
             flex: 1,
-            position: "relative"
+            position: "relative",
+            display: "flex",     // <-- ADD THIS
+            flexDirection: "column", // <-- ADD THIS
+            height: "100%"
           }}
           data-calendar-container
         >
@@ -711,7 +715,10 @@ export default function MasterSchedule({
             ]}
             startAccessor="start"
             endAccessor="end"
-            style={{ height: 600 }}
+            startAccessor="start"
+  endAccessor="end"
+  style={{ flex: 1, minHeight: 0 }} // <-- Changed to flex stretch
+  views={["work_week"]}
             views={["work_week"]}
             view="work_week"
             date={date}
@@ -805,7 +812,7 @@ export default function MasterSchedule({
               borderRadius: "12px",
               padding: "20px",
               boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
-              maxHeight: 649,
+              height: "100%",
               display: "flex",
               flexDirection: "column",
               gap: 16,
