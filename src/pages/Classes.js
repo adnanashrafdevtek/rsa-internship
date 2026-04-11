@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
 import SidebarLayout from '../components/SidebarLayout';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from "../context/AuthContext";
@@ -31,12 +32,19 @@ export default function Classes() {
     end_time: '',
     recurring_days: [],
   });
+  // eslint-disable-next-line no-unused-vars
   const [showAddRecurring, setShowAddRecurring] = useState(false);
   const [showEditRecurring, setShowEditRecurring] = useState(false);
   const [showAddStudentsFor, setShowAddStudentsFor] = useState(null);
+  // eslint-disable-next-line no-unused-vars
   const [addStudentsLoading, setAddStudentsLoading] = useState(false);
   const [allStudents, setAllStudents] = useState([]);
   const [showAllStudents, setShowAllStudents] = useState(false);
+  const [importFileName, setImportFileName] = useState('');
+  const [importPreview, setImportPreview] = useState([]);
+  const [importErrors, setImportErrors] = useState([]);
+  const [importProcessing, setImportProcessing] = useState(false);
+  const [importSummary, setImportSummary] = useState(null);
 
   const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const navigate = useNavigate();
@@ -107,6 +115,204 @@ export default function Classes() {
     } catch {
       setAllStudents([]);
     }
+  };
+
+  // Excel Import Handlers
+  const normalizeHeader = (header) => {
+    if (!header && header !== 0) return '';
+    return String(header).trim().toLowerCase();
+  };
+
+  const excelSerialToDate = (serial) => {
+    if (typeof serial !== 'number' || serial < 40000) return String(serial).trim();
+    const excelEpoch = new Date(1900, 0, 1);
+    const days = serial - 2; // Excel bug: considers 1900-02-29 as leap year
+    const date = new Date(excelEpoch.getTime() + days * 24 * 60 * 60 * 1000);
+    return date.toISOString().split('T')[0]; // YYYY-MM-DD
+  };
+
+  const excelFractionToTime = (fraction) => {
+    if (typeof fraction !== 'number' || fraction < 0 || fraction >= 1) return String(fraction).trim();
+    const totalMinutes = Math.round(fraction * 24 * 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  };
+
+  const findTeacherId = (value) => {
+    if (!value && value !== 0) return null;
+    const trimmed = String(value).trim();
+    if (trimmed === '') return null;
+    const numeric = Number(trimmed);
+    if (!Number.isNaN(numeric) && numeric > 0) {
+      return numeric;
+    }
+    const normalized = trimmed.toLowerCase();
+    const found = teachers.find((t) => {
+      const fullName = `${t.first_name} ${t.last_name}`.trim().toLowerCase();
+      const reversedName = `${t.last_name} ${t.first_name}`.trim().toLowerCase();
+      return fullName === normalized || reversedName === normalized || (t.email && t.email.toLowerCase() === normalized);
+    });
+    return found ? found.id : null;
+  };
+
+  const parseTimeRange = (value) => {
+    const input = String(value || '').trim();
+    const match = input.match(/^\s*([0-9]{1,2}:[0-9]{2})\s*[-–—]\s*([0-9]{1,2}:[0-9]{2})\s*$/);
+    if (match) return { start_time: match[1], end_time: match[2] };
+    return { start_time: input, end_time: '' };
+  };
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImportFileName(file.name);
+    setImportErrors([]);
+    setImportSummary(null);
+    setImportPreview([]);
+
+    const isCsv = file.name.toLowerCase().endsWith('.csv');
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      try {
+        const fileData = reader.result;
+        const workbook = XLSX.read(fileData, { type: isCsv ? 'string' : 'array' });
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+        if (rows.length === 0) {
+          setImportErrors(['The file is empty or could not be parsed.']);
+          return;
+        }
+
+        const parsedRows = rows.map((row, index) => {
+          const rowData = {};
+          Object.entries(row).forEach(([key, value]) => {
+            const normalized = normalizeHeader(key);
+            if (['name', 'class name', 'course', 'course name', 'subject'].includes(normalized)) rowData.name = String(value).trim();
+            if (['grade', 'grade level', 'grade_level', 'grade name', 'gradelevel'].includes(normalized)) rowData.grade_level = String(value).trim();
+            if (['teacher id', 'teacherid', 'teacher_id', 'teacher', 'teacher name', 'instructor', 'advisor', 'staff'].includes(normalized)) rowData.teacher_id = String(value).trim();
+            if (['start date', 'start_date', 'startdate', 'date', 'date of class', 'class date', 'class date'].includes(normalized)) {
+              rowData.start_date = typeof value === 'number' ? excelSerialToDate(value) : String(value).trim();
+            }
+            if (['start time', 'start_time', 'starttime', 'time', 'period time'].includes(normalized)) {
+              rowData.start_time = typeof value === 'number' ? excelFractionToTime(value) : String(value).trim();
+            }
+            if (['end date', 'end_date', 'enddate', 'date of class', 'class date', 'classdate'].includes(normalized)) {
+              rowData.end_date = typeof value === 'number' ? excelSerialToDate(value) : String(value).trim();
+            }
+            if (['end time', 'end_time', 'endtime'].includes(normalized)) {
+              rowData.end_time = typeof value === 'number' ? excelFractionToTime(value) : String(value).trim();
+            }
+            if (['recurring days', 'recurring_days', 'recurringdays', 'days'].includes(normalized)) rowData.recurring_days = String(value).trim();
+          });
+
+          if (!rowData.end_date && rowData.start_date) {
+            rowData.end_date = rowData.start_date;
+          }
+          const timeRange = parseTimeRange(rowData.start_time);
+          if (!rowData.end_time && timeRange.end_time) {
+            rowData.end_time = timeRange.end_time;
+            rowData.start_time = timeRange.start_time;
+          }
+
+          const teacherId = findTeacherId(rowData.teacher_id);
+          const valid = Boolean(rowData.name && rowData.grade_level && rowData.start_date && rowData.start_time && rowData.end_date && rowData.end_time && teacherId);
+          const errors = [];
+          if (!rowData.name) errors.push('Missing class name');
+          if (!rowData.grade_level) errors.push('Missing grade level');
+          if (!rowData.start_date) errors.push('Missing start date');
+          if (!rowData.start_time) errors.push('Missing start time');
+          if (!rowData.end_date) errors.push('Missing end date');
+          if (!rowData.end_time) errors.push('Missing end time');
+          if (!teacherId) errors.push('Invalid or missing teacher');
+
+          return {
+            rowNumber: index + 2,
+            name: rowData.name || '',
+            grade_level: rowData.grade_level || '',
+            teacher_id: teacherId,
+            teacher_raw: rowData.teacher_id || '',
+            start_date: rowData.start_date || '',
+            start_time: rowData.start_time || '',
+            end_date: rowData.end_date || '',
+            end_time: rowData.end_time || '',
+            recurring_days: rowData.recurring_days || '',
+            valid,
+            errors,
+          };
+        });
+
+        const fileErrors = [];
+        parsedRows.forEach((row) => {
+          if (!row.valid) {
+            fileErrors.push(`Row ${row.rowNumber}: ${row.errors.join('; ')}`);
+          }
+        });
+
+        setImportPreview(parsedRows.slice(0, 100));
+        setImportErrors(fileErrors.slice(0, 50));
+
+        if (parsedRows.length > 100) {
+          setImportSummary({ note: `Previewing first 100 of ${parsedRows.length} rows.` });
+        }
+      } catch (err) {
+        setImportErrors(['Failed to parse file. Ensure it is a valid .xlsx, .xls, or .csv file.']);
+      }
+    };
+
+    if (isCsv) {
+      reader.readAsText(file);
+    } else {
+      reader.readAsArrayBuffer(file);
+    }
+  };
+
+  const importClasses = async () => {
+    if (!importPreview.length) return;
+    setImportProcessing(true);
+    const validRows = importPreview.filter((row) => row.valid);
+    const failures = [];
+    let createdCount = 0;
+
+    for (const row of validRows) {
+      const body = {
+        name: row.name,
+        grade_level: row.grade_level,
+        teacher_id: row.teacher_id,
+        start_time: `${row.start_date} ${row.start_time}:00`,
+        end_time: `${row.end_date} ${row.end_time}:00`,
+        recurring_days: row.recurring_days || '',
+      };
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/classes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          failures.push(`Row ${row.rowNumber}: ${err.error || 'Server error'}`);
+        } else {
+          createdCount += 1;
+        }
+      } catch (err) {
+        failures.push(`Row ${row.rowNumber}: ${err.message}`);
+      }
+    }
+
+    setImportProcessing(false);
+    setImportSummary({ createdCount, failedCount: failures.length, failures });
+    if (createdCount > 0) fetchClasses();
+  };
+
+  const clearImportPreview = () => {
+    setImportFileName('');
+    setImportPreview([]);
+    setImportErrors([]);
+    setImportSummary(null);
   };
 
   useEffect(() => {
@@ -876,6 +1082,119 @@ export default function Classes() {
               </tbody>
             </table>
 
+            {isAdmin && (
+              <div style={importContainerStyle}>
+                <div style={importPanelStyle}>
+                  <div style={importHeaderStyle}>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#1e3a8a' }}>📊 Excel Class Import</div>
+                      <div style={{ fontSize: 14, color: '#64748b', marginTop: 4 }}>
+                        Upload a spreadsheet to bulk import classes instantly.
+                      </div>
+                    </div>
+                    <label style={fileUploadLabelStyle}>
+                      <input
+                        key="excel-import-file"
+                        type="file"
+                        accept=".xlsx,.xls,.csv"
+                        onChange={handleImportFile}
+                        style={{ display: 'none' }}
+                      />
+                      <span style={fileUploadButtonStyle}>Choose File</span>
+                    </label>
+                  </div>
+
+                  {importFileName && (
+                    <div style={importInfoStyle}>
+                      <div>
+                        <strong>File:</strong> {importFileName}
+                      </div>
+                      <button onClick={clearImportPreview} style={clearImportStyle}>
+                        Clear
+                      </button>
+                    </div>
+                  )}
+
+                  <div style={importInstructionsStyle}>
+                    <strong>Required columns:</strong> Subject, Grade Level, Teacher, Date of Class (YYYY-MM-DD or Date), Start Time (HH:MM or Time range like 08:00-09:00), End Time (HH:MM), Recurring Days
+                  </div>
+
+                  {importErrors.length > 0 && (
+                    <div style={importErrorStyle}>
+                      <div style={{ fontWeight: 700, marginBottom: 8, color: '#991b1b' }}>⚠ Validation Issues</div>
+                      {importErrors.slice(0, 5).map((error, idx) => (
+                        <div key={idx} style={{ marginBottom: 6, fontSize: 13 }}>• {error}</div>
+                      ))}
+                      {importErrors.length > 5 && <div style={{ marginTop: 6, fontSize: 13 }}>...and {importErrors.length - 5} more.</div>}
+                    </div>
+                  )}
+
+                  {importPreview.length > 0 && (
+                    <div>
+                      <div style={previewHeaderStyle}>
+                        <div><strong>Preview</strong> ({importPreview.filter(r => r.valid).length} valid rows found)</div>
+                        <button
+                          onClick={importClasses}
+                          disabled={importProcessing || importPreview.every((row) => !row.valid)}
+                          style={importButtonStyle(importProcessing || importPreview.every((row) => !row.valid))}
+                        >
+                          {importProcessing ? '⏳ Importing...' : '✓ Import Valid Rows'}
+                        </button>
+                      </div>
+                      <div style={previewTableWrapper}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#eef2ff', borderBottom: '2px solid #cbd5e1' }}>
+                              <th style={{ ...thStyle, padding: '12px 8px' }}>Row</th>
+                              <th style={{ ...thStyle, padding: '12px 8px' }}>Class Name</th>
+                              <th style={{ ...thStyle, padding: '12px 8px' }}>Grade</th>
+                              <th style={{ ...thStyle, padding: '12px 8px' }}>Teacher</th>
+                              <th style={{ ...thStyle, padding: '12px 8px' }}>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {importPreview.slice(0, 8).map((row) => (
+                              <tr key={row.rowNumber} style={row.valid ? previewRowStyle : previewRowInvalidStyle}>
+                                <td style={{ ...tdStyle, padding: '10px 8px' }}>{row.rowNumber}</td>
+                                <td style={{ ...tdStyle, padding: '10px 8px' }}>
+                                  <span style={{ fontWeight: 500 }}>{row.name}</span>
+                                </td>
+                                <td style={{ ...tdStyle, padding: '10px 8px' }}>{row.grade_level}</td>
+                                <td style={{ ...tdStyle, padding: '10px 8px', fontSize: 13 }}>{row.teacher_id || row.teacher_raw}</td>
+                                <td style={{ ...tdStyle, padding: '10px 8px' }}>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: row.valid ? '#15803d' : '#dc2626' }}>
+                                    {row.valid ? '✓ Ready' : '✗ Invalid'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {importPreview.length > 8 && (
+                        <div style={{ marginTop: 10, fontSize: 13, color: '#64748b', textAlign: 'center' }}>
+                          Showing 8 of {importPreview.length} rows
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {importSummary && (
+                    <div style={importSummaryStyle}>
+                      <div style={{ marginBottom: 10 }}>
+                        <strong>Import Complete:</strong> <span style={{ color: '#15803d' }}>{importSummary.createdCount} added</span>, <span style={{ color: '#dc2626' }}>{importSummary.failedCount} failed</span>
+                      </div>
+                      {importSummary.failures?.slice(0, 3).map((message, idx) => (
+                        <div key={idx} style={{ marginTop: 6, fontSize: 13, color: '#64748b' }}>• {message}</div>
+                      ))}
+                      {importSummary.failures?.length > 3 && <div style={{ marginTop: 6, fontSize: 13 }}>...and {importSummary.failures.length - 3} more.</div>}
+                      {importSummary.note && <div style={{ marginTop: 10, fontSize: 13, color: '#475569', fontStyle: 'italic' }}>ℹ {importSummary.note}</div>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {isAdmin && (!showAddForm ? (
               <button onClick={() => setShowAddForm(true)} style={addNewBtnStyle}>
                 + Add New Class
@@ -1081,3 +1400,137 @@ const labelStyle = {
   fontWeight: 'bold',
   fontSize: 14,
 };
+
+const importContainerStyle = {
+  backgroundColor: '#f0f4f8',
+  borderRadius: 14,
+  padding: 20,
+  marginBottom: 28,
+  boxShadow: '0 4px 12px rgba(30, 64, 175, 0.08)',
+  border: '1px solid #d1dce6',
+};
+
+const importPanelStyle = {
+  backgroundColor: '#ffffff',
+  borderRadius: 12,
+  padding: 24,
+  border: '1px solid #dbeafe',
+};
+
+const importHeaderStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 16,
+  flexWrap: 'wrap',
+  marginBottom: 20,
+};
+
+const fileUploadLabelStyle = {
+  cursor: 'pointer',
+};
+
+const fileUploadButtonStyle = {
+  display: 'inline-block',
+  padding: '10px 16px',
+  backgroundColor: '#2563eb',
+  color: '#ffffff',
+  borderRadius: 8,
+  fontWeight: 600,
+  fontSize: 14,
+  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.2)',
+  transition: 'all 0.2s',
+};
+
+const importInfoStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  backgroundColor: '#dbeafe',
+  borderRadius: 10,
+  padding: '12px 16px',
+  marginBottom: 16,
+  color: '#0c4a6e',
+  fontSize: 14,
+  fontWeight: 500,
+};
+
+const clearImportStyle = {
+  padding: '8px 12px',
+  cursor: 'pointer',
+  backgroundColor: '#ef4444',
+  color: '#ffffff',
+  border: 'none',
+  borderRadius: 6,
+  fontWeight: 600,
+  fontSize: 13,
+  transition: 'all 0.2s',
+};
+
+const importInstructionsStyle = {
+  backgroundColor: '#f8fafc',
+  borderRadius: 10,
+  border: '1px solid #e2e8f0',
+  padding: 14,
+  marginBottom: 16,
+  color: '#475569',
+  fontSize: 13,
+  lineHeight: 1.6,
+};
+
+const importErrorStyle = {
+  backgroundColor: '#fee2e2',
+  borderRadius: 10,
+  border: '1px solid #fecaca',
+  padding: 16,
+  marginBottom: 16,
+  color: '#7f1d1d',
+};
+
+const previewHeaderStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 16,
+  marginBottom: 14,
+  flexWrap: 'wrap',
+};
+
+const previewTableWrapper = {
+  overflowX: 'auto',
+  border: '1px solid #cbd5e1',
+  borderRadius: 10,
+  backgroundColor: '#f8fafc',
+};
+
+const previewRowStyle = {
+  backgroundColor: '#ffffff',
+  borderBottom: '1px solid #e2e8f0',
+};
+
+const previewRowInvalidStyle = {
+  backgroundColor: '#fef2f2',
+  borderBottom: '1px solid #e2e8f0',
+};
+
+const importSummaryStyle = {
+  backgroundColor: '#ecfdf5',
+  borderRadius: 10,
+  padding: 16,
+  marginTop: 16,
+  border: '1px solid #a7f3d0',
+  color: '#065f46',
+};
+
+const importButtonStyle = (disabled) => ({
+  padding: '10px 18px',
+  fontSize: 14,
+  fontWeight: 700,
+  borderRadius: 8,
+  border: 'none',
+  color: '#ffffff',
+  backgroundColor: disabled ? '#cbd5e1' : '#3b82f6',
+  cursor: disabled ? 'not-allowed' : 'pointer',
+  opacity: disabled ? 0.7 : 1,
+  transition: 'all 0.2s',
+});
