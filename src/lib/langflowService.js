@@ -2,7 +2,7 @@
 
 import { getToken } from './jwt';
 
-const FLOW_ID = '3fd40497-ce2c-4d71-ac65-208bba9e3839';
+const FLOW_ID = '866d5686-560c-47ad-83b8-a1373cb7f94f';
 const LANGFLOW_URL = `http://127.0.0.1:7860/api/v1/run/${FLOW_ID}`;
 const API_KEY = 'sk-Fc1IxA_guUpPwB-gR8r77JvV_JB92TBrDj26LYd1DBM';
 
