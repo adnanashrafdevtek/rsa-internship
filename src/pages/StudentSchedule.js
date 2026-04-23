@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { useAuth } from '../context/AuthContext';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
@@ -6,7 +6,7 @@ import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 const localizer = momentLocalizer(moment);
-const API_BASE_URL = "http://3.143.57.120:3000";
+const API_BASE_URL = "http://3.143.57.120:4000";
 // Custom Event Modal Component
 const EventModal = ({ isOpen, onClose, onSave, slotInfo }) => {
   const [formData, setFormData] = useState({
@@ -253,13 +253,8 @@ export default function StudentSchedule() {
   const [showModal, setShowModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
 
-  useEffect(() => {
-    if (user && user.id) {
-      fetchSchedule();
-    }
-  }, [user]);
-
-  const fetchSchedule = async () => {
+  const fetchSchedule = useCallback(async () => {
+    if (!user?.id) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/students/${user.id}/classes`);
       const data = await res.json();
@@ -271,7 +266,13 @@ export default function StudentSchedule() {
       console.error('Error fetching schedule:', error);
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user && user.id) {
+      fetchSchedule();
+    }
+  }, [user, fetchSchedule]);
 
   const generateRecurringEvents = (classes) => {
     const events = [];
@@ -295,8 +296,6 @@ export default function StudentSchedule() {
         const dayName = currentDate.format('ddd').toUpperCase();
         const daysSinceStart = currentDate.diff(startDate, 'days');
         const isADay = daysSinceStart % 2 === 0;
-        const abDay = isADay ? 'A' : 'B';
-
         let shouldInclude = false;
 
         if (recurringDays.includes(dayName)) {

@@ -33,7 +33,9 @@ export async function apiJson(input, init = {}) {
   }
 }
 
-export default {
+const api = {
   apiFetch,
   apiJson,
 };
+
+export default api;

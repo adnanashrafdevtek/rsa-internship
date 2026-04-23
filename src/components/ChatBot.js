@@ -19,8 +19,7 @@ const ChatBot = () => {
     process.env.REACT_APP_API_URL,
     process.env.REACT_APP_API_BASE,
     apiUrl,
-    'http://3.143.57.120:3000',
-    'http://localhost:3000',
+    'http://3.143.57.120:4000',
   ].filter(Boolean);
 
   useEffect(() => {

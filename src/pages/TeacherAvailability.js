@@ -16,7 +16,7 @@ import { useAuth } from "../context/AuthContext";
 import { getToken } from "../lib/jwt";
 import SidebarLayout from "../components/SidebarLayout";
 
-const API_BASE_URL = "http://localhost:3000";
+const API_BASE_URL = "http://3.143.57.120:4000";
 const localizer = dateFnsLocalizer({
   format,
   parse,
@@ -43,7 +43,7 @@ export default function TeacherAvailability() {
   const [teacherList, setTeacherList] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
+  const [message] = useState("");
   // Changed default view to WORK_WEEK to natively hide weekends without breaking grid
   const [calendarView, setCalendarView] = useState(Views.WORK_WEEK); 
   const [showModal, setShowModal] = useState(false);
@@ -64,7 +64,7 @@ export default function TeacherAvailability() {
     const fetchTeachers = async () => {
       try {
         // Hardcoding the exact URL that worked in SchedulesPage.js
-        const res = await fetch("http://localhost:3000/api/teachers"); 
+        const res = await fetch("http://3.143.57.120:4000/api/teachers"); 
         
         if (!res.ok) {
           console.error("Server responded with a bad status:", res.status);

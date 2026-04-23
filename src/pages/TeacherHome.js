@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { useAuth } from '../context/AuthContext';
 import moment from 'moment';
@@ -20,13 +20,8 @@ export default function TeacherHome() {
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    if (user && user.id) {
-      fetchTodaySchedule();
-    }
-  }, [user, currentTime]);
-
-  const fetchTodaySchedule = async () => {
+  const fetchTodaySchedule = useCallback(async () => {
+    if (!user?.id) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/teachers/${user.id}/schedules`);
       const data = await res.json();
@@ -97,7 +92,13 @@ export default function TeacherHome() {
       console.error('Error fetching schedule:', error);
       setLoading(false);
     }
-  };
+  }, [API_BASE_URL, user]);
+
+  useEffect(() => {
+    if (user && user.id) {
+      fetchTodaySchedule();
+    }
+  }, [user, currentTime, fetchTodaySchedule]);
 
   const getABDay = () => {
     const startDate = moment('2024-08-14');

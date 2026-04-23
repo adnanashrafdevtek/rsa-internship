@@ -36,7 +36,7 @@ const initialDetails = {
 
 async function saveScheduleToDatabase(data) {
   try {
-    const res = await fetch("http://localhost:3000/api/schedules", {
+    const res = await fetch("http://3.143.57.120:4000/api/schedules", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
@@ -52,7 +52,7 @@ async function saveScheduleToDatabase(data) {
 
 async function updateScheduleInDatabase(id, data) {
   try {
-    const res = await fetch(`http://localhost:3000/api/schedules/${id}`, {
+    const res = await fetch(`http://3.143.57.120:4000/api/schedules/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
@@ -70,7 +70,7 @@ async function updateScheduleInDatabase(id, data) {
 
 async function deleteScheduleFromDatabase(id) {
   try {
-    const res = await fetch(`http://localhost:3000/api/schedules/${id}`, { method: "DELETE" });
+    const res = await fetch(`http://3.143.57.120:4000/api/schedules/${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error("Delete failed");
     return { success: true };
   } catch (e) {
@@ -88,8 +88,6 @@ export default function SchedulesPage() {
   const [view, setView] = useState(Views.WEEK);
   const [masterEvents, setMasterEvents] = useState([]);
   const [teachers, setTeachers] = useState([]);
-  const [selectedTeacher, setSelectedTeacher] = useState(null);
-  const [teacherEvents, setTeacherEvents] = useState([]);
   const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentEvents, setStudentEvents] = useState([]);
@@ -116,8 +114,6 @@ export default function SchedulesPage() {
   const [eventDetailsModal, setEventDetailsModal] = useState({ open: false, event: null });
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [scheduleEvents, setScheduleEvents] = useState([]);
-  const [draggingEventId, setDraggingEventId] = useState(null);
   const [selectedGrades, setSelectedGrades] = useState([]);
   const [selectedRooms, setSelectedRooms] = useState([]);
   const [availableRooms, setAvailableRooms] = useState([]);
@@ -141,10 +137,6 @@ export default function SchedulesPage() {
     });
   };
 
-  const getRole = u => (u && u.role ? u.role.trim().toLowerCase() : "");
-  const isStudent = getRole(user) === "student";
-  const isTeacher = getRole(user) === "teacher";
-
   const handleLogout = () => {
     logout();
   };
@@ -156,39 +148,15 @@ export default function SchedulesPage() {
 
   const tabs = getTabs();
 
-  const fetchMyScheduleEvents = async () => {
-    try {
-      const response = await fetch("http://localhost:3000/api/schedules");
-      if (!response.ok) {
-        throw new Error(`API responded with status: ${response.status}`);
-      }
-      const data = await response.json();
-      const personalEvents = Array.isArray(data) ? data.map(event => ({
-        id: event.idcalendar || event.id,
-        title: event.event_title || event.title || "Event",
-        start: new Date(event.start_time),
-        end: new Date(event.end_time),
-        description: event.description || "",
-        classId: null,
-        isClass: false,
-        eventType: event.event_type || "event"
-      })) : [];
-      setScheduleEvents(personalEvents);
-    } catch (err) {
-      console.error("fetchMyScheduleEvents error", err);
-      setScheduleEvents([]);
-    }
-  };
-
   const fetchMasterSchedule = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/schedules");
+      const response = await fetch("http://3.143.57.120:4000/api/schedules");
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);
       }
       const data = await response.json();
 
-      const availResponse = await fetch("http://localhost:3000/api/teacher-availabilities");
+      const availResponse = await fetch("http://3.143.57.120:4000/api/teacher-availabilities");
       if (!availResponse.ok) {
         throw new Error(`API responded with status: ${availResponse.status}`);
       }
@@ -253,7 +221,7 @@ export default function SchedulesPage() {
 
         if (availabilityData && Array.isArray(availabilityData)) {
           const teacherAvail = availabilityData.filter(a => {
-            if (a.teacher_id != schedule.user_id) return false;
+            if (a.teacher_id !== schedule.user_id) return false;
             let availDay = normalizeDayOfWeek(a.day_of_week);
             return availDay === eventDay;
           });
@@ -289,7 +257,7 @@ export default function SchedulesPage() {
 
   const fetchTeachers = async () => {
     try {
-      const res = await fetch("http://localhost:3000/api/teachers");
+      const res = await fetch("http://3.143.57.120:4000/api/teachers");
       if (!res.ok) {
         setTeachers([]);
         return;
@@ -304,13 +272,13 @@ export default function SchedulesPage() {
 
   const fetchStudents = async () => {
     try {
-      const res = await fetch("http://localhost:3000/api/students");
+      const res = await fetch("http://3.143.57.120:4000/api/students");
       const studentsData = res.ok ? await res.json() : [];
       setStudents(studentsData);
     } catch (err) {
       console.error("Error fetching students - trying backup port:", err);
       try {
-        const res = await fetch("http://localhost:3001/api/students");
+        const res = await fetch("http://3.143.57.120:4000/api/students");
         const studentsData = res.ok ? await res.json() : [];
         setStudents(studentsData);
       } catch (backupErr) {
@@ -320,6 +288,7 @@ export default function SchedulesPage() {
     }
   };
 // NEW EFFECT FOR VERTICAL RESIZING
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isResizingHeight) return;
 
@@ -345,7 +314,7 @@ export default function SchedulesPage() {
   }, [isResizingHeight]);
   const fetchRooms = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/schedules");
+      const response = await fetch("http://3.143.57.120:4000/api/schedules");
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);
       }
@@ -367,10 +336,11 @@ export default function SchedulesPage() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const fetchAvailabilities = async () => {
       try {
-        const res = await fetch("http://localhost:3000/api/teacher-availabilities");
+        const res = await fetch("http://3.143.57.120:4000/api/teacher-availabilities");
         const availData = res.ok ? await res.json() : [];
         setAllAvailabilities(availData);
       } catch (err) {
@@ -382,9 +352,7 @@ export default function SchedulesPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        if (activeTab === "my-schedule") {
-          await fetchMyScheduleEvents();
-        } else if (activeTab === "master-schedule") {
+        if (activeTab === "master-schedule") {
           await Promise.all([fetchMasterSchedule(), fetchTeachers(), fetchAvailabilities(), fetchRooms()]);
         } else if (activeTab === "teacher-schedules") {
           await fetchTeachers();
@@ -401,7 +369,7 @@ export default function SchedulesPage() {
     };
 
     fetchData();
-  }, [user, activeTab]);
+  }, [user, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const interval = setInterval(cleanupDuplicateExceptions, 5000);
@@ -452,45 +420,9 @@ export default function SchedulesPage() {
     };
   }, [pendingChanges]);
 
-  const fetchTeacherEvents = async (teacherId) => {
-    try {
-      const response = await fetch(`http://localhost:3000/api/teachers/${teacherId}/schedules`);
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-      const data = await response.json();
-      const events = Array.isArray(data) ? data.map(schedule => {
-        const recurringDay = schedule.recurring_day !== undefined && schedule.recurring_day !== null
-          ? parseInt(schedule.recurring_day, 10)
-          : null;
-
-        return {
-          id: schedule.idcalendar,
-          title: schedule.event_title,
-          start: new Date(schedule.start_time),
-          end: new Date(schedule.end_time),
-          isClass: true,
-          description: schedule.description,
-          teacherId: schedule.user_id,
-          teacher: schedule.first_name && schedule.last_name ? `${schedule.first_name} ${schedule.last_name}` : "Unknown Teacher",
-          room: schedule.room || "",
-          grade: schedule.grade || "",
-          subject: schedule.subject || schedule.event_title || "Class",
-          recurringDays: recurringDay !== null ? [recurringDay] : [],
-          abDay: schedule.ab_day || "",
-          databaseId: schedule.idcalendar
-        };
-      }) : [];
-      setTeacherEvents(events);
-    } catch (error) {
-      console.error("Error fetching teacher events:", error);
-      setTeacherEvents([]);
-    }
-  };
-
   const fetchStudentEvents = async (studentId) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/students/${studentId}/classes`);
+      const res = await fetch(`http://3.143.57.120:4000/api/students/${studentId}/classes`);
       const classes = res.ok ? await res.json() : [];
 
       let events = [];
@@ -503,7 +435,7 @@ export default function SchedulesPage() {
     } catch (err) {
       console.error("Error fetching student events:", err);
       try {
-        const res = await fetch(`http://localhost:3001/api/students/${studentId}/classes`);
+        const res = await fetch(`http://3.143.57.120:4000/api/students/${studentId}/classes`);
         const classes = res.ok ? await res.json() : [];
         let events = [];
         classes.forEach(cls => {
@@ -515,11 +447,6 @@ export default function SchedulesPage() {
         setStudentEvents([]);
       }
     }
-  };
-
-  const handleTeacherSelect = (teacher) => {
-    setSelectedTeacher(teacher);
-    fetchTeacherEvents(teacher.id);
   };
 
   const handleStudentSelect = (student) => {
@@ -701,7 +628,7 @@ export default function SchedulesPage() {
   };
 
   const handleFridaySelection = async (abDay) => {
-    const { start, end, dragEvent, originalEvent, draggedEventId, isNewClass, isSaveEvent } = fridayModal.slotInfo;
+    const { start, end, dragEvent, isNewClass, isSaveEvent } = fridayModal.slotInfo;
     setFridayModal({ open: false, slotInfo: null });
 
     if (isSaveEvent) {
@@ -855,7 +782,6 @@ export default function SchedulesPage() {
         });
       }
 
-      setDraggingEventId(null);
     }
   };
 

@@ -715,10 +715,7 @@ export default function MasterSchedule({
             ]}
             startAccessor="start"
             endAccessor="end"
-            startAccessor="start"
-  endAccessor="end"
-  style={{ flex: 1, minHeight: 0 }} // <-- Changed to flex stretch
-  views={["work_week"]}
+            style={{ flex: 1, minHeight: 0 }} // <-- Changed to flex stretch
             views={["work_week"]}
             view="work_week"
             date={date}

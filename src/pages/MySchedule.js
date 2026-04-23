@@ -7,7 +7,7 @@ import { useAuth } from "../context/AuthContext";
 
 const localizer = momentLocalizer(moment);
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const API_BASE_URL = "http://3.143.57.120:3000";
+const API_BASE_URL = "http://3.143.57.120:4000";
 // A/B Day Custom Header
 const CustomHeader = ({ date, label }) => {
   const startDate = moment('2024-08-14');
@@ -409,7 +409,7 @@ export default function MySchedule() {
   };
 
   const handleNewEventChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, checked } = e.target;
     if (name === "recurringDays") {
       setNewEvent(prev => ({
         ...prev,

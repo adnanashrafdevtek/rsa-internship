@@ -110,7 +110,6 @@ export default function TeacherList() {
   const [date, setDate] = useState(new Date());
 
   // Add event modal state
-    const [showAddModal, setShowAddModal] = useState(false);
   const [newEvent, setNewEvent] = useState({
     title: "",
     startDate: moment().format("YYYY-MM-DD"),
@@ -195,10 +194,6 @@ export default function TeacherList() {
     }
   }, [selectedTeacher]);
 
-  const handleNavigate = (newDate) => {
-    setDate(newDate);
-  };
-
   // Check for overlapping events
   const checkEventOverlaps = (events) => {
     const overlaps = [];
@@ -264,7 +259,7 @@ export default function TeacherList() {
   };
 
   const handleNewEventChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, checked } = e.target;
     if (name === "recurringDays") {
       setNewEvent(prev => ({
         ...prev,

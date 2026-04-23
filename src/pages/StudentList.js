@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 
 const localizer = momentLocalizer(moment);
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const API_BASE_URL = "http://3.143.57.120:3000";
+const API_BASE_URL = "http://3.143.57.120:4000";
 function generateRecurringEvents(classObj, weeks = 8) {
   const daysMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   const events = [];
@@ -206,10 +206,6 @@ export default function StudentList() {
     }
   }, [selectedStudent]);
 
-  const handleNavigate = (newDate) => {
-    setDate(newDate);
-  };
-
   // Check for overlapping events
   const checkEventOverlaps = (events) => {
     const overlaps = [];
@@ -275,7 +271,7 @@ export default function StudentList() {
   };
 
   const handleNewEventChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, checked } = e.target;
     if (name === "recurringDays") {
       setNewEvent(prev => ({
         ...prev,

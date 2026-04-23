@@ -92,7 +92,7 @@ export default function Home() {
 
   // State for calendar event modal
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [deleting, setDeleting] = useState(false);
+  const [, setDeleting] = useState(false);
 
   const capitalizeFirst = (str) =>
     str ? str.charAt(0).toUpperCase() + str.slice(1) : "";

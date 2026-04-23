@@ -25,22 +25,6 @@ export default function ClassRosters() {
     return `${hour}:${min} ${ampm}`;
   };
 
-  // Helper: format date and time for admin/teacher view
-  const formatDateTime = (dt) => {
-    if (!dt) return '';
-    const dateObj = new Date(dt);
-    if (isNaN(dateObj)) return '';
-    const options = { year: 'numeric', month: 'short', day: 'numeric' };
-    let dateStr = dateObj.toLocaleDateString(undefined, options);
-
-    let hours = dateObj.getHours();
-    let minutes = dateObj.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12 || 12;
-    const timeStr = `${hours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
-
-    return `${dateStr} at ${timeStr}`;
-  };
 
   useEffect(() => {
     if (!classId) return;
@@ -80,7 +64,7 @@ export default function ClassRosters() {
         console.error('Failed to load all students:', err);
         setAllStudents([]);
       });
-  }, [classId]);
+  }, [classId, API_BASE_URL]);
 
   // Student UI
   if (user && user.role === 'student') {

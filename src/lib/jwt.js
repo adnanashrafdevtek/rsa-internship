@@ -37,9 +37,11 @@ export function getAuthHeader() {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-export default {
+const jwt = {
   setToken,
   getToken,
   removeToken,
   getAuthHeader,
 };
+
+export default jwt;
