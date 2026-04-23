@@ -2,9 +2,11 @@
 
 import { getToken } from './jwt';
 
-const FLOW_ID = '866d5686-560c-47ad-83b8-a1373cb7f94f';
-const LANGFLOW_URL = `http://127.0.0.1:7860/api/v1/run/${FLOW_ID}`;
-const API_KEY = 'sk-Fc1IxA_guUpPwB-gR8r77JvV_JB92TBrDj26LYd1DBM';
+const DEFAULT_FLOW_ID = '866d5686-560c-47ad-83b8-a1373cb7f94f';
+const LANGFLOW_BASE_URL = process.env.REACT_APP_LANGFLOW_BASE_URL || 'http://3.143.57.120:7860';
+const FLOW_ID = process.env.REACT_APP_LANGFLOW_FLOW_ID || DEFAULT_FLOW_ID;
+const LANGFLOW_URL = `${LANGFLOW_BASE_URL.replace(/\/$/, '')}/api/v1/run/${FLOW_ID}`;
+const API_KEY = process.env.REACT_APP_LANGFLOW_API_KEY || '';
 
 export async function sendMessage(userMessage) {
   const token = getToken();
@@ -18,7 +20,7 @@ export async function sendMessage(userMessage) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': API_KEY,
+        ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
         'Authorization': `Bearer ${token}`,
         authorization: `Bearer ${token}`,
       },
