@@ -16,7 +16,7 @@ import { useAuth } from "../context/AuthContext";
 import { getToken } from "../lib/jwt";
 import SidebarLayout from "../components/SidebarLayout";
 
-const API_BASE_URL = "http://3.143.57.120:4000";
+const API_BASE_URL = process.env.REACT_APP_API_BASE || "http://localhost:5000";
 const localizer = dateFnsLocalizer({
   format,
   parse,
@@ -64,7 +64,7 @@ export default function TeacherAvailability() {
     const fetchTeachers = async () => {
       try {
         // Hardcoding the exact URL that worked in SchedulesPage.js
-        const res = await fetch("http://3.143.57.120:4000/api/teachers"); 
+        const res = await fetch("http://localhost:5000/api/teachers"); 
         
         if (!res.ok) {
           console.error("Server responded with a bad status:", res.status);

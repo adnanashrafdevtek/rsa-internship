@@ -6,7 +6,7 @@ import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 const localizer = momentLocalizer(moment);
-const API_BASE_URL = "http://3.143.57.120:4000";
+const API_BASE_URL = process.env.REACT_APP_API_BASE || "http://localhost:5000";
 // Custom Event Modal Component
 const EventModal = ({ isOpen, onClose, onSave, slotInfo }) => {
   const [formData, setFormData] = useState({

@@ -16,10 +16,9 @@ const ChatBot = () => {
   const resizeStartWidthRef = useRef(defaultPanelWidth);
 
   const scheduleApiBases = [
-    process.env.REACT_APP_API_URL,
     process.env.REACT_APP_API_BASE,
     apiUrl,
-    'http://3.143.57.120:4000',
+    'http://localhost:5000',
   ].filter(Boolean);
 
   useEffect(() => {
