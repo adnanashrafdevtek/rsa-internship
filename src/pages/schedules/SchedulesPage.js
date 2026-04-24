@@ -91,7 +91,7 @@ export default function SchedulesPage() {
   const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentEvents, setStudentEvents] = useState([]);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [isResizing, setIsResizing] = useState(false);
   
   // ADD THESE NEW STATES:
@@ -375,6 +375,12 @@ export default function SchedulesPage() {
     const interval = setInterval(cleanupDuplicateExceptions, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "master-schedule") {
+      setSidebarCollapsed(true);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (!isResizing) return;
