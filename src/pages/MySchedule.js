@@ -7,7 +7,7 @@ import { useAuth } from "../context/AuthContext";
 
 const localizer = momentLocalizer(moment);
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const API_BASE_URL = process.env.REACT_APP_API_BASE || "http://localhost:5000";
+const API_BASE_URL = process.env.REACT_APP_API_BASE || "http://localhost:5001";
 // A/B Day Custom Header
 const CustomHeader = ({ date, label }) => {
   const startDate = moment('2024-08-14');

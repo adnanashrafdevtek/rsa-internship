@@ -18,7 +18,7 @@ const ChatBot = () => {
   const scheduleApiBases = [
     process.env.REACT_APP_API_BASE,
     apiUrl,
-    'http://localhost:5000',
+    'http://localhost:5001',
   ].filter(Boolean);
 
   useEffect(() => {

@@ -1,1 +1,1 @@
-export const apiUrl = process.env.REACT_APP_API_BASE || "http://localhost:5000";
+export const apiUrl = process.env.REACT_APP_API_BASE || "http://localhost:5001";
