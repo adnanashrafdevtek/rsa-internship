@@ -1,12 +1,10 @@
 // src/lib/langflowService.js
 
 import { getToken } from './jwt';
+import { langflowApiKey, langflowBaseUrl, langflowFlowId } from '../constants/apiConstants';
 
-const DEFAULT_FLOW_ID = '866d5686-560c-47ad-83b8-a1373cb7f94f';
-const LANGFLOW_BASE_URL = process.env.REACT_APP_LANGFLOW_BASE_URL || 'http://3.143.57.120:7860';
-const FLOW_ID = process.env.REACT_APP_LANGFLOW_FLOW_ID || DEFAULT_FLOW_ID;
-const LANGFLOW_URL = `${LANGFLOW_BASE_URL.replace(/\/$/, '')}/api/v1/run/${FLOW_ID}`;
-const API_KEY = process.env.REACT_APP_LANGFLOW_API_KEY || '';
+const LANGFLOW_URL = `${langflowBaseUrl}/api/v1/run/${langflowFlowId}`;
+const API_KEY = langflowApiKey;
 
 export async function sendMessage(userMessage) {
   const token = getToken();

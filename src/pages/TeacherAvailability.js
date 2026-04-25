@@ -15,8 +15,9 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import { useAuth } from "../context/AuthContext";
 import { getToken } from "../lib/jwt";
 import SidebarLayout from "../components/SidebarLayout";
+import { apiUrl } from "../constants/apiConstants";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE || "http://localhost:5001";
+const API_BASE_URL = apiUrl;
 const localizer = dateFnsLocalizer({
   format,
   parse,
@@ -63,8 +64,7 @@ export default function TeacherAvailability() {
  useEffect(() => {
     const fetchTeachers = async () => {
       try {
-        // Hardcoding the exact URL that worked in SchedulesPage.js
-        const res = await fetch("http://localhost:5001/api/teachers"); 
+        const res = await fetch(`${API_BASE_URL}/api/teachers`);
         
         if (!res.ok) {
           console.error("Server responded with a bad status:", res.status);

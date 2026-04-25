@@ -15,11 +15,7 @@ const ChatBot = () => {
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(defaultPanelWidth);
 
-  const scheduleApiBases = [
-    process.env.REACT_APP_API_BASE,
-    apiUrl,
-    'http://localhost:5001',
-  ].filter(Boolean);
+  const scheduleApiBases = [apiUrl];
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

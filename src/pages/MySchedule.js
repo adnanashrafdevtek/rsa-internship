@@ -4,10 +4,11 @@ import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import Sidebar from "./Sidebar"; // keep this
 import { useAuth } from "../context/AuthContext";
+import { apiUrl } from '../constants/apiConstants';
 
 const localizer = momentLocalizer(moment);
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const API_BASE_URL = process.env.REACT_APP_API_BASE || "http://localhost:5001";
+const API_BASE_URL = apiUrl;
 // A/B Day Custom Header
 const CustomHeader = ({ date, label }) => {
   const startDate = moment('2024-08-14');

@@ -3,7 +3,7 @@ import { setToken, removeToken, getToken } from "../lib/jwt";
 import { apiUrl } from "../constants/apiConstants";
 
 const AuthContext = createContext();
-const API_BASE_URL = process.env.REACT_APP_API_BASE || apiUrl;
+const API_BASE_URL = apiUrl;
 const dummyUsers = [
   { email: "admin@example.com", password: "admin123", role: "admin", first_name: "Admin", last_name: "User", id: 0, token: "dummy-token" },
   { email: "teacher@example.com", password: "teacher123", role: "teacher", first_name: "Teacher", last_name: "User", id: 1, token: "dummy-token" },

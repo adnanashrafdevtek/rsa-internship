@@ -1,6 +1,7 @@
 import { getToken, removeToken } from './jwt';
+import { apiUrl } from '../constants/apiConstants';
 
-const API_BASE = process.env.REACT_APP_API_BASE || '';
+const API_BASE = apiUrl;
 
 export async function apiFetch(input, init = {}) {
   const url = /^https?:\/\//.test(input) ? input : `${API_BASE}${input}`;

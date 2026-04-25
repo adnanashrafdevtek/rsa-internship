@@ -9,10 +9,27 @@ In the project directory, you can run:
 ### `npm start`
 
 Runs the app in the development mode.\
-Open [${API_BASE_URL}](${API_BASE_URL}) to view it in your browser.
+Open [http://localhost:4000](http://localhost:4000) to view it in your browser.
 
 The page will reload when you make changes.\
 You may also see any lint errors in the console.
+
+## Environment Variables
+
+Use a single `.env` file in the project root.
+
+```
+REACT_APP_API_BASE=http://3.143.57.120:4000
+REACT_APP_LANGFLOW_BASE_URL=http://3.143.57.120:7860
+REACT_APP_LANGFLOW_FLOW_ID=your-flow-id
+REACT_APP_LANGFLOW_API_KEY=your-api-key
+```
+
+Important:
+
+- In this React app, only variables prefixed with `REACT_APP_` are available in frontend code.
+- Restart the dev server after changing env values.
+- Frontend env values are baked at build time, so if you deploy the built `build/` output, rebuild when env values change.
 
 ### `npm test`
 

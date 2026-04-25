@@ -7,6 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import MasterSchedule from "./MasterSchedule";
 import StudentSchedules from "./StudentSchedules";
 import ScheduleModals from "./ScheduleModals";
+import { apiUrl } from "../../constants/apiConstants";
 import {
   getABDay,
   getABLabelForHeader,
@@ -20,6 +21,7 @@ import {
 
 const localizer = momentLocalizer(moment);
 const grades = ["K","1","2","3","4","5","6","7","8","9","10","11","12","Not here?"];
+const API_BASE_URL = apiUrl;
 
 const initialDetails = {
   teacherId: "",
@@ -36,7 +38,7 @@ const initialDetails = {
 
 async function saveScheduleToDatabase(data) {
   try {
-    const res = await fetch("http://localhost:5001/api/schedules", {
+    const res = await fetch(`${API_BASE_URL}/api/schedules`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
@@ -52,7 +54,7 @@ async function saveScheduleToDatabase(data) {
 
 async function updateScheduleInDatabase(id, data) {
   try {
-    const res = await fetch(`http://localhost:5001/api/schedules/${id}`, {
+    const res = await fetch(`${API_BASE_URL}/api/schedules/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
@@ -70,7 +72,7 @@ async function updateScheduleInDatabase(id, data) {
 
 async function deleteScheduleFromDatabase(id) {
   try {
-    const res = await fetch(`http://localhost:5001/api/schedules/${id}`, { method: "DELETE" });
+    const res = await fetch(`${API_BASE_URL}/api/schedules/${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error("Delete failed");
     return { success: true };
   } catch (e) {
@@ -150,13 +152,13 @@ export default function SchedulesPage() {
 
   const fetchMasterSchedule = async () => {
     try {
-      const response = await fetch("http://localhost:5001/api/schedules");
+      const response = await fetch(`${API_BASE_URL}/api/schedules`);
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);
       }
       const data = await response.json();
 
-      const availResponse = await fetch("http://localhost:5001/api/teacher-availabilities");
+      const availResponse = await fetch(`${API_BASE_URL}/api/teacher-availabilities`);
       if (!availResponse.ok) {
         throw new Error(`API responded with status: ${availResponse.status}`);
       }
@@ -257,7 +259,7 @@ export default function SchedulesPage() {
 
   const fetchTeachers = async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/teachers");
+      const res = await fetch(`${API_BASE_URL}/api/teachers`);
       if (!res.ok) {
         setTeachers([]);
         return;
@@ -272,13 +274,13 @@ export default function SchedulesPage() {
 
   const fetchStudents = async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/students");
+      const res = await fetch(`${API_BASE_URL}/api/students`);
       const studentsData = res.ok ? await res.json() : [];
       setStudents(studentsData);
     } catch (err) {
       console.error("Error fetching students - trying backup port:", err);
       try {
-        const res = await fetch("http://localhost:5001/api/students");
+        const res = await fetch(`${API_BASE_URL}/api/students`);
         const studentsData = res.ok ? await res.json() : [];
         setStudents(studentsData);
       } catch (backupErr) {
@@ -314,7 +316,7 @@ export default function SchedulesPage() {
   }, [isResizingHeight]);
   const fetchRooms = async () => {
     try {
-      const response = await fetch("http://localhost:5001/api/schedules");
+      const response = await fetch(`${API_BASE_URL}/api/schedules`);
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);
       }
@@ -340,7 +342,7 @@ export default function SchedulesPage() {
   useEffect(() => {
     const fetchAvailabilities = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/teacher-availabilities");
+        const res = await fetch(`${API_BASE_URL}/api/teacher-availabilities`);
         const availData = res.ok ? await res.json() : [];
         setAllAvailabilities(availData);
       } catch (err) {
@@ -428,7 +430,7 @@ export default function SchedulesPage() {
 
   const fetchStudentEvents = async (studentId) => {
     try {
-      const res = await fetch(`http://localhost:5001/api/students/${studentId}/classes`);
+      const res = await fetch(`${API_BASE_URL}/api/students/${studentId}/classes`);
       const classes = res.ok ? await res.json() : [];
 
       let events = [];
@@ -441,7 +443,7 @@ export default function SchedulesPage() {
     } catch (err) {
       console.error("Error fetching student events:", err);
       try {
-        const res = await fetch(`http://localhost:5001/api/students/${studentId}/classes`);
+        const res = await fetch(`${API_BASE_URL}/api/students/${studentId}/classes`);
         const classes = res.ok ? await res.json() : [];
         let events = [];
         classes.forEach(cls => {

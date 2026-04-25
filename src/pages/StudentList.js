@@ -5,10 +5,11 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import Sidebar from "./Sidebar";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { apiUrl } from "../constants/apiConstants";
 
 const localizer = momentLocalizer(moment);
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const API_BASE_URL = process.env.REACT_APP_API_BASE || "http://localhost:5001";
+const API_BASE_URL = apiUrl;
 function generateRecurringEvents(classObj, weeks = 8) {
   const daysMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   const events = [];
