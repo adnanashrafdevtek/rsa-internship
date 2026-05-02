@@ -103,12 +103,13 @@ export const AuthProvider = ({ children }) => {
 
       if (response.ok && data.user) {
         // persist JWT if backend provided it
-        if (data.token) {
-          setToken(data.token);
+        const token = data.token || data.user?.token;
+        if (token) {
+          setToken(token);
         }
-        setUser(data.user);
-        localStorage.setItem("user", JSON.stringify(data.user));
-        if (data.token) setToken(data.token);
+        const userWithToken = token ? { ...data.user, token } : data.user;
+        setUser(userWithToken);
+        localStorage.setItem("user", JSON.stringify(userWithToken));
         return true;
       } else {
         console.error("Login failed:", data.error);
