@@ -1,9 +1,9 @@
 // src/lib/langflowService.js
 
 import { getToken } from './jwt';
-import { langflowApiKey, langflowBaseUrl, langflowFlowId } from '../constants/apiConstants';
+import { langflowApiKey, langflowFlowId, langflowRequestBaseUrl } from '../constants/apiConstants';
 
-const LANGFLOW_URL = `${langflowBaseUrl}/api/v1/run/${langflowFlowId}`;
+const LANGFLOW_URL = `${langflowRequestBaseUrl}/api/v1/run/${langflowFlowId}`;
 const API_KEY = langflowApiKey;
 
 export async function sendMessage(userMessage) {
@@ -20,14 +20,12 @@ export async function sendMessage(userMessage) {
         'Content-Type': 'application/json',
         ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
         'Authorization': `Bearer ${token}`,
-        authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         input_value: userMessage,
         output_type: 'chat',
         input_type: 'chat',
         jwt_token: token,
-        authorization: `Bearer ${token}`,
       }),
     });
 

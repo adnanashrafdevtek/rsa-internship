@@ -7,5 +7,8 @@ const trimTrailingSlash = (value) => String(value || "").replace(/\/+$/, "");
 // REACT_APP_API_BASE takes priority when set; this is only a fallback.
 export const apiUrl = trimTrailingSlash(process.env.REACT_APP_API_BASE || DEFAULT_API_BASE);
 export const langflowBaseUrl = trimTrailingSlash(process.env.REACT_APP_LANGFLOW_BASE_URL || DEFAULT_LANGFLOW_BASE);
+export const langflowRequestBaseUrl = trimTrailingSlash(
+	process.env.REACT_APP_LANGFLOW_REQUEST_BASE_URL || process.env.REACT_APP_LANGFLOW_BASE_URL || DEFAULT_LANGFLOW_BASE
+);
 export const langflowFlowId = process.env.REACT_APP_LANGFLOW_FLOW_ID || DEFAULT_LANGFLOW_FLOW_ID;
 export const langflowApiKey = process.env.REACT_APP_LANGFLOW_API_KEY || "";
