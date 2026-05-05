@@ -32,6 +32,28 @@ app.use(
   })
 );
 
+// Also proxy direct API requests from the frontend (e.g. /api/v1/run/...) to the Langflow backend.
+app.use(
+  '/api/v1',
+  createProxyMiddleware({
+    target: TARGET,
+    changeOrigin: true,
+    secure: false,
+    onProxyReq: (proxyReq, req, res) => {
+      if (API_KEY) {
+        proxyReq.setHeader('x-api-key', API_KEY);
+      }
+      const auth = req.headers['authorization'];
+      if (auth) proxyReq.setHeader('authorization', auth);
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      proxyRes.headers['Access-Control-Allow-Origin'] = req.headers.origin || '*';
+      proxyRes.headers['Access-Control-Allow-Headers'] = 'Authorization,Content-Type,x-api-key';
+      proxyRes.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS';
+    },
+  })
+);
+
 app.get('/health', (req, res) => res.json({ ok: true, target: TARGET }));
 
 app.listen(PORT, () => {
