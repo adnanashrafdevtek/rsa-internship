@@ -1,5 +1,6 @@
 const DEFAULT_API_BASE = "http://3.143.57.120:4000";
 const DEFAULT_LANGFLOW_BASE = "http://3.143.57.120:7860";
+const DEFAULT_LANGFLOW_REQUEST_BASE = "http://3.143.57.120:4001";
 const DEFAULT_LANGFLOW_FLOW_ID = "866d5686-560c-47ad-83b8-a1373cb7f94f";
 
 const trimTrailingSlash = (value) => String(value || "").replace(/\/+$/, "");
@@ -8,7 +9,7 @@ const trimTrailingSlash = (value) => String(value || "").replace(/\/+$/, "");
 export const apiUrl = trimTrailingSlash(process.env.REACT_APP_API_BASE || DEFAULT_API_BASE);
 export const langflowBaseUrl = trimTrailingSlash(process.env.REACT_APP_LANGFLOW_BASE_URL || DEFAULT_LANGFLOW_BASE);
 export const langflowRequestBaseUrl = trimTrailingSlash(
-	process.env.REACT_APP_LANGFLOW_REQUEST_BASE_URL || process.env.REACT_APP_LANGFLOW_BASE_URL || DEFAULT_LANGFLOW_BASE
+	process.env.REACT_APP_LANGFLOW_REQUEST_BASE_URL || process.env.REACT_APP_LANGFLOW_BASE_URL || DEFAULT_LANGFLOW_REQUEST_BASE
 );
 export const langflowFlowId = process.env.REACT_APP_LANGFLOW_FLOW_ID || DEFAULT_LANGFLOW_FLOW_ID;
 export const langflowApiKey = process.env.REACT_APP_LANGFLOW_API_KEY || "";
