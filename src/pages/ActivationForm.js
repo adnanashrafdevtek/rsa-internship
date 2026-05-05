@@ -2,11 +2,13 @@ import React, { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import "./ActivationForm.css";
 import { apiUrl } from "../constants/apiConstants";
+import { uiUrl } from "../constants/apiConstants";
 
 export default function ActivationForm() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
   const API_BASE_URL = apiUrl;
+  const UI_BASE_URL = uiUrl;
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -37,16 +39,19 @@ export default function ActivationForm() {
     setError("");
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/activate`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ password }),
-      });
+    const res = await fetch(`${API_BASE_URL}/api/activate`, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json"
+        // You can remove the Authorization header unless you specifically want it there
+      },
+      body: JSON.stringify({ 
+        token,      // <--- ADD THIS LINE
+        password 
+      }),
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
 if (!res.ok) {
   throw new Error(data.error || "Activation failed");
@@ -56,9 +61,9 @@ setMessage("✅ Your account has been activated! Redirecting...");
 
 setTimeout(() => {
   if (data.role === "teacher") {
-    window.location.href = `${API_BASE_URL}/availability?user_id=${data.user_id}`;
+    window.location.href = `${UI_BASE_URL}/availability?user_id=${data.user_id}`;
   } else {
-    window.location.href = `${API_BASE_URL}`; // login page
+    window.location.href = `${UI_BASE_URL}`; // login page
   }
 }, 2000);
 
@@ -70,7 +75,7 @@ setTimeout(() => {
   return (
     <div className="activation-container">
       <div className="activation-box">
-        <h2>Activate Your Plannify Account</h2>
+        <h2>Activate Your Schedulo Account</h2>
         <p>Set your new password to secure your account and get started.</p>
 
         {message && <p className="message">{message}</p>}
