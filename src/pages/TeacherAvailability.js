@@ -149,11 +149,20 @@ export default function TeacherAvailability() {
           console.error("❌ Invalid event (not Date):", event);
           return null;
         }
+        
+        // Extract the exact local time values directly from the browser
         return {
           start: event.start.toISOString(),
           end: event.end.toISOString(),
+          day_of_week: event.start.getDay(), // Browser's local day
+          start_time: event.start.toTimeString().split(" ")[0], // "HH:MM:SS" local
+          end_time: event.end.toTimeString().split(" ")[0],     // "HH:MM:SS" local
+          valid_from: format(event.start, 'yyyy-MM-dd'),        // "YYYY-MM-DD" local
+          valid_to: format(event.end, 'yyyy-MM-dd')             // "YYYY-MM-DD" local
         };
       }).filter(e => e !== null);
+
+      // ... rest of the fetch logic remains exactly the same
 
       const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/teacher-availability`, {
