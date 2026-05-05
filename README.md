@@ -30,6 +30,7 @@ Recommended request flow for chatbot:
 
 - Browser -> `REACT_APP_LANGFLOW_REQUEST_BASE_URL` (proxy on port 4001)
 - Proxy -> `REACT_APP_LANGFLOW_BASE_URL` (Langflow on port 7860)
+- Do not point `REACT_APP_LANGFLOW_REQUEST_BASE_URL` to port 5001 (that is your app API backend, not the Langflow proxy endpoint).
 
 Start proxy:
 
