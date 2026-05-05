@@ -21,8 +21,21 @@ Use a single `.env` file in the project root.
 ```
 REACT_APP_API_BASE=http://3.143.57.120:4000
 REACT_APP_LANGFLOW_BASE_URL=http://3.143.57.120:7860
+REACT_APP_LANGFLOW_REQUEST_BASE_URL=http://3.143.57.120:4001
 REACT_APP_LANGFLOW_FLOW_ID=your-flow-id
 REACT_APP_LANGFLOW_API_KEY=your-api-key
+```
+
+Recommended request flow for chatbot:
+
+- Browser -> `REACT_APP_LANGFLOW_REQUEST_BASE_URL` (proxy on port 4001)
+- Proxy -> `REACT_APP_LANGFLOW_BASE_URL` (Langflow on port 7860)
+- Do not point `REACT_APP_LANGFLOW_REQUEST_BASE_URL` to port 5001 (that is your app API backend, not the Langflow proxy endpoint).
+
+Start proxy:
+
+```
+npm run start-proxy
 ```
 
 Important:

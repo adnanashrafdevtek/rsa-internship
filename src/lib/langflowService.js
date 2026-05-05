@@ -14,6 +14,8 @@ export async function sendMessage(userMessage) {
   }
 
   try {
+    console.info('Langflow request URL:', LANGFLOW_URL);
+
     const response = await fetch(LANGFLOW_URL, {
       method: 'POST',
       headers: {
@@ -38,7 +40,16 @@ export async function sendMessage(userMessage) {
     }
 
     if (!response.ok) {
+      const contentType = response.headers.get('content-type') || '';
       const detail = data?.detail || textResponse || `API Error: ${response.status}`;
+
+      if (contentType.includes('text/html') || String(detail).includes('Cannot POST /api/v1/run/')) {
+        return {
+          ok: false,
+          error: `Langflow endpoint mismatch. Request URL was ${LANGFLOW_URL}. Received HTML response: ${String(detail).slice(0, 180)}`,
+        };
+      }
+
       if (String(detail).toLowerCase().includes('missing authorization header')) {
         return { ok: false, error: 'Your session is not authorized for schedule fetch. Please log out and log in again, then retry.' };
       }
