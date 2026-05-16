@@ -151,24 +151,41 @@ export default function SchedulesPage() {
   const tabs = getTabs();
 
   const fetchMasterSchedule = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/schedules`);
-      if (!response.ok) {
-        throw new Error(`API responded with status: ${response.status}`);
-      }
-      const data = await response.json();
+  try {
+    // Dynamically retrieve token from localStorage or your context user object
+    const token = localStorage.getItem("token") || user?.token;
 
-      const availResponse = await fetch(`${API_BASE_URL}/api/teacher-availabilities`);
-      if (!availResponse.ok) {
-        throw new Error(`API responded with status: ${availResponse.status}`);
+    const response = await fetch(`${API_BASE_URL}/api/schedules`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
       }
-      const availabilityData = await availResponse.json();
+    });
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+    const data = await response.json();
 
-      if (!Array.isArray(data)) {
-        setMasterEvents([]);
-        setCreateEvents([]);
-        return;
+    const availResponse = await fetch(`${API_BASE_URL}/api/teacher-availabilities`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
       }
+    });
+    if (!availResponse.ok) {
+      throw new Error(`API responded with status: ${availResponse.status}`);
+    }
+    const availabilityData = await availResponse.json();
+
+    if (!Array.isArray(data)) {
+      setMasterEvents([]);
+      setCreateEvents([]);
+      return;
+    }
+
+    // ... rest of your mapping code stays exactly the same
 
       const events = data.map(schedule => {
         const recurringDay = schedule.recurring_day !== undefined && schedule.recurring_day !== null
@@ -339,39 +356,41 @@ export default function SchedulesPage() {
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const fetchAvailabilities = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/teacher-availabilities`);
-        const availData = res.ok ? await res.json() : [];
-        setAllAvailabilities(availData);
-      } catch (err) {
-        console.error("Error fetching teacher availability from backend:", err);
-        setAllAvailabilities([]);
+ useEffect(() => {
+  const fetchAvailabilities = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/teacher-availabilities`);
+      if (!res.ok) {
+        throw new Error(`Availability HTTP error! status: ${res.status}`);
       }
-    };
+      const availData = await res.json();
+      setAllAvailabilities(availData); // This feeds your calendar view bounds
+    } catch (err) {
+      console.error("Error fetching teacher availability from backend:", err);
+      setAllAvailabilities([]);
+    }
+  };
 
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        if (activeTab === "master-schedule") {
-          await Promise.all([fetchMasterSchedule(), fetchTeachers(), fetchAvailabilities(), fetchRooms()]);
-        } else if (activeTab === "teacher-schedules") {
-          await fetchTeachers();
-        } else if (activeTab === "student-schedules") {
-          await fetchStudents();
-        } else if (activeTab === "create-schedule") {
-          await Promise.all([fetchTeachers(), fetchAvailabilities(), fetchMasterSchedule()]);
-        }
-      } catch (error) {
-        console.error("Data fetching error:", error);
-      } finally {
-        setLoading(false);
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      if (activeTab === "master-schedule") {
+        // Triggers all essential datasets concurrently
+        await Promise.all([fetchMasterSchedule(), fetchTeachers(), fetchAvailabilities(), fetchRooms()]);
+      } else if (activeTab === "teacher-schedules") {
+        await fetchTeachers();
+      } else if (activeTab === "student-schedules") {
+        await fetchStudents();
       }
-    };
+    } catch (error) {
+      console.error("Data fetching error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchData();
-  }, [user, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  fetchData();
+}, [user, activeTab]);
 
   useEffect(() => {
     const interval = setInterval(cleanupDuplicateExceptions, 5000);
@@ -524,10 +543,14 @@ export default function SchedulesPage() {
   );
 
   const renderTabContent = () => {
-    if (loading) {
-      return <LoadingSpinner />;
-    }
+  if (loading) {
+    return <LoadingSpinner />;
+  }
 
+  // Safety fallback: if events aren't loaded or arrays are broken, don't break the DOM
+  if (activeTab === "master-schedule" && !masterEvents) {
+    return <div style={{ padding: 24 }}>Initializing calendar data...</div>;
+  }
     switch (activeTab) {
       case "master-schedule":
         return (
